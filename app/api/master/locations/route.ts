@@ -1,0 +1,38 @@
+import { locations } from '@/lib/mock/data';
+import type { ApiResponse, MastLocation } from '@/lib/types';
+
+const db = [...locations];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+  const filtered = search ? db.filter(r => r.code.toLowerCase().includes(search) || r.name.toLowerCase().includes(search)) : db;
+  return Response.json({ success: true, data: filtered.filter(r => !r.isDelete), total: filtered.length } satisfies ApiResponse<MastLocation[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const record: MastLocation = { ...body, id: nextId++, createDate: now, updateDate: now, createBy: 'admin', updateBy: 'admin', isDelete: false };
+  db.push(record);
+  return Response.json({ success: true, data: record } satisfies ApiResponse<MastLocation>, { status: 201 });
+}
+
+export async function PUT(request: Request) {
+  const body = await request.json();
+  const idx = db.findIndex(r => r.id === body.id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], ...body, updateDate: new Date().toISOString() };
+  return Response.json({ success: true, data: db[idx] } satisfies ApiResponse<MastLocation>);
+}
+
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const id = Number(searchParams.get('id'));
+  const idx = db.findIndex(r => r.id === id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], isDelete: true };
+  return Response.json({ success: true, data: { id } });
+}
+

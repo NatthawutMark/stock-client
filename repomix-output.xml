@@ -1,0 +1,3925 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+app/
+  api/
+    auth/
+      login/
+        route.ts
+    dashboard/
+      route.ts
+    inventory/
+      [id]/
+        route.ts
+      route.ts
+    master/
+      brands/
+        route.ts
+      customers/
+        route.ts
+      items/
+        [id]/
+          route.ts
+        route.ts
+      locations/
+        route.ts
+      uom/
+        route.ts
+      vendors/
+        route.ts
+      warehouses/
+        route.ts
+    transactions/
+      disposal/
+        route.ts
+      issue/
+        route.ts
+      receive/
+        [id]/
+          route.ts
+        route.ts
+      request/
+        route.ts
+      transfer/
+        route.ts
+  components/
+    layout/
+      AppLayout.tsx
+      Header.tsx
+      Sidebar.tsx
+    ui/
+      Badge.tsx
+      DataTable.tsx
+      Modal.tsx
+      Pagination.tsx
+      SearchInput.tsx
+      StatCard.tsx
+  dashboards/
+    page.tsx
+  login/
+    page.tsx
+  master/
+    items/
+      page.tsx
+  favicon.ico
+  globals.css
+  layout.tsx
+  providers.tsx
+components/
+  ui/
+    button.tsx
+lib/
+  api/
+    services/
+      auth.ts
+      inventory.ts
+      master.ts
+      transaction.ts
+    client.ts
+  i18n/
+    translations.ts
+  mock/
+    data.ts
+  types/
+    index.ts
+  utils.ts
+public/
+  file.svg
+  globe.svg
+  next.svg
+  vercel.svg
+  window.svg
+.gitignore
+AGENTS.md
+CLAUDE.md
+components.json
+Design_DB_V1.xlsx
+eslint.config.mjs
+next.config.ts
+package.json
+postcss.config.mjs
+README.md
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="app/api/auth/login/route.ts">
+import { users } from '@/lib/mock/data';
+import type { ApiResponse, LoginResponse } from '@/lib/types';
+
+export async function POST(request: Request) {
+  const { username, password } = await request.json();
+  const found = users.find(u => u.username === username && u.password === password);
+
+  if (!found) {
+    return Response.json({ success: false, data: null, message: 'Invalid credentials' }, { status: 401 });
+  }
+
+  const { password: _pw, ...user } = found;
+  const response: LoginResponse = {
+    token: `mock-token-${user.id}-${Date.now()}`,
+    user: {
+      ...user,
+      username: user.username,
+      role: user.role,
+      isAdmin: user.isAdmin,
+    },
+  };
+
+  return Response.json({ success: true, data: response } satisfies ApiResponse<LoginResponse>);
+}
+</file>
+
+<file path="app/api/dashboard/route.ts">
+import { getDashboardStats } from '@/lib/mock/data';
+import type { ApiResponse } from '@/lib/types';
+
+export async function GET() {
+  const stats = getDashboardStats();
+  return Response.json({ success: true, data: stats } satisfies ApiResponse<typeof stats>);
+}
+</file>
+
+<file path="app/api/inventory/[id]/route.ts">
+import { inventories, items, locations, warehouses, uoms } from '@/lib/mock/data';
+import type { ApiResponse, InventoryView } from '@/lib/types';
+
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const inv = inventories.find(r => r.id === Number(id));
+  if (!inv) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  const item = items.find(i => i.id === inv.itemId);
+  const enriched: InventoryView = {
+    ...inv,
+    itemCode: item?.itemCode,
+    itemName: item?.itemName,
+    locationName: locations.find(l => l.id === inv.locationId)?.name,
+    warehouseName: warehouses.find(w => w.id === inv.warehouseId)?.warehouseName,
+    uomName: uoms.find(u => u.id === item?.uomId)?.name,
+  };
+  return Response.json({ success: true, data: enriched } satisfies ApiResponse<InventoryView>);
+}
+</file>
+
+<file path="app/api/inventory/route.ts">
+import { inventories, items, locations, warehouses, uoms } from '@/lib/mock/data';
+import type { ApiResponse, InventoryView } from '@/lib/types';
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+  const warehouseId = searchParams.get('warehouseId') ? Number(searchParams.get('warehouseId')) : null;
+
+  const enriched: InventoryView[] = inventories.map(inv => {
+    const item = items.find(i => i.id === inv.itemId);
+    return {
+      ...inv,
+      itemCode: item?.itemCode,
+      itemName: item?.itemName,
+      locationName: locations.find(l => l.id === inv.locationId)?.name,
+      warehouseName: warehouses.find(w => w.id === inv.warehouseId)?.warehouseName,
+      uomName: uoms.find(u => u.id === item?.uomId)?.name,
+    };
+  });
+
+  let filtered = enriched.filter(r => !r.isDelete);
+  if (warehouseId) filtered = filtered.filter(r => r.warehouseId === warehouseId);
+  if (search) filtered = filtered.filter(r =>
+    r.itemCode?.toLowerCase().includes(search) ||
+    r.itemName?.toLowerCase().includes(search) ||
+    r.lotNo?.toLowerCase().includes(search) ||
+    r.serialNo?.toLowerCase().includes(search)
+  );
+
+  return Response.json({ success: true, data: filtered, total: filtered.length } satisfies ApiResponse<InventoryView[]>);
+}
+</file>
+
+<file path="app/api/master/brands/route.ts">
+import { brands } from '@/lib/mock/data';
+import type { ApiResponse, MastBrand } from '@/lib/types';
+
+const db = [...brands];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+  const filtered = search
+    ? db.filter(r => r.nameTh.toLowerCase().includes(search) || r.nameEn.toLowerCase().includes(search))
+    : db;
+  return Response.json({ success: true, data: filtered.filter(r => !r.isDelete), total: filtered.length } satisfies ApiResponse<MastBrand[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const record: MastBrand = { ...body, id: nextId++, createDate: now, updateDate: now, createBy: 'admin', updateBy: 'admin', isDelete: false };
+  db.push(record);
+  return Response.json({ success: true, data: record } satisfies ApiResponse<MastBrand>, { status: 201 });
+}
+
+export async function PUT(request: Request) {
+  const body = await request.json();
+  const idx = db.findIndex(r => r.id === body.id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], ...body, updateDate: new Date().toISOString() };
+  return Response.json({ success: true, data: db[idx] } satisfies ApiResponse<MastBrand>);
+}
+
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const id = Number(searchParams.get('id'));
+  const idx = db.findIndex(r => r.id === id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], isDelete: true };
+  return Response.json({ success: true, data: { id } });
+}
+</file>
+
+<file path="app/api/master/customers/route.ts">
+import { customers } from '@/lib/mock/data';
+import type { ApiResponse, MastCustomer } from '@/lib/types';
+
+const db = [...customers];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+  const filtered = search ? db.filter(r => r.custCode.toLowerCase().includes(search) || r.custName.toLowerCase().includes(search)) : db;
+  return Response.json({ success: true, data: filtered.filter(r => !r.isDelete), total: filtered.length } satisfies ApiResponse<MastCustomer[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const record: MastCustomer = { ...body, id: nextId++, createDate: now, updateDate: now, createBy: 'admin', updateBy: 'admin', isDelete: false };
+  db.push(record);
+  return Response.json({ success: true, data: record } satisfies ApiResponse<MastCustomer>, { status: 201 });
+}
+
+export async function PUT(request: Request) {
+  const body = await request.json();
+  const idx = db.findIndex(r => r.id === body.id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], ...body, updateDate: new Date().toISOString() };
+  return Response.json({ success: true, data: db[idx] } satisfies ApiResponse<MastCustomer>);
+}
+
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const id = Number(searchParams.get('id'));
+  const idx = db.findIndex(r => r.id === id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], isDelete: true };
+  return Response.json({ success: true, data: { id } });
+}
+</file>
+
+<file path="app/api/master/items/[id]/route.ts">
+import { items } from '@/lib/mock/data';
+import type { ApiResponse, MastItem } from '@/lib/types';
+
+const db = [...items];
+
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const record = db.find(r => r.id === Number(id));
+  if (!record) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  return Response.json({ success: true, data: record } satisfies ApiResponse<MastItem>);
+}
+
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const idx = db.findIndex(r => r.id === Number(id));
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  const body = await request.json();
+  db[idx] = { ...db[idx], ...body, updateDate: new Date().toISOString(), updateBy: 'admin' };
+  return Response.json({ success: true, data: db[idx] } satisfies ApiResponse<MastItem>);
+}
+
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const idx = db.findIndex(r => r.id === Number(id));
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], isDelete: true, updateDate: new Date().toISOString() };
+  return Response.json({ success: true, data: { id: Number(id) } });
+}
+</file>
+
+<file path="app/api/master/items/route.ts">
+import { items } from '@/lib/mock/data';
+import type { ApiResponse, MastItem } from '@/lib/types';
+
+const db = [...items];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+
+  const filtered = search
+    ? db.filter(r => r.itemCode.toLowerCase().includes(search) || r.itemName.toLowerCase().includes(search))
+    : db;
+
+  return Response.json({
+    success: true,
+    data: filtered.filter(r => !r.isDelete),
+    total: filtered.length,
+  } satisfies ApiResponse<MastItem[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const record: MastItem = {
+    ...body,
+    id: nextId++,
+    createDate: now,
+    updateDate: now,
+    createBy: 'admin',
+    updateBy: 'admin',
+    isDelete: false,
+  };
+  db.push(record);
+  return Response.json({ success: true, data: record } satisfies ApiResponse<MastItem>, { status: 201 });
+}
+</file>
+
+<file path="app/api/master/locations/route.ts">
+import { locations } from '@/lib/mock/data';
+import type { ApiResponse, MastLocation } from '@/lib/types';
+
+const db = [...locations];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+  const filtered = search ? db.filter(r => r.code.toLowerCase().includes(search) || r.name.toLowerCase().includes(search)) : db;
+  return Response.json({ success: true, data: filtered.filter(r => !r.isDelete), total: filtered.length } satisfies ApiResponse<MastLocation[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const record: MastLocation = { ...body, id: nextId++, createDate: now, updateDate: now, createBy: 'admin', updateBy: 'admin', isDelete: false };
+  db.push(record);
+  return Response.json({ success: true, data: record } satisfies ApiResponse<MastLocation>, { status: 201 });
+}
+
+export async function PUT(request: Request) {
+  const body = await request.json();
+  const idx = db.findIndex(r => r.id === body.id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], ...body, updateDate: new Date().toISOString() };
+  return Response.json({ success: true, data: db[idx] } satisfies ApiResponse<MastLocation>);
+}
+
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const id = Number(searchParams.get('id'));
+  const idx = db.findIndex(r => r.id === id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], isDelete: true };
+  return Response.json({ success: true, data: { id } });
+}
+</file>
+
+<file path="app/api/master/uom/route.ts">
+import { uoms } from '@/lib/mock/data';
+import type { ApiResponse, MastUom } from '@/lib/types';
+
+const db = [...uoms];
+let nextId = db.length + 1;
+
+export async function GET() {
+  return Response.json({ success: true, data: db.filter(r => !r.isDelete), total: db.length } satisfies ApiResponse<MastUom[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const record: MastUom = { ...body, id: nextId++, createDate: now, updateDate: now, createBy: 'admin', updateBy: 'admin', isDelete: false };
+  db.push(record);
+  return Response.json({ success: true, data: record } satisfies ApiResponse<MastUom>, { status: 201 });
+}
+</file>
+
+<file path="app/api/master/vendors/route.ts">
+import { vendors } from '@/lib/mock/data';
+import type { ApiResponse, MastVendor } from '@/lib/types';
+
+const db = [...vendors];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+  const filtered = search ? db.filter(r => r.vendCode.toLowerCase().includes(search) || r.vendName.toLowerCase().includes(search)) : db;
+  return Response.json({ success: true, data: filtered.filter(r => !r.isDelete), total: filtered.length } satisfies ApiResponse<MastVendor[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const record: MastVendor = { ...body, id: nextId++, createDate: now, updateDate: now, createBy: 'admin', updateBy: 'admin', isDelete: false };
+  db.push(record);
+  return Response.json({ success: true, data: record } satisfies ApiResponse<MastVendor>, { status: 201 });
+}
+
+export async function PUT(request: Request) {
+  const body = await request.json();
+  const idx = db.findIndex(r => r.id === body.id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], ...body, updateDate: new Date().toISOString() };
+  return Response.json({ success: true, data: db[idx] } satisfies ApiResponse<MastVendor>);
+}
+
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const id = Number(searchParams.get('id'));
+  const idx = db.findIndex(r => r.id === id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], isDelete: true };
+  return Response.json({ success: true, data: { id } });
+}
+</file>
+
+<file path="app/api/master/warehouses/route.ts">
+import { warehouses } from '@/lib/mock/data';
+import type { ApiResponse, MastWarehouse } from '@/lib/types';
+
+const db = [...warehouses];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+  const filtered = search ? db.filter(r => r.code.toLowerCase().includes(search) || r.warehouseName.toLowerCase().includes(search)) : db;
+  return Response.json({ success: true, data: filtered.filter(r => !r.isDelete), total: filtered.length } satisfies ApiResponse<MastWarehouse[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const record: MastWarehouse = { ...body, id: nextId++, createDate: now, updateDate: now, createBy: 'admin', updateBy: 'admin', isDelete: false };
+  db.push(record);
+  return Response.json({ success: true, data: record } satisfies ApiResponse<MastWarehouse>, { status: 201 });
+}
+
+export async function PUT(request: Request) {
+  const body = await request.json();
+  const idx = db.findIndex(r => r.id === body.id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], ...body, updateDate: new Date().toISOString() };
+  return Response.json({ success: true, data: db[idx] } satisfies ApiResponse<MastWarehouse>);
+}
+
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const id = Number(searchParams.get('id'));
+  const idx = db.findIndex(r => r.id === id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], isDelete: true };
+  return Response.json({ success: true, data: { id } });
+}
+</file>
+
+<file path="app/api/transactions/disposal/route.ts">
+import { docDisposals, statuses, warehouses } from '@/lib/mock/data';
+import type { ApiResponse, DocDisposal, DocDisposalView } from '@/lib/types';
+
+const db = [...docDisposals];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+
+  const enriched: DocDisposalView[] = db.map(r => ({
+    ...r,
+    warehouseName: warehouses.find(w => w.id === r.warehouseId)?.warehouseName,
+    statusName: statuses.find(s => s.id === r.statusId)?.nameTh,
+  }));
+
+  const filtered = search ? enriched.filter(r => r.docNo.toLowerCase().includes(search)) : enriched;
+  return Response.json({ success: true, data: filtered.filter(r => !r.isDelete), total: filtered.length } satisfies ApiResponse<DocDisposalView[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const doc: DocDisposal = {
+    ...body,
+    id: nextId++,
+    docNo: `DSP${new Date().getFullYear()}${String(nextId).padStart(3, '0')}`,
+    statusId: 1,
+    createDate: now,
+    updateDate: now,
+    createBy: 'admin',
+    updateBy: 'admin',
+    isDelete: false,
+  };
+  db.push(doc);
+  return Response.json({ success: true, data: doc } satisfies ApiResponse<DocDisposal>, { status: 201 });
+}
+</file>
+
+<file path="app/api/transactions/issue/route.ts">
+import { docIssues, docIssueDetails, statuses, warehouses, customers, docTypes } from '@/lib/mock/data';
+import type { ApiResponse, DocIssue, DocIssueView } from '@/lib/types';
+
+const db = [...docIssues];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+
+  const enriched: DocIssueView[] = db.map(r => ({
+    ...r,
+    customerName: customers.find(c => c.id === r.customerId)?.custName,
+    warehouseName: warehouses.find(w => w.id === r.warehouseId)?.warehouseName,
+    statusName: statuses.find(s => s.id === r.statusId)?.nameTh,
+    docTypeName: docTypes.find(d => d.id === r.docTypeId)?.name,
+  }));
+
+  const filtered = search
+    ? enriched.filter(r => r.docNo.toLowerCase().includes(search) || r.customerName?.toLowerCase().includes(search))
+    : enriched;
+
+  return Response.json({ success: true, data: filtered.filter(r => !r.isDelete), total: filtered.length } satisfies ApiResponse<DocIssueView[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const { details, ...docData } = body;
+  const doc: DocIssue = {
+    ...docData,
+    id: nextId++,
+    docNo: `GI${new Date().getFullYear()}${String(nextId).padStart(3, '0')}`,
+    createDate: now,
+    updateDate: now,
+    createBy: 'admin',
+    updateBy: 'admin',
+    isDelete: false,
+  };
+  db.push(doc);
+  return Response.json({ success: true, data: doc } satisfies ApiResponse<DocIssue>, { status: 201 });
+}
+</file>
+
+<file path="app/api/transactions/receive/[id]/route.ts">
+import { docReceives, docReceiveDetails, statuses, warehouses, vendors, docTypes } from '@/lib/mock/data';
+import type { ApiResponse, DocReceive, DocReceiveView } from '@/lib/types';
+
+const db = [...docReceives];
+const detailDb = [...docReceiveDetails];
+
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const record = db.find(r => r.id === Number(id));
+  if (!record) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  const details = detailDb.filter(d => d.docId === record.id);
+  const enriched: DocReceiveView = {
+    ...record,
+    vendorName: vendors.find(v => v.id === record.vendorId)?.vendName,
+    warehouseName: warehouses.find(w => w.id === record.warehouseId)?.warehouseName,
+    statusName: statuses.find(s => s.id === record.statusId)?.nameTh,
+    docTypeName: docTypes.find(d => d.id === record.docTypeId)?.name,
+  };
+  return Response.json({ success: true, data: { ...enriched, details } } satisfies ApiResponse<DocReceiveView & { details: typeof details }>);
+}
+
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const idx = db.findIndex(r => r.id === Number(id));
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  const body = await request.json();
+  db[idx] = { ...db[idx], ...body, updateDate: new Date().toISOString() };
+  return Response.json({ success: true, data: db[idx] } satisfies ApiResponse<DocReceive>);
+}
+</file>
+
+<file path="app/api/transactions/receive/route.ts">
+import { docReceives, docReceiveDetails, statuses, warehouses, vendors, docTypes } from '@/lib/mock/data';
+import type { ApiResponse, DocReceive, DocReceiveView } from '@/lib/types';
+
+const db = [...docReceives];
+const detailDb = [...docReceiveDetails];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+
+  const enriched: DocReceiveView[] = db.map(r => ({
+    ...r,
+    vendorName: vendors.find(v => v.id === r.vendorId)?.vendName,
+    warehouseName: warehouses.find(w => w.id === r.warehouseId)?.warehouseName,
+    statusName: statuses.find(s => s.id === r.statusId)?.nameTh,
+    docTypeName: docTypes.find(d => d.id === r.docTypeId)?.name,
+  }));
+
+  const filtered = search
+    ? enriched.filter(r => r.docNo.toLowerCase().includes(search) || r.vendorName?.toLowerCase().includes(search))
+    : enriched;
+
+  return Response.json({ success: true, data: filtered.filter(r => !r.isDelete), total: filtered.length } satisfies ApiResponse<DocReceiveView[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const { details, ...docData } = body;
+  const doc: DocReceive = {
+    ...docData,
+    id: nextId++,
+    docNo: `GR${new Date().getFullYear()}${String(nextId).padStart(3, '0')}`,
+    createDate: now,
+    updateDate: now,
+    createBy: 'admin',
+    updateBy: 'admin',
+    isDelete: false,
+  };
+  db.push(doc);
+  return Response.json({ success: true, data: doc } satisfies ApiResponse<DocReceive>, { status: 201 });
+}
+</file>
+
+<file path="app/api/transactions/request/route.ts">
+import { docRequests, statuses, locations, warehouses } from '@/lib/mock/data';
+import type { ApiResponse, DocRequest, DocRequestView } from '@/lib/types';
+
+const db = [...docRequests];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+
+  const enriched: DocRequestView[] = db.map(r => ({
+    ...r,
+    fromLocationName: locations.find(l => l.id === r.fromLocationId)?.name,
+    toWarehouseName: warehouses.find(w => w.id === r.toWarehouseId)?.warehouseName,
+    statusName: statuses.find(s => s.id === r.statusId)?.nameTh,
+  }));
+
+  const filtered = search ? enriched.filter(r => r.docNo.toLowerCase().includes(search)) : enriched;
+  return Response.json({ success: true, data: filtered.filter(r => !r.isDelete), total: filtered.length } satisfies ApiResponse<DocRequestView[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const doc: DocRequest = {
+    ...body,
+    id: nextId++,
+    docNo: `REQ${new Date().getFullYear()}${String(nextId).padStart(3, '0')}`,
+    statusId: 1,
+    createDate: now,
+    updateDate: now,
+    createBy: 'admin',
+    updateBy: 'admin',
+    isDelete: false,
+  };
+  db.push(doc);
+  return Response.json({ success: true, data: doc } satisfies ApiResponse<DocRequest>, { status: 201 });
+}
+</file>
+
+<file path="app/api/transactions/transfer/route.ts">
+import { docTransfers, statuses, warehouses } from '@/lib/mock/data';
+import type { ApiResponse, DocTransfer, DocTransferView } from '@/lib/types';
+
+const db = [...docTransfers];
+let nextId = db.length + 1;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get('search')?.toLowerCase() ?? '';
+
+  const enriched: DocTransferView[] = db.map(r => ({
+    ...r,
+    fromWarehouseName: warehouses.find(w => w.id === r.fromWarehouseId)?.warehouseName,
+    toWarehouseName: warehouses.find(w => w.id === r.toWarehouseId)?.warehouseName,
+    statusName: statuses.find(s => s.id === r.statusId)?.nameTh,
+  }));
+
+  const filtered = search
+    ? enriched.filter(r => r.docNo.toLowerCase().includes(search))
+    : enriched;
+
+  return Response.json({ success: true, data: filtered.filter(r => !r.isDelete), total: filtered.length } satisfies ApiResponse<DocTransferView[]>);
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const now = new Date().toISOString();
+  const doc: DocTransfer = {
+    ...body,
+    id: nextId++,
+    docNo: `TRF${new Date().getFullYear()}${String(nextId).padStart(3, '0')}`,
+    statusId: 7,
+    createDate: now,
+    updateDate: now,
+    createBy: 'admin',
+    updateBy: 'admin',
+    isDelete: false,
+  };
+  db.push(doc);
+  return Response.json({ success: true, data: doc } satisfies ApiResponse<DocTransfer>, { status: 201 });
+}
+
+export async function PUT(request: Request) {
+  const body = await request.json();
+  const idx = db.findIndex(r => r.id === body.id);
+  if (idx === -1) return Response.json({ success: false, data: null, message: 'Not found' }, { status: 404 });
+  db[idx] = { ...db[idx], ...body, updateDate: new Date().toISOString() };
+  return Response.json({ success: true, data: db[idx] } satisfies ApiResponse<DocTransfer>);
+}
+</file>
+
+<file path="app/components/layout/AppLayout.tsx">
+'use client';
+import { type ReactNode } from 'react';
+import { Sidebar } from './Sidebar';
+import { Header } from './Header';
+
+export function AppLayout({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar />
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <Header />
+        <main className="flex-1 overflow-auto p-6" style={{ background: 'var(--bg)' }}>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="app/components/layout/Header.tsx">
+'use client';
+
+import { usePathname } from 'next/navigation';
+import { useI18n, useTheme, useAuth } from '@/app/providers';
+import { type Lang } from '@/lib/i18n/translations';
+
+export function Header() {
+  const { t, lang, setLang } = useI18n();
+  const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
+  const pathname = usePathname();
+
+  const breadcrumb = pathname
+    .split('/')
+    .filter(Boolean)
+    .map(seg => seg.charAt(0).toUpperCase() + seg.slice(1))
+    .join(' / ');
+
+  return (
+    <header
+      className="flex items-center justify-between px-6 py-3 shrink-0 z-10"
+      style={{
+        background: 'var(--bg-card)',
+        borderBottom: '1px solid var(--border)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+    >
+      {/* Breadcrumb */}
+      <div>
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          {t.auth.systemName}
+        </p>
+        <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          {breadcrumb || t.nav.dashboard}
+        </p>
+      </div>
+
+      {/* Controls */}
+      <div className="flex items-center gap-3">
+        {/* Lang toggle */}
+        <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+          {(['th', 'en'] as Lang[]).map(l => (
+            <button
+              key={l}
+              onClick={() => setLang(l)}
+              className="px-3 py-1 text-xs font-medium transition-colors"
+              style={{
+                background: lang === l ? 'var(--accent)' : 'var(--bg-card)',
+                color: lang === l ? '#fff' : 'var(--text-secondary)',
+              }}
+            >
+              {l.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-base"
+          style={{ background: 'var(--bg)', color: 'var(--text-primary)' }}
+          title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+        >
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
+
+        {/* User menu */}
+        {user && (
+          <div className="flex items-center gap-2">
+            <div className="text-right">
+              <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                {user.fName} {user.lName}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                {user.role}
+              </p>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-bold">
+              {user.fName.charAt(0)}
+            </div>
+            <button
+              onClick={logout}
+              className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+              style={{ background: 'var(--bg)', color: 'var(--text-secondary)' }}
+            >
+              {t.auth.logout}
+            </button>
+          </div>
+        )}
+      </div>
+    </header>
+  );
+}
+</file>
+
+<file path="app/components/layout/Sidebar.tsx">
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useI18n } from '@/app/providers';
+import Swal from 'sweetalert2';
+
+interface NavItem {
+  href?: string;
+  labelKey: string;
+  icon: string;
+  children?: NavItem[];
+}
+
+const NAV: NavItem[] = [
+  { href: '/dashboard', labelKey: 'dashboard', icon: '⊞' },
+  {
+    labelKey: 'master', icon: '☰',
+    children: [
+      { href: '/master/items', labelKey: 'items', icon: '📦' },
+      { href: '/master/brands', labelKey: 'brands', icon: '🏷️' },
+      { href: '/master/warehouses', labelKey: 'warehouses', icon: '🏭' },
+      { href: '/master/locations', labelKey: 'locations', icon: '📍' },
+      { href: '/master/vendors', labelKey: 'vendors', icon: '🚚' },
+      { href: '/master/customers', labelKey: 'customers', icon: '👤' },
+    ],
+  },
+  {
+    labelKey: 'transactions', icon: '📄',
+    children: [
+      { href: '/transactions/receive', labelKey: 'receive', icon: '📥' },
+      { href: '/transactions/issue', labelKey: 'issue', icon: '📤' },
+      { href: '/transactions/request', labelKey: 'request', icon: '📋' },
+      { href: '/transactions/transfer', labelKey: 'transfer', icon: '🔀' },
+      { href: '/transactions/disposal', labelKey: 'disposal', icon: '🗑️' },
+    ],
+  },
+  { href: '/inventory', labelKey: 'inventory', icon: '🗃️' },
+];
+
+function getLabel(key: string, t: ReturnType<typeof useI18n>['t']) {
+  return (t.nav as Record<string, string>)[key] ?? key;
+  Swal.fire({
+    icon: 'error',
+    title: 'Oops...',
+    text: `Missing translation for key: ${key}`,
+  });
+}
+
+export function Sidebar() {
+  const { t } = useI18n();
+  const pathname = usePathname();
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    master: true,
+    transactions: false,
+  });
+  const [collapsed, setCollapsed] = useState(false);
+
+  const toggle = (key: string) =>
+    setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }));
+
+  return (
+    <aside
+      className="flex flex-col transition-all duration-300 h-full shrink-0"
+      style={{
+        width: collapsed ? 64 : 240,
+        background: 'var(--bg-sidebar)',
+        borderRight: '1px solid rgba(255,255,255,0.05)',
+      }}
+    >
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-4 py-5 shrink-0">
+        <span className="text-2xl">📦</span>
+        {!collapsed && (
+          <span className="text-white font-bold text-sm leading-tight">
+            WMS<br />
+            <span className="text-blue-400 font-normal text-xs">Warehouse Mgmt</span>
+          </span>
+        )}
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="ml-auto text-slate-400 hover:text-white transition-colors text-lg"
+          aria-label="Toggle sidebar"
+        >
+          {collapsed ? '›' : '‹'}
+        </button>
+      </div>
+
+      {/* Nav items */}
+      <nav className="flex-1 overflow-y-auto py-2">
+        {NAV.map(item => {
+          if (item.children) {
+            const isOpen = openGroups[item.labelKey] ?? false;
+            const anyActive = item.children.some(c => c.href && pathname.startsWith(c.href));
+            return (
+              <div key={item.labelKey}>
+                <button
+                  onClick={() => toggle(item.labelKey)}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors
+                    ${anyActive ? 'text-blue-400' : 'text-slate-400 hover:text-white'}`}
+                  style={{ background: anyActive ? 'rgba(59,130,246,0.1)' : undefined }}
+                >
+                  <span className="text-base shrink-0">{item.icon}</span>
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 text-left font-medium">
+                        {getLabel(item.labelKey, t)}
+                      </span>
+                      <span className="text-xs">{isOpen ? '▾' : '▸'}</span>
+                    </>
+                  )}
+                </button>
+                {!collapsed && isOpen && (
+                  <div className="pl-4">
+                    {item.children.map(child => {
+                      const active = child.href ? pathname === child.href : false;
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href!}
+                          className={`flex items-center gap-3 px-4 py-2 text-sm rounded-lg mx-2 mb-0.5 transition-colors
+                            ${active
+                              ? 'bg-blue-600 text-white'
+                              : 'text-slate-400 hover:text-white hover:bg-white/5'
+                            }`}
+                        >
+                          <span className="text-sm">{child.icon}</span>
+                          <span>{getLabel(child.labelKey, t)}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          const active = item.href ? pathname === item.href : false;
+          return (
+            <Link
+              key={item.href}
+              href={item.href!}
+              className={`flex items-center gap-3 px-4 py-2.5 mx-2 mb-0.5 rounded-lg text-sm transition-colors
+                ${active
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                }`}
+            >
+              <span className="text-base shrink-0">{item.icon}</span>
+              {!collapsed && (
+                <span className="font-medium">{getLabel(item.labelKey, t)}</span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+    </aside>
+  );
+}
+</file>
+
+<file path="app/components/ui/Badge.tsx">
+type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'secondary' | 'primary' | 'purple';
+
+const variants: Record<BadgeVariant, string> = {
+  success: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  warning: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  danger: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  info: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  secondary: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+  primary: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+  purple: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+};
+
+interface BadgeProps {
+  label: string;
+  variant?: BadgeVariant;
+  dot?: boolean;
+}
+
+export function Badge({ label, variant = 'secondary', dot = false }: BadgeProps) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]}`}>
+      {dot && <span className="w-1.5 h-1.5 rounded-full bg-current" />}
+      {label}
+    </span>
+  );
+}
+
+/** Map status string → Badge variant */
+export function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, BadgeVariant> = {
+    Draft: 'secondary', ร่าง: 'secondary',
+    Pending: 'warning', รอดำเนินการ: 'warning', รอรับ: 'warning', รอจ่าย: 'warning',
+    Completed: 'success', รับแล้ว: 'success', จ่ายแล้ว: 'success', โอนแล้ว: 'success', เสร็จสิ้น: 'success',
+    Approved: 'success', อนุมัติ: 'success',
+    Rejected: 'danger', ปฏิเสธ: 'danger',
+    Cancelled: 'danger', ยกเลิก: 'danger',
+    'In Progress': 'info', กำลังดำเนินการ: 'info',
+  };
+  return <Badge label={status} variant={map[status] ?? 'secondary'} dot />;
+}
+</file>
+
+<file path="app/components/ui/DataTable.tsx">
+'use client';
+
+import { useState, useMemo } from 'react';
+
+export interface Column<T> {
+  key: keyof T | string;
+  label: string;
+  render?: (value: unknown, row: T) => React.ReactNode;
+  sortable?: boolean;
+  className?: string;
+}
+
+interface DataTableProps<T extends { id: number | string }> {
+  columns: Column<T>[];
+  data: T[];
+  loading?: boolean;
+  emptyMessage?: string;
+  onEdit?: (row: T) => void;
+  onDelete?: (row: T) => void;
+  onView?: (row: T) => void;
+  actionsLabel?: string;
+}
+
+export function DataTable<T extends { id: number | string }>({
+  columns,
+  data,
+  loading = false,
+  emptyMessage = 'ไม่มีข้อมูล',
+  onEdit,
+  onDelete,
+  onView,
+  actionsLabel = 'จัดการ',
+}: DataTableProps<T>) {
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const sorted = useMemo(() => {
+    if (!sortKey) return data;
+    return [...data].sort((a, b) => {
+      const av = (a as Record<string, unknown>)[sortKey];
+      const bv = (b as Record<string, unknown>)[sortKey];
+      const cmp = String(av ?? '').localeCompare(String(bv ?? ''), 'th');
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [data, sortKey, sortDir]);
+
+  const hasActions = onEdit || onDelete || onView;
+
+  return (
+    <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--border)' }}>
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
+            {columns.map(col => (
+              <th
+                key={String(col.key)}
+                className={`px-4 py-3 text-left font-semibold text-xs uppercase tracking-wide select-none
+                  ${col.sortable ? 'cursor-pointer hover:text-blue-500 transition-colors' : ''}
+                  ${col.className ?? ''}`}
+                style={{ color: 'var(--text-secondary)' }}
+                onClick={col.sortable ? () => handleSort(String(col.key)) : undefined}
+              >
+                <span className="flex items-center gap-1">
+                  {col.label}
+                  {col.sortable && sortKey === String(col.key) && (
+                    <span>{sortDir === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </span>
+              </th>
+            ))}
+            {hasActions && (
+              <th
+                className="px-4 py-3 text-right text-xs uppercase tracking-wide font-semibold"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                {actionsLabel}
+              </th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {loading ? (
+            <tr>
+              <td
+                colSpan={columns.length + (hasActions ? 1 : 0)}
+                className="py-12 text-center"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <span>กำลังโหลด...</span>
+                </div>
+              </td>
+            </tr>
+          ) : sorted.length === 0 ? (
+            <tr>
+              <td
+                colSpan={columns.length + (hasActions ? 1 : 0)}
+                className="py-12 text-center"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                {emptyMessage}
+              </td>
+            </tr>
+          ) : (
+            sorted.map((row, i) => (
+              <tr
+                key={row.id}
+                className="border-t transition-colors hover:bg-blue-50/5"
+                style={{ borderColor: 'var(--border)', background: i % 2 === 0 ? 'var(--bg-card)' : 'transparent' }}
+              >
+                {columns.map(col => {
+                  const val = (row as Record<string, unknown>)[String(col.key)];
+                  return (
+                    <td key={String(col.key)} className={`px-4 py-3 ${col.className ?? ''}`} style={{ color: 'var(--text-primary)' }}>
+                      {col.render ? col.render(val, row) : String(val ?? '-')}
+                    </td>
+                  );
+                })}
+                {hasActions && (
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      {onView && (
+                        <button
+                          onClick={() => onView(row)}
+                          className="px-2.5 py-1 text-xs rounded-lg transition-colors"
+                          style={{ background: 'var(--bg)', color: 'var(--text-secondary)' }}
+                        >
+                          👁
+                        </button>
+                      )}
+                      {onEdit && (
+                        <button
+                          onClick={() => onEdit(row)}
+                          className="px-2.5 py-1 text-xs rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors dark:bg-blue-900/20 dark:text-blue-400"
+                        >
+                          แก้ไข
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button
+                          onClick={() => onDelete(row)}
+                          className="px-2.5 py-1 text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors dark:bg-red-900/20 dark:text-red-400"
+                        >
+                          ลบ
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+</file>
+
+<file path="app/components/ui/Modal.tsx">
+'use client';
+
+import { useEffect, useRef, type ReactNode } from 'react';
+
+interface ModalProps {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  footer?: ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  closeOnOutsideClick?: boolean;
+}
+
+const sizes = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+};
+
+export function Modal({ open, onClose, title, children, footer, size = 'md', closeOnOutsideClick = false }: ModalProps) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }}
+      onClick={(e) => { if (closeOnOutsideClick && e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        ref={ref}
+        className={`w-full ${sizes[size]} rounded-2xl shadow-2xl flex flex-col max-h-[90vh]`}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>
+            {title}
+          </h2>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-xl"
+            style={{ color: 'var(--text-secondary)' }}
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {children}
+        </div>
+
+        {/* Footer */}
+        {footer && (
+          <div className="px-6 py-4 border-t flex justify-end gap-3" style={{ borderColor: 'var(--border)' }}>
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="app/components/ui/Pagination.tsx">
+interface PaginationProps {
+  page: number;
+  total: number;
+  limit: number;
+  onPageChange: (p: number) => void;
+  ofLabel?: string;
+  pageLabel?: string;
+}
+
+export function Pagination({ page, total, limit, onPageChange, ofLabel = 'จาก', pageLabel = 'หน้า' }: PaginationProps) {
+  const totalPages = Math.ceil(total / limit);
+  if (totalPages <= 1) return null;
+
+  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  const visible = pages.filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1);
+
+  return (
+    <div className="flex items-center justify-between text-sm mt-4">
+      <span style={{ color: 'var(--text-secondary)' }}>
+        {pageLabel} {page} {ofLabel} {totalPages} ({total} รายการ)
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPageChange(page - 1)}
+          disabled={page === 1}
+          className="px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+          style={{ background: 'var(--bg)', color: 'var(--text-primary)' }}
+        >
+          ‹
+        </button>
+        {visible.map((p, i) => {
+          const prev = visible[i - 1];
+          return (
+            <div key={p} className="flex items-center gap-1">
+              {prev && p - prev > 1 && (
+                <span style={{ color: 'var(--text-secondary)' }}>…</span>
+              )}
+              <button
+                onClick={() => onPageChange(p)}
+                className="w-8 h-8 rounded-lg text-xs font-medium transition-colors"
+                style={{
+                  background: p === page ? 'var(--accent)' : 'var(--bg)',
+                  color: p === page ? '#fff' : 'var(--text-primary)',
+                }}
+              >
+                {p}
+              </button>
+            </div>
+          );
+        })}
+        <button
+          onClick={() => onPageChange(page + 1)}
+          disabled={page === totalPages}
+          className="px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+          style={{ background: 'var(--bg)', color: 'var(--text-primary)' }}
+        >
+          ›
+        </button>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="app/components/ui/SearchInput.tsx">
+'use client';
+
+interface SearchInputProps {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+}
+
+export function SearchInput({ value, onChange, placeholder = 'ค้นหา...', className = '' }: SearchInputProps) {
+  return (
+    <div className={`relative ${className}`}>
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+        🔍
+      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border transition-colors outline-none focus:ring-2 focus:ring-blue-500/30"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          color: 'var(--text-primary)',
+        }}
+      />
+      {value && (
+        <button
+          onClick={() => onChange('')}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs rounded-full w-4 h-4 flex items-center justify-center"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="app/components/ui/StatCard.tsx">
+import type { ReactNode } from 'react';
+
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: string;
+  sub?: string;
+  accent?: 'blue' | 'green' | 'yellow' | 'red' | 'purple';
+  trend?: 'up' | 'down' | 'neutral';
+}
+
+const accents = {
+  blue: { bg: 'bg-blue-500/10', icon: 'text-blue-500', border: 'border-blue-500/20' },
+  green: { bg: 'bg-green-500/10', icon: 'text-green-500', border: 'border-green-500/20' },
+  yellow: { bg: 'bg-yellow-500/10', icon: 'text-yellow-500', border: 'border-yellow-500/20' },
+  red: { bg: 'bg-red-500/10', icon: 'text-red-500', border: 'border-red-500/20' },
+  purple: { bg: 'bg-purple-500/10', icon: 'text-purple-500', border: 'border-purple-500/20' },
+};
+
+export function StatCard({ title, value, icon, sub, accent = 'blue', trend }: StatCardProps) {
+  const a = accents[accent];
+  return (
+    <div
+      className={`rounded-2xl p-5 border flex items-start gap-4 transition-shadow hover:shadow-md ${a.border}`}
+      style={{ background: 'var(--bg-card)' }}
+    >
+      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0 ${a.bg}`}>
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium mb-1 truncate" style={{ color: 'var(--text-secondary)' }}>
+          {title}
+        </p>
+        <p className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+          {typeof value === 'number' ? value.toLocaleString('th-TH') : value}
+        </p>
+        {sub && (
+          <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+            {trend === 'up' && <span className="text-green-500">↑ </span>}
+            {trend === 'down' && <span className="text-red-500">↓ </span>}
+            {sub}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="app/dashboards/page.tsx">
+'use client';
+
+import { useEffect, useState } from 'react';
+import { AppLayout } from '../components/layout/AppLayout';
+import { StatCard } from '../components/ui/StatCard';
+import { useI18n } from '../providers';
+
+export default function DashboardPage() {
+  const { t } = useI18n();
+  const [stats, setStats] = useState<Record<string, number> | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/dashboard')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setStats(data.data);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <AppLayout>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-bold">{t.dashboard.title}</h1>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            title={t.dashboard.totalItems}
+            value={stats?.totalItems || 0}
+            icon="📦"
+            accent="blue"
+          />
+          <StatCard
+            title={t.dashboard.totalStock}
+            value={stats?.totalStock || 0}
+            icon="🗃️"
+            accent="green"
+          />
+          <StatCard
+            title={t.dashboard.lowStock}
+            value={stats?.lowStock || 0}
+            icon="⚠️"
+            accent="yellow"
+            trend={(stats?.lowStock ?? 0) > 0 ? 'up' : 'neutral'}
+          />
+          <StatCard
+            title={t.dashboard.pendingDocs}
+            value={stats?.pendingDocs || 0}
+            icon="📄"
+            accent="purple"
+          />
+        </div>
+      )}
+
+      {/* Placeholder for more content */}
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="rounded-2xl p-6 border bg-card text-card-foreground shadow-sm" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+          <h3 className="font-semibold mb-4">{t.dashboard.recentActivity}</h3>
+          <p className="text-sm text-secondary" style={{ color: 'var(--text-secondary)' }}>{t.common.noData}</p>
+        </div>
+        <div className="rounded-2xl p-6 border bg-card text-card-foreground shadow-sm" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+          <h3 className="font-semibold mb-4">{t.dashboard.stockByWarehouse}</h3>
+          <p className="text-sm text-secondary" style={{ color: 'var(--text-secondary)' }}>{t.common.noData}</p>
+        </div>
+      </div>
+    </AppLayout>
+  );
+}
+</file>
+
+<file path="app/login/page.tsx">
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth, useI18n, useTheme } from '../providers';
+import { authService } from '@/lib/api/services/auth';
+
+export default function LoginPage() {
+    const router = useRouter();
+    const { t, lang, setLang } = useI18n();
+    const { theme, toggleTheme } = useTheme();
+    const { setUser } = useAuth();
+
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            const res = await authService.login({ username, password });
+            if (res.success && res.data) {
+                setUser(res.data.user);
+                router.push('/');
+            } else {
+                setError(res.message || t.auth.loginFailed);
+            }
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : t.auth.loginFailed);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Quick helper for mock credentials
+    const fillMock = (role: 'admin' | 'staff') => {
+        setUsername(role);
+        setPassword(role + '1234');
+    };
+
+    return (
+        <div className="min-h-screen flex items-center justify-center p-4 transition-colors" style={{ background: 'var(--bg)' }}>
+            {/* Settings toggles */}
+            <div className="absolute top-4 right-4 flex gap-2">
+                <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+                    {(['th', 'en'] as const).map(l => (
+                        <button
+                            key={l}
+                            onClick={() => setLang(l)}
+                            className="px-3 py-1 text-xs font-medium transition-colors"
+                            style={{
+                                background: lang === l ? 'var(--accent)' : 'var(--bg-card)',
+                                color: lang === l ? '#fff' : 'var(--text-secondary)',
+                            }}
+                        >
+                            {l.toUpperCase()}
+                        </button>
+                    ))}
+                </div>
+                <button
+                    onClick={toggleTheme}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors"
+                    style={{ background: 'var(--bg-card)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                >
+                    {theme === 'dark' ? '☀️' : '🌙'}
+                </button>
+            </div>
+
+            <div className="w-full max-w-md rounded-2xl shadow-xl overflow-hidden border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+                <div className="p-8">
+                    <div className="text-center mb-8">
+                        <div className="text-5xl mb-4">📦</div>
+                        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>WMS</h1>
+                        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{t.auth.systemName}</p>
+                    </div>
+
+                    <form onSubmit={handleLogin} className="space-y-5">
+                        <div>
+                            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                                {t.auth.username}
+                            </label>
+                            <input
+                                type="text"
+                                value={username}
+                                onChange={e => setUsername(e.target.value)}
+                                className="w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-shadow"
+                                style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                                {t.auth.password}
+                            </label>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                className="w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-shadow"
+                                style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                                required
+                            />
+                        </div>
+
+                        {error && (
+                            <div className="p-3 text-sm rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                                {error}
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full py-2.5 rounded-xl text-white font-medium transition-colors"
+                            style={{ background: 'var(--accent)' }}
+                        >
+                            {loading ? t.common.loading : t.auth.loginButton}
+                        </button>
+                    </form>
+                </div>
+
+                {/* Helper for demo */}
+                <div className="p-4 border-t flex justify-center gap-4 text-sm" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Demo:</span>
+                    <button onClick={() => fillMock('admin')} className="text-blue-500 hover:underline">Admin</button>
+                    <button onClick={() => fillMock('staff')} className="text-blue-500 hover:underline">Staff</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+</file>
+
+<file path="app/master/items/page.tsx">
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { AppLayout } from '@/app/components/layout/AppLayout';
+import { DataTable, type Column } from '@/app/components/ui/DataTable';
+import { Modal } from '@/app/components/ui/Modal';
+import { SearchInput } from '@/app/components/ui/SearchInput';
+import { Badge } from '@/app/components/ui/Badge';
+import { useI18n } from '@/app/providers';
+import { masterService } from '@/lib/api/services/master';
+import type { MastItem } from '@/lib/types';
+
+export default function MasterItemPage() {
+  const { t } = useI18n();
+
+  // State
+  const [items, setItems] = useState<MastItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<MastItem | null>(null);
+  
+  // Form State
+  const [formData, setFormData] = useState({
+    itemCode: '',
+    itemName: '',
+    isLotNo: false,
+    isSerialNo: false,
+    isActive: true,
+    uomId: 1, // Default mock UOM
+  });
+
+  const fetchItems = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await masterService.items.list({ search });
+      if (res.success) setItems(res.data);
+    } catch (error) {
+      console.error('Failed to fetch items:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => fetchItems(), 300);
+    return () => clearTimeout(timer);
+  }, [fetchItems]);
+
+  const handleOpenCreate = () => {
+    setEditingItem(null);
+    setFormData({ itemCode: '', itemName: '', isLotNo: false, isSerialNo: false, isActive: true, uomId: 1 });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (item: MastItem) => {
+    setEditingItem(item);
+    setFormData({
+      itemCode: item.itemCode,
+      itemName: item.itemName,
+      isLotNo: item.isLotNo,
+      isSerialNo: item.isSerialNo,
+      isActive: item.isActive,
+      uomId: item.uomId,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (item: MastItem) => {
+    if (confirm(`ต้องการลบสินค้า ${item.itemCode} หรือไม่?`)) {
+      await masterService.items.remove(item.id);
+      fetchItems();
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      const payload: Omit<MastItem, 'id' | 'createDate' | 'updateDate'> = {
+        itemCode: formData.itemCode,
+        itemName: formData.itemName,
+        isLotNo: formData.isLotNo,
+        isSerialNo: formData.isSerialNo,
+        isActive: formData.isActive,
+        uomId: formData.uomId,
+        brandId: 1,
+        groupId: 1,
+        minAlter: 0,
+        maxAlter: 100,
+        locationId: 1,
+        buyPrice: 0,
+        sellPrice: 0,
+        isDelete: false,
+        createBy: 'admin',
+        updateBy: 'admin',
+      };
+
+      if (editingItem) {
+        await masterService.items.update(editingItem.id, payload);
+      } else {
+        await masterService.items.create(payload);
+      }
+      setIsModalOpen(false);
+      fetchItems();
+    } catch (error) {
+      console.error('Save failed:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    }
+  };
+
+  // Table Columns Setup
+  const columns: Column<MastItem>[] = [
+    { key: 'itemCode', label: t.master.item.itemCode, sortable: true },
+    { key: 'itemName', label: t.master.item.itemName, sortable: true },
+    {
+      key: 'isLotNo',
+      label: 'Lot Control',
+      render: (val) => val ? <Badge label="Yes" variant="info" /> : <Badge label="No" variant="secondary" />
+    },
+    {
+      key: 'isSerialNo',
+      label: 'Serial Control',
+      render: (val) => val ? <Badge label="Yes" variant="purple" /> : <Badge label="No" variant="secondary" />
+    },
+    {
+      key: 'isActive',
+      label: 'สถานะ',
+      render: (val) => val ? <Badge label="Active" variant="success" /> : <Badge label="Inactive" variant="danger" />
+    },
+  ];
+
+  return (
+    <AppLayout>
+      {/* Header Section */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{t.master.item.title}</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>จัดการข้อมูลรหัสสินค้าทั้งหมดในระบบ</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <SearchInput value={search} onChange={setSearch} placeholder="ค้นหารหัส หรือ ชื่อสินค้า..." className="w-64" />
+          <button
+            onClick={handleOpenCreate}
+            className="px-4 py-2 text-sm font-medium text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity"
+            style={{ background: 'var(--accent)' }}
+          >
+            + สร้างสินค้าใหม่
+          </button>
+        </div>
+      </div>
+
+      {/* Data Table */}
+      <DataTable
+        columns={columns}
+        data={items}
+        loading={loading}
+        onEdit={handleOpenEdit}
+        onDelete={handleDelete}
+      />
+
+      {/* Create / Edit Modal */}
+      <Modal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editingItem ? `แก้ไขสินค้า: ${editingItem.itemCode}` : 'สร้างสินค้าใหม่'}
+        size="md"
+        footer={
+          <>
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="px-4 py-2 text-sm font-medium rounded-lg transition-colors border"
+              style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            >
+              ยกเลิก
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 text-sm font-medium text-white rounded-lg transition-opacity hover:opacity-90"
+              style={{ background: 'var(--accent)' }}
+            >
+              บันทึกข้อมูล
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-primary)' }}>รหัสสินค้า (Item Code)</label>
+            <input
+              type="text"
+              value={formData.itemCode}
+              onChange={e => setFormData({ ...formData, itemCode: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-lg border focus:ring-2 focus:ring-blue-500/50 outline-none"
+              style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-primary)' }}>ชื่อสินค้า (Item Name)</label>
+            <input
+              type="text"
+              value={formData.itemName}
+              onChange={e => setFormData({ ...formData, itemName: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-lg border focus:ring-2 focus:ring-blue-500/50 outline-none"
+              style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            />
+          </div>
+          <div className="flex gap-6 pt-2">
+            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--text-primary)' }}>
+              <input
+                type="checkbox"
+                checked={formData.isLotNo}
+                onChange={e => setFormData({ ...formData, isLotNo: e.target.checked })}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              ควบคุม Lot
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--text-primary)' }}>
+              <input
+                type="checkbox"
+                checked={formData.isSerialNo}
+                onChange={e => setFormData({ ...formData, isSerialNo: e.target.checked })}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              ควบคุม Serial
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--text-primary)' }}>
+              <input
+                type="checkbox"
+                checked={formData.isActive}
+                onChange={e => setFormData({ ...formData, isActive: e.target.checked })}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              ใช้งาน
+            </label>
+          </div>
+        </div>
+      </Modal>
+    </AppLayout>
+  );
+}
+</file>
+
+<file path="app/providers.tsx">
+'use client';
+
+import {
+    createContext,
+    useContext,
+    useState,
+    useEffect,
+    useCallback,
+    type ReactNode,
+} from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { translations, type Lang, type Translations } from '@/lib/i18n/translations';
+import type { CurrentUser } from '@/lib/types';
+
+// ─── Theme ────────────────────────────────────────────────────
+
+interface ThemeContextValue {
+    theme: 'light' | 'dark';
+    toggleTheme: () => void;
+}
+
+const ThemeContext = createContext<ThemeContextValue>({
+    theme: 'light',
+    toggleTheme: () => { },
+});
+
+export const useTheme = () => useContext(ThemeContext);
+
+// ─── I18n ─────────────────────────────────────────────────────
+
+interface I18nContextValue {
+    lang: Lang;
+    t: Translations;
+    setLang: (l: Lang) => void;
+}
+
+const I18nContext = createContext<I18nContextValue>({
+    lang: 'th',
+    t: translations.th,
+    setLang: () => { },
+});
+
+export const useI18n = () => useContext(I18nContext);
+
+// ─── Auth ─────────────────────────────────────────────────────
+
+interface AuthContextValue {
+    user: CurrentUser | null;
+    setUser: (u: CurrentUser | null) => void;
+    logout: () => void;
+}
+
+const AuthContext = createContext<AuthContextValue>({
+    user: null,
+    setUser: () => { },
+    logout: () => { },
+});
+
+export const useAuth = () => useContext(AuthContext);
+
+// ─── Providers ────────────────────────────────────────────────
+
+export function Providers({ children }: { children: ReactNode }) {
+    const [theme, setTheme] = useState<'light' | 'dark'>('light');
+    const [lang, setLangState] = useState<Lang>('th');
+    const [user, setUser] = useState<CurrentUser | null>(null);
+    const [mounted, setMounted] = useState(false);
+    const router = useRouter();
+    const pathname = usePathname();
+
+    // Load from localStorage after mount
+    useEffect(() => {
+        const savedTheme = (localStorage.getItem('wms-theme') as 'light' | 'dark') ?? 'light';
+        const savedLang = (localStorage.getItem('wms-lang') as Lang) ?? 'th';
+        const savedUser = localStorage.getItem('wms-user');
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTheme(savedTheme);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setLangState(savedLang);
+        if (savedUser) {
+            try { setUser(JSON.parse(savedUser)); } catch { /* ignore */ }
+        }
+        setMounted(true);
+    }, []);
+
+    // Sync theme class on <html>
+    useEffect(() => {
+        if (!mounted) return;
+        const root = document.documentElement;
+        root.classList.toggle('dark', theme === 'dark');
+        localStorage.setItem('wms-theme', theme);
+    }, [theme, mounted]);
+
+    // Route Protection
+    useEffect(() => {
+        if (!mounted) return;
+        if (!user && pathname !== '/login') {
+            router.replace('/login');
+        } else if (user && pathname === '/login') {
+            router.replace('/dashboard');
+        }
+    }, [user, pathname, mounted, router]);
+
+    const toggleTheme = useCallback(() => {
+        setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+    }, []);
+
+    const setLang = useCallback((l: Lang) => {
+        setLangState(l);
+        localStorage.setItem('wms-lang', l);
+    }, []);
+
+    const logout = useCallback(() => {
+        setUser(null);
+        localStorage.removeItem('wms-user');
+        router.replace('/login');
+    }, [router]);
+
+    const handleSetUser = useCallback((u: CurrentUser | null) => {
+        setUser(u);
+        if (u) localStorage.setItem('wms-user', JSON.stringify(u));
+        else localStorage.removeItem('wms-user');
+    }, []);
+
+    // Prevent SSR flash and hide content until route protection resolves
+    if (!mounted) return null;
+    if (!user && pathname !== '/login') return null; // wait for redirect
+
+    return (
+        <ThemeContext.Provider value={{ theme, toggleTheme }}>
+            <I18nContext.Provider value={{ lang, t: translations[lang], setLang }}>
+                <AuthContext.Provider value={{ user, setUser: handleSetUser, logout }}>
+                    {children}
+                </AuthContext.Provider>
+            </I18nContext.Provider>
+        </ThemeContext.Provider>
+    );
+}
+</file>
+
+<file path="components/ui/button.tsx">
+import { Button as ButtonPrimitive } from "@base-ui/react/button"
+import { cva, type VariantProps } from "class-variance-authority"
+import { cn } from "cn"
+
+const buttonVariants = cva(
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        outline:
+          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+        secondary:
+          "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+        ghost:
+          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+        destructive:
+          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default:
+          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
+        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+        icon: "size-8",
+        "icon-xs":
+          "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
+        "icon-sm":
+          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
+        "icon-lg": "size-9",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+function Button({
+  className,
+  variant = "default",
+  size = "default",
+  ...props
+}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  return (
+    <ButtonPrimitive
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  )
+}
+
+export { Button, buttonVariants }
+</file>
+
+<file path="lib/api/services/auth.ts">
+import type { LoginRequest, LoginResponse } from '../../types';
+import { apiClient } from '../client';
+
+export const authService = {
+  login: (data: LoginRequest) =>
+    apiClient.post<LoginResponse>('/api/auth/login', data),
+
+  getProfile: () =>
+    apiClient.get<LoginResponse['user']>('/api/auth/profile'),
+};
+</file>
+
+<file path="lib/api/services/inventory.ts">
+import type { Inventory, InventoryView, PaginationParams } from '../../types';
+import { apiClient } from '../client';
+
+export const inventoryService = {
+  list: (p?: PaginationParams & { warehouseId?: number }) => {
+    const q = new URLSearchParams();
+    if (p?.page) q.set('page', String(p.page));
+    if (p?.limit) q.set('limit', String(p.limit));
+    if (p?.search) q.set('search', p.search);
+    if (p?.warehouseId) q.set('warehouseId', String(p.warehouseId));
+    return apiClient.get<InventoryView[]>(`/api/inventory?${q}`);
+  },
+  get: (id: number) => apiClient.get<InventoryView>(`/api/inventory/${id}`),
+};
+</file>
+
+<file path="lib/api/services/master.ts">
+import type {
+  MastItem, MastBrand, MastWarehouse, MastLocation, MastUom, MastVendor, MastCustomer,
+  ApiResponse, PaginationParams,
+} from '../../types';
+import { apiClient } from '../client';
+
+// ─── Items ───────────────────────────────────────────────────
+export const masterService = {
+  items: {
+    list: (p?: PaginationParams) => {
+      const q = new URLSearchParams();
+      if (p?.page) q.set('page', String(p.page));
+      if (p?.limit) q.set('limit', String(p.limit));
+      if (p?.search) q.set('search', p.search);
+      return apiClient.get<MastItem[]>(`/api/master/items?${q}`);
+    },
+    get: (id: number) => apiClient.get<MastItem>(`/api/master/items/${id}`),
+    create: (data: Omit<MastItem, 'id' | 'createDate' | 'updateDate'>) =>
+      apiClient.post<MastItem>('/api/master/items', data),
+    update: (id: number, data: Partial<MastItem>) =>
+      apiClient.put<MastItem>(`/api/master/items/${id}`, data),
+    remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/items/${id}`),
+  },
+  brands: {
+    list: (p?: PaginationParams) => {
+      const q = new URLSearchParams();
+      if (p?.search) q.set('search', p.search);
+      return apiClient.get<MastBrand[]>(`/api/master/brands?${q}`);
+    },
+    create: (data: Omit<MastBrand, 'id' | 'createDate' | 'updateDate'>) =>
+      apiClient.post<MastBrand>('/api/master/brands', data),
+    update: (id: number, data: Partial<MastBrand>) =>
+      apiClient.put<MastBrand>(`/api/master/brands/${id}`, data),
+    remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/brands/${id}`),
+  },
+  warehouses: {
+    list: (p?: PaginationParams) => {
+      const q = new URLSearchParams();
+      if (p?.search) q.set('search', p.search);
+      return apiClient.get<MastWarehouse[]>(`/api/master/warehouses?${q}`);
+    },
+    create: (data: Omit<MastWarehouse, 'id' | 'createDate' | 'updateDate'>) =>
+      apiClient.post<MastWarehouse>('/api/master/warehouses', data),
+    update: (id: number, data: Partial<MastWarehouse>) =>
+      apiClient.put<MastWarehouse>(`/api/master/warehouses/${id}`, data),
+    remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/warehouses/${id}`),
+  },
+  locations: {
+    list: (p?: PaginationParams) => {
+      const q = new URLSearchParams();
+      if (p?.search) q.set('search', p.search);
+      return apiClient.get<MastLocation[]>(`/api/master/locations?${q}`);
+    },
+    create: (data: Omit<MastLocation, 'id' | 'createDate' | 'updateDate'>) =>
+      apiClient.post<MastLocation>('/api/master/locations', data),
+    update: (id: number, data: Partial<MastLocation>) =>
+      apiClient.put<MastLocation>(`/api/master/locations/${id}`, data),
+    remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/locations/${id}`),
+  },
+  uoms: {
+    list: () => apiClient.get<MastUom[]>('/api/master/uom'),
+    create: (data: Omit<MastUom, 'id' | 'createDate' | 'updateDate'>) =>
+      apiClient.post<MastUom>('/api/master/uom', data),
+    update: (id: number, data: Partial<MastUom>) =>
+      apiClient.put<MastUom>(`/api/master/uom/${id}`, data),
+    remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/uom/${id}`),
+  },
+  vendors: {
+    list: (p?: PaginationParams) => {
+      const q = new URLSearchParams();
+      if (p?.search) q.set('search', p.search);
+      return apiClient.get<MastVendor[]>(`/api/master/vendors?${q}`);
+    },
+    create: (data: Omit<MastVendor, 'id' | 'createDate' | 'updateDate'>) =>
+      apiClient.post<MastVendor>('/api/master/vendors', data),
+    update: (id: number, data: Partial<MastVendor>) =>
+      apiClient.put<MastVendor>(`/api/master/vendors/${id}`, data),
+    remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/vendors/${id}`),
+  },
+  customers: {
+    list: (p?: PaginationParams) => {
+      const q = new URLSearchParams();
+      if (p?.search) q.set('search', p.search);
+      return apiClient.get<MastCustomer[]>(`/api/master/customers?${q}`);
+    },
+    create: (data: Omit<MastCustomer, 'id' | 'createDate' | 'updateDate'>) =>
+      apiClient.post<MastCustomer>('/api/master/customers', data),
+    update: (id: number, data: Partial<MastCustomer>) =>
+      apiClient.put<MastCustomer>(`/api/master/customers/${id}`, data),
+    remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/customers/${id}`),
+  },
+};
+</file>
+
+<file path="lib/api/services/transaction.ts">
+import type {
+  DocReceive, DocReceiveDetail, DocIssue, DocIssueDetail,
+  DocTransfer, DocRequest, DocDisposal, PaginationParams,
+} from '../../types';
+import { apiClient } from '../client';
+
+export const transactionService = {
+  receive: {
+    list: (p?: PaginationParams) => {
+      const q = new URLSearchParams();
+      if (p?.search) q.set('search', p.search);
+      return apiClient.get<DocReceive[]>(`/api/transactions/receive?${q}`);
+    },
+    get: (id: number) => apiClient.get<DocReceive & { details: DocReceiveDetail[] }>(`/api/transactions/receive/${id}`),
+    create: (data: Omit<DocReceive, 'id' | 'createDate' | 'updateDate'> & { details: Omit<DocReceiveDetail, 'id' | 'docId' | 'createDate' | 'updateDate'>[] }) =>
+      apiClient.post<DocReceive>('/api/transactions/receive', data),
+    update: (id: number, data: Partial<DocReceive>) =>
+      apiClient.put<DocReceive>(`/api/transactions/receive/${id}`, data),
+    approve: (id: number) =>
+      apiClient.post<DocReceive>(`/api/transactions/receive/${id}/approve`, {}),
+  },
+  issue: {
+    list: (p?: PaginationParams) => {
+      const q = new URLSearchParams();
+      if (p?.search) q.set('search', p.search);
+      return apiClient.get<DocIssue[]>(`/api/transactions/issue?${q}`);
+    },
+    get: (id: number) => apiClient.get<DocIssue & { details: DocIssueDetail[] }>(`/api/transactions/issue/${id}`),
+    create: (data: Omit<DocIssue, 'id' | 'createDate' | 'updateDate'> & { details: Omit<DocIssueDetail, 'id' | 'docId' | 'createDate' | 'updateDate'>[] }) =>
+      apiClient.post<DocIssue>('/api/transactions/issue', data),
+    update: (id: number, data: Partial<DocIssue>) =>
+      apiClient.put<DocIssue>(`/api/transactions/issue/${id}`, data),
+  },
+  transfer: {
+    list: (p?: PaginationParams) => {
+      const q = new URLSearchParams();
+      if (p?.search) q.set('search', p.search);
+      return apiClient.get<DocTransfer[]>(`/api/transactions/transfer?${q}`);
+    },
+    create: (data: Omit<DocTransfer, 'id' | 'createDate' | 'updateDate'>) =>
+      apiClient.post<DocTransfer>('/api/transactions/transfer', data),
+    update: (id: number, data: Partial<DocTransfer>) =>
+      apiClient.put<DocTransfer>(`/api/transactions/transfer/${id}`, data),
+  },
+  request: {
+    list: (p?: PaginationParams) => {
+      const q = new URLSearchParams();
+      if (p?.search) q.set('search', p.search);
+      return apiClient.get<DocRequest[]>(`/api/transactions/request?${q}`);
+    },
+    create: (data: Omit<DocRequest, 'id' | 'createDate' | 'updateDate'>) =>
+      apiClient.post<DocRequest>('/api/transactions/request', data),
+    update: (id: number, data: Partial<DocRequest>) =>
+      apiClient.put<DocRequest>(`/api/transactions/request/${id}`, data),
+  },
+  disposal: {
+    list: (p?: PaginationParams) => {
+      const q = new URLSearchParams();
+      if (p?.search) q.set('search', p.search);
+      return apiClient.get<DocDisposal[]>(`/api/transactions/disposal?${q}`);
+    },
+    create: (data: Omit<DocDisposal, 'id' | 'createDate' | 'updateDate'>) =>
+      apiClient.post<DocDisposal>('/api/transactions/disposal', data),
+    update: (id: number, data: Partial<DocDisposal>) =>
+      apiClient.put<DocDisposal>(`/api/transactions/disposal/${id}`, data),
+  },
+};
+</file>
+
+<file path="lib/api/client.ts">
+import type { ApiResponse } from '../types';
+
+const BASE_URL = '';  // same-origin Next.js API routes
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+async function request<T>(
+  url: string,
+  options?: RequestInit
+): Promise<ApiResponse<T>> {
+  const res = await fetch(`${BASE_URL}${url}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new ApiError(res.status, err.message ?? res.statusText);
+  }
+
+  return res.json() as Promise<ApiResponse<T>>;
+}
+
+export const apiClient = {
+  get: <T>(url: string) => request<T>(url),
+  post: <T>(url: string, body: unknown) =>
+    request<T>(url, { method: 'POST', body: JSON.stringify(body) }),
+  put: <T>(url: string, body: unknown) =>
+    request<T>(url, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: <T>(url: string) => request<T>(url, { method: 'DELETE' }),
+};
+</file>
+
+<file path="lib/i18n/translations.ts">
+export type Lang = 'th' | 'en';
+
+const th = {
+  common: {
+    save: 'บันทึก',
+    cancel: 'ยกเลิก',
+    delete: 'ลบ',
+    edit: 'แก้ไข',
+    create: 'สร้างใหม่',
+    search: 'ค้นหา',
+    confirm: 'ยืนยัน',
+    back: 'ย้อนกลับ',
+    view: 'ดู',
+    export: 'ส่งออก',
+    import: 'นำเข้า',
+    print: 'พิมพ์',
+    approve: 'อนุมัติ',
+    reject: 'ปฏิเสธ',
+    submit: 'ส่ง',
+    close: 'ปิด',
+    loading: 'กำลังโหลด...',
+    noData: 'ไม่มีข้อมูล',
+    error: 'เกิดข้อผิดพลาด',
+    success: 'สำเร็จ',
+    warning: 'คำเตือน',
+    all: 'ทั้งหมด',
+    active: 'ใช้งาน',
+    inactive: 'ไม่ใช้งาน',
+    yes: 'ใช่',
+    no: 'ไม่ใช่',
+    actions: 'จัดการ',
+    total: 'รวม',
+    status: 'สถานะ',
+    remark: 'หมายเหตุ',
+    date: 'วันที่',
+    createdAt: 'วันที่สร้าง',
+    updatedAt: 'วันที่แก้ไข',
+    createdBy: 'สร้างโดย',
+    updatedBy: 'แก้ไขโดย',
+    rowsPerPage: 'แถวต่อหน้า',
+    of: 'จาก',
+    page: 'หน้า',
+    confirmDelete: 'ยืนยันการลบ?',
+    deleteMessage: 'ข้อมูลนี้จะถูกลบถาวร ต้องการดำเนินการต่อหรือไม่?',
+    saveSuccess: 'บันทึกข้อมูลสำเร็จ',
+    deleteSuccess: 'ลบข้อมูลสำเร็จ',
+    searchPlaceholder: 'ค้นหา...',
+  },
+  nav: {
+    dashboard: 'แดชบอร์ด',
+    master: 'ข้อมูลหลัก',
+    items: 'สินค้า',
+    brands: 'แบรนด์',
+    groups: 'กลุ่มสินค้า',
+    locations: 'ที่เก็บสินค้า',
+    warehouses: 'คลังสินค้า',
+    vendors: 'ผู้จำหน่าย',
+    customers: 'ลูกค้า',
+    uom: 'หน่วยนับ',
+    transactions: 'รายการเอกสาร',
+    receive: 'รับสินค้า',
+    issue: 'จ่ายสินค้า',
+    request: 'ขอเบิก',
+    transfer: 'โอนย้าย',
+    disposal: 'ตัดจำหน่าย',
+    inventory: 'สินค้าคงคลัง',
+    reports: 'รายงาน',
+    settings: 'ตั้งค่า',
+    users: 'ผู้ใช้งาน',
+    roles: 'สิทธิ์การใช้งาน',
+  },
+  dashboard: {
+    title: 'แดชบอร์ด',
+    totalItems: 'สินค้าทั้งหมด',
+    totalStock: 'ยอดคงคลังรวม',
+    lowStock: 'สินค้าใกล้หมด',
+    pendingDocs: 'เอกสารรอดำเนินการ',
+    recentActivity: 'กิจกรรมล่าสุด',
+    stockByWarehouse: 'สินค้าแยกตามคลัง',
+    todayReceive: 'รับเข้าวันนี้',
+    todayIssue: 'จ่ายออกวันนี้',
+    expiringSoon: 'ใกล้หมดอายุ',
+    totalValue: 'มูลค่ารวม',
+  },
+  master: {
+    item: {
+      title: 'สินค้า',
+      itemCode: 'รหัสสินค้า',
+      itemName: 'ชื่อสินค้า',
+      brand: 'แบรนด์',
+      group: 'กลุ่ม',
+      uom: 'หน่วยนับ',
+      location: 'ที่เก็บ',
+      warehouse: 'คลัง',
+      buyPrice: 'ราคาซื้อ',
+      sellPrice: 'ราคาขาย',
+      minAlter: 'ต่ำสุด',
+      maxAlter: 'สูงสุด',
+      isLotNo: 'ติดตาม Lot No.',
+      isSerialNo: 'ติดตาม Serial No.',
+      createItem: 'เพิ่มสินค้า',
+      editItem: 'แก้ไขสินค้า',
+    },
+    brand: {
+      title: 'แบรนด์',
+      nameTh: 'ชื่อ (TH)',
+      nameEn: 'ชื่อ (EN)',
+      createBrand: 'เพิ่มแบรนด์',
+      editBrand: 'แก้ไขแบรนด์',
+    },
+    warehouse: {
+      title: 'คลังสินค้า',
+      code: 'รหัสคลัง',
+      warehouseName: 'ชื่อคลัง',
+      description: 'รายละเอียด',
+      createWarehouse: 'เพิ่มคลังสินค้า',
+      editWarehouse: 'แก้ไขคลังสินค้า',
+    },
+    location: {
+      title: 'ที่เก็บสินค้า',
+      code: 'รหัส',
+      name: 'ชื่อที่เก็บ',
+      createLocation: 'เพิ่มที่เก็บ',
+      editLocation: 'แก้ไขที่เก็บ',
+    },
+    vendor: {
+      title: 'ผู้จำหน่าย',
+      vendCode: 'รหัสผู้จำหน่าย',
+      vendName: 'ชื่อผู้จำหน่าย',
+      contactName: 'ชื่อผู้ติดต่อ',
+      tel: 'เบอร์โทร',
+      address: 'ที่อยู่',
+      remark: 'หมายเหตุ',
+      createVendor: 'เพิ่มผู้จำหน่าย',
+      editVendor: 'แก้ไขผู้จำหน่าย',
+    },
+    customer: {
+      title: 'ลูกค้า',
+      custCode: 'รหัสลูกค้า',
+      custName: 'ชื่อลูกค้า',
+      contactName: 'ชื่อผู้ติดต่อ',
+      tel: 'เบอร์โทร',
+      address: 'ที่อยู่',
+      remark: 'หมายเหตุ',
+      createCustomer: 'เพิ่มลูกค้า',
+      editCustomer: 'แก้ไขลูกค้า',
+    },
+  },
+  transaction: {
+    docNo: 'เลขที่เอกสาร',
+    docType: 'ประเภทเอกสาร',
+    docDate: 'วันที่เอกสาร',
+    vendor: 'ผู้จำหน่าย',
+    customer: 'ลูกค้า',
+    warehouse: 'คลัง',
+    status: 'สถานะ',
+    item: 'สินค้า',
+    qty: 'จำนวน',
+    uom: 'หน่วย',
+    receive: {
+      title: 'รับสินค้า (GR)',
+      create: 'สร้างใบรับสินค้า',
+      detail: 'รายละเอียดการรับ',
+    },
+    issue: {
+      title: 'จ่ายสินค้า (GI)',
+      create: 'สร้างใบจ่ายสินค้า',
+      detail: 'รายละเอียดการจ่าย',
+    },
+    request: {
+      title: 'ใบขอเบิก',
+      create: 'สร้างใบขอเบิก',
+      employee: 'พนักงาน',
+      fromLocation: 'จากที่เก็บ',
+      toWarehouse: 'ไปยังคลัง',
+      pickingQty: 'จำนวนที่หยิบ',
+      returnQty: 'จำนวนคืน',
+    },
+    transfer: {
+      title: 'โอนย้ายสินค้า',
+      create: 'สร้างใบโอนย้าย',
+      fromWarehouse: 'จากคลัง',
+      toWarehouse: 'ไปยังคลัง',
+    },
+    disposal: {
+      title: 'ตัดจำหน่าย',
+      create: 'สร้างใบตัดจำหน่าย',
+      reason: 'เหตุผล',
+    },
+  },
+  inventory: {
+    title: 'สินค้าคงคลัง',
+    itemCode: 'รหัสสินค้า',
+    itemName: 'ชื่อสินค้า',
+    lotNo: 'Lot No.',
+    serialNo: 'Serial No.',
+    qty: 'จำนวนคงเหลือ',
+    price: 'ราคา',
+    location: 'ที่เก็บ',
+    warehouse: 'คลัง',
+    mfgDate: 'วันที่ผลิต',
+    expireDate: 'วันหมดอายุ',
+    totalValue: 'มูลค่ารวม',
+  },
+  status: {
+    draft: 'ร่าง',
+    pending: 'รอดำเนินการ',
+    approved: 'อนุมัติ',
+    rejected: 'ปฏิเสธ',
+    completed: 'เสร็จสิ้น',
+    cancelled: 'ยกเลิก',
+    inProgress: 'กำลังดำเนินการ',
+  },
+  auth: {
+    login: 'เข้าสู่ระบบ',
+    logout: 'ออกจากระบบ',
+    username: 'ชื่อผู้ใช้',
+    password: 'รหัสผ่าน',
+    loginButton: 'เข้าสู่ระบบ',
+    loginFailed: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',
+    welcome: 'ยินดีต้อนรับ',
+    systemName: 'ระบบจัดการคลังสินค้า',
+  },
+};
+
+const en: typeof th = {
+  common: {
+    save: 'Save',
+    cancel: 'Cancel',
+    delete: 'Delete',
+    edit: 'Edit',
+    create: 'Create',
+    search: 'Search',
+    confirm: 'Confirm',
+    back: 'Back',
+    view: 'View',
+    export: 'Export',
+    import: 'Import',
+    print: 'Print',
+    approve: 'Approve',
+    reject: 'Reject',
+    submit: 'Submit',
+    close: 'Close',
+    loading: 'Loading...',
+    noData: 'No data found',
+    error: 'An error occurred',
+    success: 'Success',
+    warning: 'Warning',
+    all: 'All',
+    active: 'Active',
+    inactive: 'Inactive',
+    yes: 'Yes',
+    no: 'No',
+    actions: 'Actions',
+    total: 'Total',
+    status: 'Status',
+    remark: 'Remark',
+    date: 'Date',
+    createdAt: 'Created At',
+    updatedAt: 'Updated At',
+    createdBy: 'Created By',
+    updatedBy: 'Updated By',
+    rowsPerPage: 'Rows per page',
+    of: 'of',
+    page: 'Page',
+    confirmDelete: 'Confirm Delete?',
+    deleteMessage: 'This record will be permanently deleted. Continue?',
+    saveSuccess: 'Record saved successfully',
+    deleteSuccess: 'Record deleted successfully',
+    searchPlaceholder: 'Search...',
+  },
+  nav: {
+    dashboard: 'Dashboard',
+    master: 'Master Data',
+    items: 'Items',
+    brands: 'Brands',
+    groups: 'Item Groups',
+    locations: 'Locations',
+    warehouses: 'Warehouses',
+    vendors: 'Vendors',
+    customers: 'Customers',
+    uom: 'Unit of Measure',
+    transactions: 'Transactions',
+    receive: 'Goods Receipt',
+    issue: 'Goods Issue',
+    request: 'Stock Request',
+    transfer: 'Transfer',
+    disposal: 'Disposal',
+    inventory: 'Inventory',
+    reports: 'Reports',
+    settings: 'Settings',
+    users: 'Users',
+    roles: 'Roles',
+  },
+  dashboard: {
+    title: 'Dashboard',
+    totalItems: 'Total Items',
+    totalStock: 'Total Stock',
+    lowStock: 'Low Stock',
+    pendingDocs: 'Pending Documents',
+    recentActivity: 'Recent Activity',
+    stockByWarehouse: 'Stock by Warehouse',
+    todayReceive: "Today's Receipts",
+    todayIssue: "Today's Issues",
+    expiringSoon: 'Expiring Soon',
+    totalValue: 'Total Value',
+  },
+  master: {
+    item: {
+      title: 'Items',
+      itemCode: 'Item Code',
+      itemName: 'Item Name',
+      brand: 'Brand',
+      group: 'Group',
+      uom: 'UOM',
+      location: 'Location',
+      warehouse: 'Warehouse',
+      buyPrice: 'Buy Price',
+      sellPrice: 'Sell Price',
+      minAlter: 'Min Stock',
+      maxAlter: 'Max Stock',
+      isLotNo: 'Track Lot No.',
+      isSerialNo: 'Track Serial No.',
+      createItem: 'Add Item',
+      editItem: 'Edit Item',
+    },
+    brand: {
+      title: 'Brands',
+      nameTh: 'Name (TH)',
+      nameEn: 'Name (EN)',
+      createBrand: 'Add Brand',
+      editBrand: 'Edit Brand',
+    },
+    warehouse: {
+      title: 'Warehouses',
+      code: 'Code',
+      warehouseName: 'Warehouse Name',
+      description: 'Description',
+      createWarehouse: 'Add Warehouse',
+      editWarehouse: 'Edit Warehouse',
+    },
+    location: {
+      title: 'Locations',
+      code: 'Code',
+      name: 'Location Name',
+      createLocation: 'Add Location',
+      editLocation: 'Edit Location',
+    },
+    vendor: {
+      title: 'Vendors',
+      vendCode: 'Vendor Code',
+      vendName: 'Vendor Name',
+      contactName: 'Contact Name',
+      tel: 'Tel',
+      address: 'Address',
+      remark: 'Remark',
+      createVendor: 'Add Vendor',
+      editVendor: 'Edit Vendor',
+    },
+    customer: {
+      title: 'Customers',
+      custCode: 'Customer Code',
+      custName: 'Customer Name',
+      contactName: 'Contact Name',
+      tel: 'Tel',
+      address: 'Address',
+      remark: 'Remark',
+      createCustomer: 'Add Customer',
+      editCustomer: 'Edit Customer',
+    },
+  },
+  transaction: {
+    docNo: 'Doc No.',
+    docType: 'Doc Type',
+    docDate: 'Doc Date',
+    vendor: 'Vendor',
+    customer: 'Customer',
+    warehouse: 'Warehouse',
+    status: 'Status',
+    item: 'Item',
+    qty: 'Qty',
+    uom: 'UOM',
+    receive: {
+      title: 'Goods Receipt (GR)',
+      create: 'Create GR',
+      detail: 'Receipt Detail',
+    },
+    issue: {
+      title: 'Goods Issue (GI)',
+      create: 'Create GI',
+      detail: 'Issue Detail',
+    },
+    request: {
+      title: 'Stock Request',
+      create: 'Create Request',
+      employee: 'Employee',
+      fromLocation: 'From Location',
+      toWarehouse: 'To Warehouse',
+      pickingQty: 'Picking Qty',
+      returnQty: 'Return Qty',
+    },
+    transfer: {
+      title: 'Stock Transfer',
+      create: 'Create Transfer',
+      fromWarehouse: 'From Warehouse',
+      toWarehouse: 'To Warehouse',
+    },
+    disposal: {
+      title: 'Disposal',
+      create: 'Create Disposal',
+      reason: 'Reason',
+    },
+  },
+  inventory: {
+    title: 'Inventory',
+    itemCode: 'Item Code',
+    itemName: 'Item Name',
+    lotNo: 'Lot No.',
+    serialNo: 'Serial No.',
+    qty: 'On Hand Qty',
+    price: 'Price',
+    location: 'Location',
+    warehouse: 'Warehouse',
+    mfgDate: 'Mfg Date',
+    expireDate: 'Expire Date',
+    totalValue: 'Total Value',
+  },
+  status: {
+    draft: 'Draft',
+    pending: 'Pending',
+    approved: 'Approved',
+    rejected: 'Rejected',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    inProgress: 'In Progress',
+  },
+  auth: {
+    login: 'Login',
+    logout: 'Logout',
+    username: 'Username',
+    password: 'Password',
+    loginButton: 'Sign In',
+    loginFailed: 'Invalid username or password',
+    welcome: 'Welcome',
+    systemName: 'Warehouse Management System',
+  },
+};
+
+export const translations = { th, en } as const;
+export type Translations = typeof th;
+</file>
+
+<file path="lib/mock/data.ts">
+import type {
+  MastItem, MastBrand, MastGroup, MastLocation, MastWarehouse, MastUom,
+  MastVendor, MastCustomer, MastEmployee, MastStatus, MastDocType,
+  MastReason, MastTransType,
+  DocReceive, DocReceiveDetail, DocIssue, DocIssueDetail,
+  DocRequest, DocTransfer, DocDisposal,
+  Inventory, InventoryDamage,
+  UserProfile,
+} from '../types';
+
+const now = new Date().toISOString();
+const by = 'admin';
+
+// ─── Master ──────────────────────────────────────────────────
+
+export const brands: MastBrand[] = [
+  { id: 1, nameTh: 'ซัมซุง', nameEn: 'Samsung', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, nameTh: 'แอปเปิล', nameEn: 'Apple', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, nameTh: 'เดลล์', nameEn: 'Dell', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 4, nameTh: 'เอชพี', nameEn: 'HP', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const groups: MastGroup[] = [
+  { id: 1, nameTh: 'อิเล็กทรอนิกส์', nameEn: 'Electronics', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, nameTh: 'คอมพิวเตอร์', nameEn: 'Computers', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, nameTh: 'อุปกรณ์เสริม', nameEn: 'Accessories', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const uoms: MastUom[] = [
+  { id: 1, name: 'ชิ้น', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, name: 'กล่อง', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, name: 'โหล', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 4, name: 'ชุด', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const warehouses: MastWarehouse[] = [
+  { id: 1, code: 'WH01', warehouseName: 'คลังกลาง', description: 'คลังสินค้าหลัก', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, code: 'WH02', warehouseName: 'คลังสาขา A', description: 'คลังสาขา ภาคเหนือ', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, code: 'WH03', warehouseName: 'คลังสาขา B', description: 'คลังสาขา ภาคใต้', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const locations: MastLocation[] = [
+  { id: 1, code: 'A-01-01', name: 'ชั้น A แถว 01 ช่อง 01', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, code: 'A-01-02', name: 'ชั้น A แถว 01 ช่อง 02', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, code: 'B-01-01', name: 'ชั้น B แถว 01 ช่อง 01', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 4, code: 'B-02-01', name: 'ชั้น B แถว 02 ช่อง 01', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 5, code: 'C-01-01', name: 'ชั้น C แถว 01 ช่อง 01', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const vendors: MastVendor[] = [
+  { id: 1, vendCode: 'V001', vendName: 'บริษัท ไทยเทค จำกัด', contactName: 'คุณสมชาย', tel: '02-111-1111', address: '123 ถ.พระราม 4 กทม.', remark: '', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, vendCode: 'V002', vendName: 'บริษัท อิเล็คทรา จำกัด', contactName: 'คุณมานี', tel: '02-222-2222', address: '456 ถ.สุขุมวิท กทม.', remark: '', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, vendCode: 'V003', vendName: 'ห้างหุ้นส่วน แม็กซ์ซัพพลาย', contactName: 'คุณวิชัย', tel: '053-333-333', address: '789 ถ.นิมมาน เชียงใหม่', remark: '', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const customers: MastCustomer[] = [
+  { id: 1, custCode: 'C001', custName: 'บริษัท ซีเนอร์ยี่ จำกัด', contactName: 'คุณอรทัย', tel: '02-444-4444', address: '10 ถ.รัชดาภิเษก กทม.', remark: '', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, custCode: 'C002', custName: 'บริษัท โปรเทค จำกัด', contactName: 'คุณประภาส', tel: '02-555-5555', address: '20 ถ.ลาดพร้าว กทม.', remark: '', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, custCode: 'C003', custName: 'ร้าน ไอที คอร์เนอร์', contactName: 'คุณกมล', tel: '076-666-666', address: '30 ถ.ราษฎร์ อุทิศ ภูเก็ต', remark: '', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const items: MastItem[] = [
+  { id: 1, itemCode: 'ITM001', itemName: 'โน๊ตบุ๊ค Dell Inspiron 15', brandId: 3, minAlter: 5, maxAlter: 50, uomId: 1, locationId: 1, buyPrice: 18000, sellPrice: 22000, isLotNo: false, isSerialNo: true, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, itemCode: 'ITM002', itemName: 'iPhone 15 Pro 256GB', brandId: 2, minAlter: 3, maxAlter: 30, uomId: 1, locationId: 2, buyPrice: 35000, sellPrice: 42000, isLotNo: false, isSerialNo: true, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, itemCode: 'ITM003', itemName: 'Samsung Galaxy S24', brandId: 1, minAlter: 5, maxAlter: 40, uomId: 1, locationId: 2, buyPrice: 28000, sellPrice: 33000, isLotNo: false, isSerialNo: true, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 4, itemCode: 'ITM004', itemName: 'เมาส์ไร้สาย HP', brandId: 4, minAlter: 10, maxAlter: 100, uomId: 1, locationId: 3, buyPrice: 350, sellPrice: 550, isLotNo: false, isSerialNo: false, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 5, itemCode: 'ITM005', itemName: 'คีย์บอร์ด Dell', brandId: 3, minAlter: 10, maxAlter: 80, uomId: 1, locationId: 3, buyPrice: 450, sellPrice: 680, isLotNo: false, isSerialNo: false, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 6, itemCode: 'ITM006', itemName: 'จอมอนิเตอร์ 24" Samsung', brandId: 1, minAlter: 3, maxAlter: 20, uomId: 1, locationId: 4, buyPrice: 4500, sellPrice: 6200, isLotNo: false, isSerialNo: true, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 7, itemCode: 'ITM007', itemName: 'RAM DDR5 16GB', brandId: 1, minAlter: 20, maxAlter: 200, uomId: 1, locationId: 5, buyPrice: 1800, sellPrice: 2400, isLotNo: true, isSerialNo: false, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const transTypes: MastTransType[] = [
+  { id: 1, name: 'Receive', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, name: 'Issue', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, name: 'Transfer', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 4, name: 'Request', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 5, name: 'Disposal', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const statuses: MastStatus[] = [
+  { id: 1, transTypeId: 1, nameTh: 'ร่าง', nameEn: 'Draft', orderNo: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, transTypeId: 1, nameTh: 'รอรับ', nameEn: 'Pending', orderNo: 2, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, transTypeId: 1, nameTh: 'รับแล้ว', nameEn: 'Completed', orderNo: 3, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 4, transTypeId: 2, nameTh: 'ร่าง', nameEn: 'Draft', orderNo: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 5, transTypeId: 2, nameTh: 'รอจ่าย', nameEn: 'Pending', orderNo: 2, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 6, transTypeId: 2, nameTh: 'จ่ายแล้ว', nameEn: 'Completed', orderNo: 3, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 7, transTypeId: 3, nameTh: 'ร่าง', nameEn: 'Draft', orderNo: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 8, transTypeId: 3, nameTh: 'โอนแล้ว', nameEn: 'Completed', orderNo: 2, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const docTypes: MastDocType[] = [
+  { id: 1, transTypeId: 1, name: 'ใบรับสินค้าปกติ', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, transTypeId: 1, name: 'ใบรับคืน', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, transTypeId: 2, name: 'ใบจ่ายสินค้าปกติ', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 4, transTypeId: 2, name: 'ใบจ่ายสินค้าเสีย', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const reasons: MastReason[] = [
+  { id: 1, name: 'สินค้าชำรุด', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, name: 'สินค้าหมดอายุ', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, name: 'สินค้าสูญหาย', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 4, name: 'คุณภาพต่ำกว่ามาตรฐาน', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+// ─── Transactions ─────────────────────────────────────────────
+
+export const docReceives: DocReceive[] = [
+  { id: 1, docNo: 'GR2024001', docTypeId: 1, statusId: 3, warehouseId: 1, vendorId: 1, isActive: true, isDelete: false, createDate: '2024-01-10T10:00:00Z', createBy: by, updateDate: '2024-01-10T14:00:00Z', updateBy: by },
+  { id: 2, docNo: 'GR2024002', docTypeId: 1, statusId: 2, warehouseId: 1, vendorId: 2, isActive: true, isDelete: false, createDate: '2024-01-15T09:00:00Z', createBy: by, updateDate: '2024-01-15T09:00:00Z', updateBy: by },
+  { id: 3, docNo: 'GR2024003', docTypeId: 1, statusId: 1, warehouseId: 2, vendorId: 1, isActive: true, isDelete: false, createDate: '2024-01-20T11:00:00Z', createBy: by, updateDate: '2024-01-20T11:00:00Z', updateBy: by },
+];
+
+export const docReceiveDetails: DocReceiveDetail[] = [
+  { id: 1, docId: 1, itemId: 1, itemName: 'โน๊ตบุ๊ค Dell Inspiron 15', uomId: 1, itemQty: 10, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, docId: 1, itemId: 4, itemName: 'เมาส์ไร้สาย HP', uomId: 1, itemQty: 20, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, docId: 2, itemId: 2, itemName: 'iPhone 15 Pro 256GB', uomId: 1, itemQty: 5, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const docIssues: DocIssue[] = [
+  { id: 1, docNo: 'GI2024001', docTypeId: 3, statusId: 6, warehouseId: 1, customerId: 1, isActive: true, isDelete: false, createDate: '2024-01-12T10:00:00Z', createBy: by, updateDate: '2024-01-12T16:00:00Z', updateBy: by },
+  { id: 2, docNo: 'GI2024002', docTypeId: 3, statusId: 5, warehouseId: 1, customerId: 2, isActive: true, isDelete: false, createDate: '2024-01-18T09:00:00Z', createBy: by, updateDate: '2024-01-18T09:00:00Z', updateBy: by },
+];
+
+export const docIssueDetails: DocIssueDetail[] = [
+  { id: 1, docId: 1, itemId: 4, itemName: 'เมาส์ไร้สาย HP', uomId: 1, itemQty: 5, bookingQty: 5, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, docId: 2, itemId: 5, itemName: 'คีย์บอร์ด Dell', uomId: 1, itemQty: 3, bookingQty: 3, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const docTransfers: DocTransfer[] = [
+  { id: 1, docNo: 'TRF2024001', fromWarehouseId: 1, toWarehouseId: 2, statusId: 8, isActive: true, isDelete: false, createDate: '2024-01-14T10:00:00Z', createBy: by, updateDate: '2024-01-14T15:00:00Z', updateBy: by },
+  { id: 2, docNo: 'TRF2024002', fromWarehouseId: 1, toWarehouseId: 3, statusId: 7, isActive: true, isDelete: false, createDate: '2024-01-22T10:00:00Z', createBy: by, updateDate: '2024-01-22T10:00:00Z', updateBy: by },
+];
+
+export const docRequests: DocRequest[] = [
+  { id: 1, docNo: 'REQ2024001', statusId: 2, fromLocationId: 1, toWarehouseId: 1, employeeId: 1, isActive: true, isDelete: false, createDate: '2024-01-13T09:00:00Z', createBy: by, updateDate: '2024-01-13T09:00:00Z', updateBy: by },
+  { id: 2, docNo: 'REQ2024002', statusId: 3, fromLocationId: 2, toWarehouseId: 1, employeeId: 1, isActive: true, isDelete: false, createDate: '2024-01-16T14:00:00Z', createBy: by, updateDate: '2024-01-16T16:00:00Z', updateBy: by },
+];
+
+export const docDisposals: DocDisposal[] = [
+  { id: 1, docNo: 'DSP2024001', statusId: 3, warehouseId: 1, isActive: true, isDelete: false, createDate: '2024-01-11T10:00:00Z', createBy: by, updateDate: '2024-01-11T14:00:00Z', updateBy: by },
+];
+
+// ─── Inventory ─────────────────────────────────────────────
+
+export const inventories: Inventory[] = [
+  { id: 1, itemId: 1, lotNo: '', serialNo: 'SN-DELL-001', itemQty: 8, itemPrice: 18000, locationId: 1, mfgDate: '2023-06-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, itemId: 1, lotNo: '', serialNo: 'SN-DELL-002', itemQty: 2, itemPrice: 18000, locationId: 1, mfgDate: '2023-06-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, itemId: 2, lotNo: '', serialNo: 'SN-IPH-001', itemQty: 5, itemPrice: 35000, locationId: 2, mfgDate: '2023-09-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 4, itemId: 3, lotNo: '', serialNo: 'SN-SAM-001', itemQty: 3, itemPrice: 28000, locationId: 2, mfgDate: '2023-08-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 5, itemId: 4, lotNo: '', serialNo: '', itemQty: 3, itemPrice: 350, locationId: 3, mfgDate: '2023-01-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 6, itemId: 5, lotNo: '', serialNo: '', itemQty: 12, itemPrice: 450, locationId: 3, mfgDate: '2023-01-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 7, itemId: 6, lotNo: '', serialNo: 'SN-MON-001', itemQty: 6, itemPrice: 4500, locationId: 4, mfgDate: '2023-05-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 8, itemId: 7, lotNo: 'LOT2024001', serialNo: '', itemQty: 50, itemPrice: 1800, locationId: 5, mfgDate: '2024-01-01', expireDate: '2026-01-01', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const inventoryDamages: InventoryDamage[] = [
+  { id: 1, docId: 1, invId: 5, itemQty: 2, locationId: 3, reasonId: 1, warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+// ─── Auth (mock) ────────────────────────────────────────────
+
+export const users: (UserProfile & { username: string; password: string; role: string; isAdmin: boolean })[] = [
+  { id: 1, fName: 'สมชาย', lName: 'ใจดี', tel: '081-111-1111', address: 'กรุงเทพฯ', email: 'admin@wms.local', username: 'admin', password: 'admin1234', role: 'Administrator', isAdmin: true, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, fName: 'สมหญิง', lName: 'รักงาน', tel: '082-222-2222', address: 'กรุงเทพฯ', email: 'staff@wms.local', username: 'staff', password: 'staff1234', role: 'Staff', isAdmin: false, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+// ─── Dashboard summary ───────────────────────────────────────
+
+export const getDashboardStats = () => ({
+  totalItems: items.length,
+  totalStock: inventories.reduce((s, i) => s + i.itemQty, 0),
+  lowStock: items.filter(item => {
+    const stock = inventories.filter(inv => inv.itemId === item.id).reduce((s, i) => s + i.itemQty, 0);
+    return stock < item.minAlter;
+  }).length,
+  pendingDocs: [
+    ...docReceives.filter(d => d.statusId === 2),
+    ...docIssues.filter(d => d.statusId === 5),
+    ...docTransfers.filter(d => d.statusId === 7),
+    ...docRequests.filter(d => d.statusId === 2),
+  ].length,
+  totalValue: inventories.reduce((s, inv) => s + inv.itemQty * inv.itemPrice, 0),
+  todayReceive: docReceives.length,
+  todayIssue: docIssues.length,
+});
+</file>
+
+<file path="lib/types/index.ts">
+// ============================================================
+// WMS Type Definitions — aligned with Design_DB_V1.xlsx
+// ============================================================
+
+// ─── Common base ────────────────────────────────────────────
+export interface BaseEntity {
+  id: number;
+  isActive: boolean;
+  isDelete: boolean;
+  createDate: string;
+  createBy: string;
+  updateDate: string;
+  updateBy: string;
+}
+
+// ─── Master Data ─────────────────────────────────────────────
+
+export interface MastItem extends BaseEntity {
+  itemCode: string;
+  itemName: string;
+  brandId: number;
+  minAlter: number;
+  maxAlter: number;
+  uomId: number;
+  locationId: number;
+  buyPrice: number;
+  sellPrice: number;
+  isLotNo: boolean;
+  isSerialNo: boolean;
+  groupId?: number;
+  warehouseId?: number;
+}
+
+export interface MastBrand extends BaseEntity {
+  nameTh: string;
+  nameEn: string;
+}
+
+export interface MastGroup extends BaseEntity {
+  nameTh: string;
+  nameEn: string;
+}
+
+export interface MastItemGroup {
+  id: number;
+  itemId: number;
+  groupId: number;
+  isActive: boolean;
+  isDelete: boolean;
+  createDate: string;
+  createBy: string;
+  updateDate: string;
+  updateBy: string;
+}
+
+export interface MastLocation extends BaseEntity {
+  code: string;
+  name: string;
+}
+
+export interface MastWarehouse extends BaseEntity {
+  code: string;
+  warehouseName: string;
+  description: string;
+}
+
+export interface MastItemWarehouse {
+  id: number;
+  itemId: number;
+  warehouseId: number;
+  isActive: boolean;
+  isDelete: boolean;
+  createDate: string;
+  createBy: string;
+  updateDate: string;
+  updateBy: string;
+}
+
+export interface MastUom extends BaseEntity {
+  name: string;
+}
+
+export interface MastVendor extends BaseEntity {
+  vendCode: string;
+  vendName: string;
+  contactName: string;
+  tel: string;
+  address: string;
+  remark: string;
+}
+
+export interface MastCustomer extends BaseEntity {
+  custCode: string;
+  custName: string;
+  contactName: string;
+  tel: string;
+  address: string;
+  remark: string;
+}
+
+export interface MastEmployee extends BaseEntity {
+  empCode: string;
+  fName: string;
+  lName: string;
+  tel: string;
+}
+
+export interface MastStatus extends BaseEntity {
+  transTypeId: number;
+  nameTh: string;
+  nameEn: string;
+  orderNo: number;
+}
+
+export interface MastDocType extends BaseEntity {
+  transTypeId: number;
+  name: string;
+}
+
+export interface MastReason extends BaseEntity {
+  name: string;
+}
+
+export interface MastTransType extends BaseEntity {
+  name: string;
+}
+
+// ─── Transactions ────────────────────────────────────────────
+
+export interface DocReceive extends BaseEntity {
+  docNo: string;
+  docTypeId: number;
+  statusId: number;
+  warehouseId: number;
+  vendorId: number;
+  remark?: string;
+}
+
+export interface DocReceiveDetail extends BaseEntity {
+  docId: number;
+  itemId: number;
+  itemName: string;
+  uomId: number;
+  itemQty: number;
+}
+
+export interface DocIssue extends BaseEntity {
+  docNo: string;
+  docTypeId: number;
+  statusId: number;
+  warehouseId: number;
+  customerId: number;
+  remark?: string;
+}
+
+export interface DocIssueDetail extends BaseEntity {
+  docId: number;
+  itemId: number;
+  itemName: string;
+  uomId: number;
+  itemQty: number;
+  bookingQty: number;
+}
+
+export interface DocRequest extends BaseEntity {
+  docNo: string;
+  statusId: number;
+  fromLocationId: number;
+  toWarehouseId: number;
+  employeeId: number;
+  remark?: string;
+}
+
+export interface DocRequestDetail extends BaseEntity {
+  docId: number;
+  invId: number;
+  itemQty: number;
+  pickingQty: number;
+  returnQty: number;
+}
+
+export interface DocRequestPicking extends BaseEntity {
+  docId: number;
+  itemDetailId: number;
+  pickingQty: number;
+}
+
+export interface ReqTransLog extends BaseEntity {
+  docId: number;
+  fromStatusId: number;
+  toStatusId: number;
+  fromUserId: number;
+  toUserId: number;
+  remark?: string;
+}
+
+export interface DocReturn extends BaseEntity {
+  docId: number;
+  invId: number;
+  itemQty: number;
+  reasonId: number;
+}
+
+export interface DocTransfer extends BaseEntity {
+  docNo: string;
+  fromWarehouseId: number;
+  toWarehouseId: number;
+  statusId: number;
+  remark?: string;
+}
+
+export interface DocTransferFromDetail extends BaseEntity {
+  docId: number;
+  invId: number;
+  itemQty: number;
+  pickingQty: number;
+}
+
+export interface DocTransferToDetail extends BaseEntity {
+  docId: number;
+  invId: number;
+  itemQty: number;
+  putawayQty: number;
+  locationId: number;
+  newInvId: number;
+}
+
+export interface DocDisposal extends BaseEntity {
+  docNo: string;
+  statusId: number;
+  warehouseId: number;
+  remark?: string;
+}
+
+export interface DocDisposalDetail extends BaseEntity {
+  docId: number;
+  invDmgId: number;
+  itemQty: number;
+}
+
+// ─── Inventory ───────────────────────────────────────────────
+
+export interface Inventory extends BaseEntity {
+  itemId: number;
+  lotNo: string;
+  serialNo: string;
+  itemQty: number;
+  itemPrice: number;
+  locationId: number;
+  mfgDate: string;
+  expireDate: string;
+  warehouseId: number;
+}
+
+export interface InventoryDamage extends BaseEntity {
+  docId: number;
+  invId: number;
+  itemQty: number;
+  locationId: number;
+  reasonId: number;
+  warehouseId: number;
+}
+
+export interface InventoryDamageLog extends BaseEntity {
+  invDmgId: number;
+  itemQty: number;
+  moveLocationId: number;
+}
+
+export interface InvMoveLog extends BaseEntity {
+  invId: number;
+  oldLocationId: number;
+  newLocationId: number;
+  itemQty: number;
+}
+
+// ─── Authentication ──────────────────────────────────────────
+
+export interface UserProfile extends BaseEntity {
+  fName: string;
+  lName: string;
+  tel: string;
+  address: string;
+  email: string;
+}
+
+export interface UserAuthen extends BaseEntity {
+  userId: number;
+  username: string;
+  password: string;
+  plaintext: string;
+}
+
+export interface SysRole extends BaseEntity {
+  menuId: number;
+  nameTh: string;
+  nameEn: string;
+  isAdmin: boolean;
+}
+
+export interface SysRoleMenu extends BaseEntity {
+  userId: number;
+  roleId: number;
+  canView: boolean;
+  canCreate: boolean;
+  canApprove: boolean;
+}
+
+export interface SysMenu extends BaseEntity {
+  parentId: number | null;
+  nameTh: string;
+  nameEn: string;
+}
+
+// ─── Joined / View types for UI ──────────────────────────────
+
+export interface MastItemView extends MastItem {
+  brandName?: string;
+  uomName?: string;
+  locationName?: string;
+  warehouseName?: string;
+  groupName?: string;
+}
+
+export interface InventoryView extends Inventory {
+  itemCode?: string;
+  itemName?: string;
+  locationName?: string;
+  warehouseName?: string;
+  uomName?: string;
+}
+
+export interface DocReceiveView extends DocReceive {
+  vendorName?: string;
+  warehouseName?: string;
+  statusName?: string;
+  docTypeName?: string;
+}
+
+export interface DocIssueView extends DocIssue {
+  customerName?: string;
+  warehouseName?: string;
+  statusName?: string;
+  docTypeName?: string;
+}
+
+export interface DocTransferView extends DocTransfer {
+  fromWarehouseName?: string;
+  toWarehouseName?: string;
+  statusName?: string;
+}
+
+export interface DocRequestView extends DocRequest {
+  employeeName?: string;
+  fromLocationName?: string;
+  toWarehouseName?: string;
+  statusName?: string;
+}
+
+export interface DocDisposalView extends DocDisposal {
+  warehouseName?: string;
+  statusName?: string;
+}
+
+// ─── API Response wrapper ────────────────────────────────────
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+  total?: number;
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  isActive?: boolean;
+}
+
+// ─── Auth ────────────────────────────────────────────────────
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: UserProfile & { username: string; role: string; isAdmin: boolean };
+}
+
+export interface CurrentUser {
+  id: number;
+  username: string;
+  fName: string;
+  lName: string;
+  email: string;
+  role: string;
+  isAdmin: boolean;
+}
+</file>
+
+<file path="lib/utils.ts">
+export { cn } from "cn"
+</file>
+
+<file path="components.json">
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-nova",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "app/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "rtl": false,
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "hooks": "@/hooks"
+  },
+  "menuColor": "default",
+  "menuAccent": "subtle",
+  "registries": {}
+}
+</file>
+
+<file path="app/globals.css">
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Dark-mode via .dark class on <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-sidebar: #1e293b;
+  --bg-sidebar-hover: #334155;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-sidebar: #cbd5e1;
+  --border: oklch(0.922 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-hover: #2563eb;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --bg: #0f172a;
+  --bg-card: #1e293b;
+  --bg-sidebar: #020617;
+  --bg-sidebar-hover: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-sidebar: #94a3b8;
+  --border: oklch(1 0 0 / 10%);
+  --accent: oklch(0.269 0 0);
+  --accent-hover: #3b82f6;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Sarabun', 'Noto Sans Thai', Arial, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+</file>
+
+<file path="app/layout.tsx">
+import type { Metadata } from 'next';
+import './globals.css';
+import { Providers } from './providers';
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+
+export const metadata: Metadata = {
+    title: 'WMS — Warehouse Management System',
+    description: 'Stock & Warehouse Management System',
+};
+
+export default function RootLayout({
+    children,
+}: Readonly<{
+    children: React.ReactNode;
+}>) {
+    return (
+        <html lang="th" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
+            {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+            <head>
+                <link rel="preconnect" href="https://fonts.googleapis.com" />
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+                <link
+                    href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap"
+                    rel="stylesheet"
+                />
+            </head>
+            <body>
+                <Providers>{children}</Providers>
+            </body>
+        </html>
+    );
+}
+</file>
+
+<file path="public/file.svg">
+<svg fill="none" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 13.5V5.41a1 1 0 0 0-.3-.7L9.8.29A1 1 0 0 0 9.08 0H1.5v13.5A2.5 2.5 0 0 0 4 16h8a2.5 2.5 0 0 0 2.5-2.5m-1.5 0v-7H8v-5H3v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1M9.5 5V2.12L12.38 5zM5.13 5h-.62v1.25h2.12V5zm-.62 3h7.12v1.25H4.5zm.62 3h-.62v1.25h7.12V11z" clip-rule="evenodd" fill="#666" fill-rule="evenodd"/></svg>
+</file>
+
+<file path="public/globe.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><g clip-path="url(#a)"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.27 14.1a6.5 6.5 0 0 0 3.67-3.45q-1.24.21-2.7.34-.31 1.83-.97 3.1M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.48-1.52a7 7 0 0 1-.96 0H7.5a4 4 0 0 1-.84-1.32q-.38-.89-.63-2.08a40 40 0 0 0 3.92 0q-.25 1.2-.63 2.08a4 4 0 0 1-.84 1.31zm2.94-4.76q1.66-.15 2.95-.43a7 7 0 0 0 0-2.58q-1.3-.27-2.95-.43a18 18 0 0 1 0 3.44m-1.27-3.54a17 17 0 0 1 0 3.64 39 39 0 0 1-4.3 0 17 17 0 0 1 0-3.64 39 39 0 0 1 4.3 0m1.1-1.17q1.45.13 2.69.34a6.5 6.5 0 0 0-3.67-3.44q.65 1.26.98 3.1M8.48 1.5l.01.02q.41.37.84 1.31.38.89.63 2.08a40 40 0 0 0-3.92 0q.25-1.2.63-2.08a4 4 0 0 1 .85-1.32 7 7 0 0 1 .96 0m-2.75.4a6.5 6.5 0 0 0-3.67 3.44 29 29 0 0 1 2.7-.34q.31-1.83.97-3.1M4.58 6.28q-1.66.16-2.95.43a7 7 0 0 0 0 2.58q1.3.27 2.95.43a18 18 0 0 1 0-3.44m.17 4.71q-1.45-.12-2.69-.34a6.5 6.5 0 0 0 3.67 3.44q-.65-1.27-.98-3.1" fill="#666"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h16v16H0z"/></clipPath></defs></svg>
+</file>
+
+<file path="public/next.svg">
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 394 80"><path fill="#000" d="M262 0h68.5v12.7h-27.2v66.6h-13.6V12.7H262V0ZM149 0v12.7H94v20.4h44.3v12.6H94v21h55v12.6H80.5V0h68.7zm34.3 0h-17.8l63.8 79.4h17.9l-32-39.7 32-39.6h-17.9l-23 28.6-23-28.6zm18.3 56.7-9-11-27.1 33.7h17.8l18.3-22.7z"/><path fill="#000" d="M81 79.3 17 0H0v79.3h13.6V17l50.2 62.3H81Zm252.6-.4c-1 0-1.8-.4-2.5-1s-1.1-1.6-1.1-2.6.3-1.8 1-2.5 1.6-1 2.6-1 1.8.3 2.5 1a3.4 3.4 0 0 1 .6 4.3 3.7 3.7 0 0 1-3 1.8zm23.2-33.5h6v23.3c0 2.1-.4 4-1.3 5.5a9.1 9.1 0 0 1-3.8 3.5c-1.6.8-3.5 1.3-5.7 1.3-2 0-3.7-.4-5.3-1s-2.8-1.8-3.7-3.2c-.9-1.3-1.4-3-1.4-5h6c.1.8.3 1.6.7 2.2s1 1.2 1.6 1.5c.7.4 1.5.5 2.4.5 1 0 1.8-.2 2.4-.6a4 4 0 0 0 1.6-1.8c.3-.8.5-1.8.5-3V45.5zm30.9 9.1a4.4 4.4 0 0 0-2-3.3 7.5 7.5 0 0 0-4.3-1.1c-1.3 0-2.4.2-3.3.5-.9.4-1.6 1-2 1.6a3.5 3.5 0 0 0-.3 4c.3.5.7.9 1.3 1.2l1.8 1 2 .5 3.2.8c1.3.3 2.5.7 3.7 1.2a13 13 0 0 1 3.2 1.8 8.1 8.1 0 0 1 3 6.5c0 2-.5 3.7-1.5 5.1a10 10 0 0 1-4.4 3.5c-1.8.8-4.1 1.2-6.8 1.2-2.6 0-4.9-.4-6.8-1.2-2-.8-3.4-2-4.5-3.5a10 10 0 0 1-1.7-5.6h6a5 5 0 0 0 3.5 4.6c1 .4 2.2.6 3.4.6 1.3 0 2.5-.2 3.5-.6 1-.4 1.8-1 2.4-1.7a4 4 0 0 0 .8-2.4c0-.9-.2-1.6-.7-2.2a11 11 0 0 0-2.1-1.4l-3.2-1-3.8-1c-2.8-.7-5-1.7-6.6-3.2a7.2 7.2 0 0 1-2.4-5.7 8 8 0 0 1 1.7-5 10 10 0 0 1 4.3-3.5c2-.8 4-1.2 6.4-1.2 2.3 0 4.4.4 6.2 1.2 1.8.8 3.2 2 4.3 3.4 1 1.4 1.5 3 1.5 5h-5.8z"/></svg>
+</file>
+
+<file path="public/vercel.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1000"><path d="m577.3 0 577.4 1000H0z" fill="#fff"/></svg>
+</file>
+
+<file path="public/window.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
+</file>
+
+<file path=".gitignore">
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+</file>
+
+<file path="AGENTS.md">
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+</file>
+
+<file path="CLAUDE.md">
+@AGENTS.md
+</file>
+
+<file path="eslint.config.mjs">
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
+
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  // Override default ignores of eslint-config-next.
+  globalIgnores([
+    // Default ignores of eslint-config-next:
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+  ]),
+]);
+
+export default eslintConfig;
+</file>
+
+<file path="next.config.ts">
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* config options here */
+};
+
+export default nextConfig;
+</file>
+
+<file path="package.json">
+{
+  "name": "pj-stock",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.8.0",
+    "class-variance-authority": "^0.7.1",
+    "cn": "^0.4.0",
+    "dotenv": "^18.0.3",
+    "lucide-react": "^1.47.0",
+    "next": "16.3.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "shadcn": "^4.21.0",
+    "sweetalert2": "^11.26.25",
+    "tw-animate-css": "^1.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.5",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
+</file>
+
+<file path="postcss.config.mjs">
+const config = {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
+
+export default config;
+</file>
+
+<file path="README.md">
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+## Getting Started
+
+First, run the development server:
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts"
+  ],
+  "exclude": ["node_modules"]
+}
+</file>
+
+</files>
