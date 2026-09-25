@@ -1,6 +1,13 @@
+import axios, { AxiosError } from 'axios';
+import { config } from '@/lib/config';
 import type { ApiResponse } from '../types';
 
-const BASE_URL = '';  // same-origin Next.js API routes
+const API_IP = process.env.NEXT_PUBLIC_API_IP;
+const API_PORT = process.env.NEXT_PUBLIC_API_PORT;
+
+const BASE_URL = API_IP && API_PORT 
+  ? `${API_IP}:${API_PORT}` 
+  : '';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -8,29 +15,42 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(
-  url: string,
-  options?: RequestInit
-): Promise<ApiResponse<T>> {
-  const res = await fetch(`${BASE_URL}${url}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+// สร้าง Axios Instance
+const instance = axios.create({
+  baseURL: config.api.baseUrl,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new ApiError(res.status, err.message ?? res.statusText);
+// Interceptor จัดการ Error รวมจาก API
+instance.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError<{ message?: string }>) => {
+    const status = error.response?.status ?? 500;
+    const message = error.response?.data?.message ?? error.message ?? 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
+    return Promise.reject(new ApiError(status, message));
   }
-
-  return res.json() as Promise<ApiResponse<T>>;
-}
+);
 
 export const apiClient = {
-  get: <T>(url: string) => request<T>(url),
-  post: <T>(url: string, body: unknown) =>
-    request<T>(url, { method: 'POST', body: JSON.stringify(body) }),
-  put: <T>(url: string, body: unknown) =>
-    request<T>(url, { method: 'PUT', body: JSON.stringify(body) }),
-  delete: <T>(url: string) => request<T>(url, { method: 'DELETE' }),
-};
+  get: async <T>(url: string, params?: Record<string, unknown>) => {
+    const res = await instance.get<ApiResponse<T>>(url, { params });
+    return res.data;
+  },
 
+  post: async <T>(url: string, body?: unknown) => {
+    const res = await instance.post<ApiResponse<T>>(url, body);
+    return res.data;
+  },
+
+  put: async <T>(url: string, body?: unknown) => {
+    const res = await instance.put<ApiResponse<T>>(url, body);
+    return res.data;
+  },
+
+  delete: async <T>(url: string, params?: Record<string, unknown>) => {
+    const res = await instance.delete<ApiResponse<T>>(url, { params });
+    return res.data;
+  },
+};
