@@ -23,8 +23,6 @@ export default function DashboardPage() {
             })
             .finally(() => setLoading(false));
 
-        console.log(`${process.env.NEXT_PUBLIC_API_IP}:${process.env.NEXT_PUBLIC_API_PORT}`);
-
         masterService.warehouses.list({ limit: 5 }).then(data => {
             console.log('Warehouses:', data);
         })

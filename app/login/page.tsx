@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth, useI18n, useTheme } from '../providers';
-import { authService } from '@/lib/api/services/auth';
+import { authService } from '@/app/_services/auth';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -24,7 +24,7 @@ export default function LoginPage() {
         try {
             const res = await authService.login({ username, password });
             if (res.success && res.data) {
-                setUser(res.data.user);
+                setUser(res.data.results);
                 router.push('/');
             } else {
                 setError(res.message || t.auth.loginFailed);

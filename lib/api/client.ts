@@ -29,6 +29,7 @@ instance.interceptors.response.use(
   (error: AxiosError<{ message?: string }>) => {
     const status = error.response?.status ?? 500;
     const message = error.response?.data?.message ?? error.message ?? 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
+    console.log('API Error:', status, config.api.baseUrl);
     return Promise.reject(new ApiError(status, message));
   }
 );
