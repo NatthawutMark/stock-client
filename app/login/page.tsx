@@ -4,12 +4,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth, useI18n, useTheme } from '../providers';
 import { authService } from '@/app/_services/auth';
+import { Button } from '@/components/ui';
+
 
 export default function LoginPage() {
     const router = useRouter();
     const { t, lang, setLang } = useI18n();
     const { theme, toggleTheme } = useTheme();
-    const { setUser } = useAuth();
+    const { setUser, setToken } = useAuth();
 
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -21,10 +23,14 @@ export default function LoginPage() {
         setError('');
         setLoading(true);
 
+        localStorage.removeItem('wms-token');
+        localStorage.removeItem('wms-user');
+
         try {
             const res = await authService.login({ username, password });
-            if (res.success && res.data) {
-                setUser(res.data.results);
+            if (res.success && res.results) {
+                setUser(res.results?.response || null);
+                setToken({ accessToken: res.results?.accessToken || null, refreshToken: res.results?.refreshToken || null });
                 router.push('/');
             } else {
                 setError(res.message || t.auth.loginFailed);
@@ -113,14 +119,17 @@ export default function LoginPage() {
                             </div>
                         )}
 
-                        <button
+                        {/* <button
                             type="submit"
                             disabled={loading}
                             className="w-full py-2.5 rounded-xl text-white font-medium transition-colors"
                             style={{ background: 'var(--accent)' }}
                         >
                             {loading ? t.common.loading : t.auth.loginButton}
-                        </button>
+                        </button> */}
+                        <Button type='submit' disabled={loading} variant='default' className='w-full' size='icon'>
+                            {loading ? t.common.loading : t.auth.loginButton}
+                        </Button>
                     </form>
                 </div>
 

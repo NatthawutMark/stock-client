@@ -1,18 +1,18 @@
 import type {
     MastItem, MastBrand, MastWarehouse, MastLocation, MastUom, MastVendor, MastCustomer,
     ApiResponse, PaginationParams,
-} from '../../types';
-import { apiClient } from '../client';
+} from '@/lib/types';
+import { apiClient } from '@/lib/api/client';
 
 // ─── Items ───────────────────────────────────────────────────
 export const masterService = {
     items: {
         list: (p?: PaginationParams) => {
-            const q = new URLSearchParams();
-            if (p?.page) q.set('page', String(p.page));
-            if (p?.limit) q.set('limit', String(p.limit));
-            if (p?.search) q.set('search', p.search);
-            return apiClient.get<MastItem[]>(`/api/master/items?${q}`);
+            // const q = new URLSearchParams();
+            // if (p?.page) q.set('page', String(p.page));
+            // if (p?.limit) q.set('limit', String(p.limit));
+            // if (p?.search) q.set('search', p.search);
+            return apiClient.post<any>(`/api/MastItem/getAllItem`, { isActive: true, isDelete: false });
         },
         get: (id: number) => apiClient.get<MastItem>(`/api/master/items/${id}`),
         create: (data: Omit<MastItem, 'id' | 'createDate' | 'updateDate'>) =>
@@ -37,7 +37,7 @@ export const masterService = {
         list: (p?: PaginationParams) => {
             const q = new URLSearchParams();
             if (p?.search) q.set('search', p.search);
-            
+
             return apiClient.get<MastWarehouse[]>(`/api/mastwarehouse/getall`);
         },
         create: (data: Omit<MastWarehouse, 'id' | 'createDate' | 'updateDate'>) =>

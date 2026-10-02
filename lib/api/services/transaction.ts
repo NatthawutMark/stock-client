@@ -2,7 +2,7 @@ import type {
     DocReceive, DocReceiveDetail, DocIssue, DocIssueDetail,
     DocTransfer, DocRequest, DocDisposal, PaginationParams,
 } from '../../types';
-import { apiClient } from '../client';
+import { apiClient } from '@/lib/api/client';
 
 export const transactionService = {
     receive: {

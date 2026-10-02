@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { translations, type Lang, type Translations } from '@/lib/i18n/translations';
-import type { CurrentUser } from '@/lib/types';
+import type { CurrentUser, Token } from '@/lib/types';
 
 // ─── Theme ────────────────────────────────────────────────────
 
@@ -47,26 +47,45 @@ export const useI18n = () => useContext(I18nContext);
 interface AuthContextValue {
     user: CurrentUser | null;
     setUser: (u: CurrentUser | null) => void;
+    token: Token | null;
+    setToken: (t: Token | null) => void;
     logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue>({
     user: null,
     setUser: () => { },
+    token: null,
+    setToken: () => { },
     logout: () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
 
+// ─── PageTitleLayout ───────────────────────────────────────────────────
+
+interface LayoutContextValue {
+    pageTitle: string;
+    setPageTitle: (title: string) => void;
+}
+
+const LayoutContext = createContext<LayoutContextValue>({
+    pageTitle: '',
+    setPageTitle: () => { },
+});
+
+export const useLayout = () => useContext(LayoutContext);
 // ─── Providers ────────────────────────────────────────────────
 
 export function Providers({ children }: { children: ReactNode }) {
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [lang, setLangState] = useState<Lang>('th');
     const [user, setUser] = useState<CurrentUser | null>(null);
+    const [token, setToken] = useState<Token | null>(null);
     const [mounted, setMounted] = useState(false);
     const router = useRouter();
     const pathname = usePathname();
+    const [pageTitle, setPageTitle] = useState<string>('');
 
     // Load from localStorage after mount
     useEffect(() => {
@@ -94,12 +113,12 @@ export function Providers({ children }: { children: ReactNode }) {
     // Route Protection
     useEffect(() => {
         if (!mounted) return;
-        if (!user && pathname !== '/login') {
+        if (!user && !token && pathname !== '/login') {
             router.replace('/login');
-        } else if (user && pathname === '/login') {
+        } else if (user && token && pathname === '/login') {
             router.replace('/dashboard');
         }
-    }, [user, pathname, mounted, router]);
+    }, [user, token, pathname, mounted, router]);
 
     const toggleTheme = useCallback(() => {
         setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
@@ -113,6 +132,7 @@ export function Providers({ children }: { children: ReactNode }) {
     const logout = useCallback(() => {
         setUser(null);
         localStorage.removeItem('wms-user');
+        localStorage.removeItem('wms-token');
         router.replace('/login');
     }, [router]);
 
@@ -122,6 +142,12 @@ export function Providers({ children }: { children: ReactNode }) {
         else localStorage.removeItem('wms-user');
     }, []);
 
+    const handleSetToken = useCallback((t: Token | null) => {
+        setToken(t);
+        if (t) localStorage.setItem('wms-token', JSON.stringify(t));
+        else localStorage.removeItem('wms-token');
+    }, []);
+
     // Prevent SSR flash and hide content until route protection resolves
     if (!mounted) return null;
     if (!user && pathname !== '/login') return null; // wait for redirect
@@ -129,8 +155,10 @@ export function Providers({ children }: { children: ReactNode }) {
     return (
         <ThemeContext.Provider value={{ theme, toggleTheme }}>
             <I18nContext.Provider value={{ lang, t: translations[lang], setLang }}>
-                <AuthContext.Provider value={{ user, setUser: handleSetUser, logout }}>
-                    {children}
+                <AuthContext.Provider value={{ user, setUser: handleSetUser, token, setToken: handleSetToken, logout }}>
+                    <LayoutContext.Provider value={{ pageTitle, setPageTitle }}>
+                        {children}
+                    </LayoutContext.Provider>
                 </AuthContext.Provider>
             </I18nContext.Provider>
         </ThemeContext.Provider>

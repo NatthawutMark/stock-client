@@ -22,11 +22,8 @@ export default function DashboardPage() {
                 }
             })
             .finally(() => setLoading(false));
-
-        masterService.warehouses.list({ limit: 5 }).then(data => {
-            console.log('Warehouses:', data);
-        })
     }, []);
+
 
     return (
         <AppLayout>

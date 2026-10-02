@@ -2,7 +2,7 @@ import type {
     MastItem, MastBrand, MastWarehouse, MastLocation, MastUom, MastVendor, MastCustomer,
     ApiResponse, PaginationParams,
 } from '../../types';
-import { apiClient } from '../client';
+import { apiClient } from '@/lib/api/client';
 
 // ─── Items ───────────────────────────────────────────────────
 export const masterService = {
@@ -37,7 +37,6 @@ export const masterService = {
         list: (p?: PaginationParams) => {
             const q = new URLSearchParams();
             if (p?.search) q.set('search', p.search);
-            
             return apiClient.get<MastWarehouse[]>(`/api/mastwarehouse/getall`);
         },
         create: (data: Omit<MastWarehouse, 'id' | 'createDate' | 'updateDate'>) =>

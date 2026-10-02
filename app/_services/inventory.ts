@@ -1,5 +1,5 @@
-import type { Inventory, InventoryView, PaginationParams } from '../../types';
-import { apiClient } from '../client';
+import type { Inventory, InventoryView, PaginationParams } from '@/lib/types';
+import { apiClient } from '@/lib/api/client';
 
 export const inventoryService = {
     list: (p?: PaginationParams & { warehouseId?: number }) => {
