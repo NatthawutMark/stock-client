@@ -9,10 +9,16 @@ import {
     DialogDescription,
     DialogFooter,
     DialogClose,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+    Button,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/index';
 import { masterService } from '@/app/_services/master';
 import type { MastItem } from '@/lib/types';
+import { useI18n } from '@/app/providers';
 
 interface CreateItemFormData {
     itemCode: string;
@@ -40,6 +46,8 @@ interface CreateItemModalProps {
 }
 
 export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: CreateItemModalProps) {
+    const { t } = useI18n();
+
     const [formData, setFormData] = useState<CreateItemFormData>({ ...defaultFormData });
     const [saving, setSaving] = useState(false);
 
@@ -48,15 +56,17 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
     };
 
     useEffect(() => {
-        console.log('modal:', dataEdit);
-        setFormData({
-            itemCode: dataEdit?.itemCode ?? '',
-            itemName: dataEdit?.itemName ?? '',
-            uomId: 1,
-            isActive: true,
-            isLotNo: false,
-            isSerialNo: false
-        })
+
+        if (typeof dataEdit !== 'undefined' && dataEdit !== null) {
+            setFormData({
+                itemCode: dataEdit?.itemCode ?? '',
+                itemName: dataEdit?.itemName ?? '',
+                uomId: 1,
+                isActive: true,
+                isLotNo: false,
+                isSerialNo: false
+            })
+        }
     }, [open])
 
     const buildPayload = (): Omit<MastItem, 'id' | 'createDate' | 'updateDate'> => ({
@@ -128,17 +138,31 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                 {/* ── Form Body ── */}
                 <div className="space-y-4 py-2">
                     {/* รหัสสินค้า */}
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-medium">
-                            รหัสสินค้า (Item Code)
-                        </label>
-                        <input
-                            type="text"
-                            value={formData.itemCode}
-                            onChange={(e) => setFormData({ ...formData, itemCode: e.target.value })}
-                            className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none"
-                            placeholder="เช่น ITM-001"
-                        />
+                    <div className="space-y-1.5 grid grid-cols-2 gap-4">
+                        <div className="col-span-1 space-y-1.5">
+                            <label className="block text-sm font-medium">
+                                {t.master.item.itemCode}
+                            </label>
+                            <input
+                                type="text"
+                                value={formData.itemCode}
+                                onChange={(e) => setFormData({ ...formData, itemCode: e.target.value })}
+                                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none"
+                                placeholder="เช่น ITM-001"
+                            />
+                        </div>
+                        <div className="col-span-1 space-y-1.5">
+                            <label className="block text-sm font-medium">
+                                {t.master.item.itemName}
+                            </label>
+                            <input
+                                type="text"
+                                value={formData.itemName}
+                                onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
+                                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none"
+                                placeholder="เช่น ITM-NAME-001"
+                            />
+                        </div>
                     </div>
 
                     {/* ชื่อสินค้า */}
@@ -146,13 +170,23 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                         <label className="block text-sm font-medium">
                             ชื่อสินค้า (Item Name)
                         </label>
-                        <input
+                        {/* <input
                             type="text"
                             value={formData.itemName}
                             onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
                             className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none"
                             placeholder="ชื่อสินค้า"
-                        />
+                        /> */}
+                        <Select>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="เลือกหน่วยนับ" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="1">ชิ้น</SelectItem>
+                                <SelectItem value="2">กล่อง</SelectItem>
+                                <SelectItem value="3">แพ็ค</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     {/* Checkboxes */}
@@ -199,7 +233,7 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                         {saving ? 'กำลังบันทึก...' : 'บันทึก'}
                     </Button>
                 </DialogFooter>
-            </DialogContent>
-        </Dialog>
+            </DialogContent >
+        </Dialog >
     );
 }

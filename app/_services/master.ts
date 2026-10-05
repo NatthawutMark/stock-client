@@ -12,7 +12,7 @@ export const masterService = {
             // if (p?.page) q.set('page', String(p.page));
             // if (p?.limit) q.set('limit', String(p.limit));
             // if (p?.search) q.set('search', p.search);
-            return apiClient.post<any>(`/api/MastItem/getAllItem`, { isActive: true, isDelete: false });
+            return apiClient.post<any>(`/api/MastItem/list`, { isActive: true, isDelete: false });
         },
         get: (id: number) => apiClient.get<MastItem>(`/api/master/items/${id}`),
         create: (data: Omit<MastItem, 'id' | 'createDate' | 'updateDate'>) =>
