@@ -145,6 +145,13 @@ const th = {
       createCustomer: 'เพิ่มลูกค้า',
       editCustomer: 'แก้ไขลูกค้า',
     },
+    docType: {
+      title: 'ประเภทเอกสาร',
+      transType: 'ประเภทธุรกรรม',
+      name: 'ชื่อประเภทเอกสาร',
+      createDocType: 'เพิ่มประเภทเอกสาร',
+      editDocType: 'แก้ไขประเภทเอกสาร',
+    },
   },
   transaction: {
     docNo: 'เลขที่เอกสาร',
@@ -367,6 +374,13 @@ const en: typeof th = {
       remark: 'Remark',
       createCustomer: 'Add Customer',
       editCustomer: 'Edit Customer',
+    },
+    docType: {
+      title: 'Doc Types',
+      transType: 'Transaction Type',
+      name: 'Doc Type Name',
+      createDocType: 'Add Doc Type',
+      editDocType: 'Edit Doc Type',
     },
   },
   transaction: {

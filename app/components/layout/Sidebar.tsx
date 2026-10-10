@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useI18n, useLayout } from '@/app/providers';
-import Swal from 'sweetalert2';
-import { ReactJsxRuntime } from 'next/dist/server/route-modules/app-page/vendored/rsc/entrypoints';
-import { Label, Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Label, Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui';
+import { LeaderboardIcon, renderMenuIcon } from '@/components/icon/index';
 
 interface NavItem {
     href?: string;
@@ -58,7 +57,7 @@ function getLabel(key: string, t: ReturnType<typeof useI18n>['t']) {
 }
 
 export function Sidebar() {
-    const { t, lang } = useI18n();
+    const { lang } = useI18n();
     const { setPageTitle } = useLayout();
     const pathname = usePathname();
     const [listMenu, setListMenu] = useState<NavMenu[]>([])
@@ -73,6 +72,7 @@ export function Sidebar() {
             const getMenuLocal = localStorage.getItem('wms-user');
             if (getMenuLocal) {
                 const userMenu = JSON.parse(getMenuLocal)?.menus;
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setListMenu(userMenu || []);
             }
         } catch (error) {
@@ -82,27 +82,6 @@ export function Sidebar() {
 
     useEffect(() => {
         if (listMenu.length === 0) return;
-        // setOpenGroups(prev => {
-        //     const newGroups = { ...prev };
-        //     listMenu.forEach(item => {
-        //         if (item.subMenus && item.subMenus.length > 0) {
-        //             const menuKey = (lang === 'th' ? item.nameTh : item.nameEn) || '';
-
-        //             // ตรวจสอบว่า URL ตอนนี้ตรงกับเมนูย่อยอันไหนหรือไม่
-        //             const isCurrentActive = item.subMenus.some(
-        //                 c => c.url && pathname.startsWith(c.url)
-        //             );
-
-        //             // ถ้ากำลังเปิดหน้าเมนูย่อยนั้นอยู่ ให้บังคับกางออก
-        //             if (isCurrentActive && menuKey) {
-        //                 newGroups[menuKey] = true;
-        //             }
-        //         }
-        //     });
-        //     console.log('newGroup', newGroups)
-        //     return newGroups;
-        // });
-        // console.log('openGroups', openGroups);
         let currentActiveTitle = ''; // ตัวแปรเก็บชื่อหน้าที่กำลังใช้งาน
         const newGroupsToOpen: Record<string, boolean> = {};
 
@@ -129,16 +108,18 @@ export function Sidebar() {
 
         // 1. สั่งกางเมนูกลุ่มที่มีการอัปเดต (ผสมกับของเดิม)
         if (Object.keys(newGroupsToOpen).length > 0) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setOpenGroups(prev => ({ ...prev, ...newGroupsToOpen }));
         }
 
         // 2. สั่งเซ็ตชื่อหน้าเว็บไปที่ Provider 
         // (ทำแยกออกมาด้านนอกสุด ไม่ไปปนใน setOpenGroups)
         if (currentActiveTitle) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPageTitle(currentActiveTitle);
         }
 
-    }, [pathname, listMenu, lang,]);
+    }, [pathname, listMenu, lang, setPageTitle]);
 
     // return (
     //     <aside
@@ -368,15 +349,17 @@ export function Sidebar() {
                                 key={menuLang}
                                 open={isOpen}
                                 onOpenChange={() => toggle(menuLang)}
-                                className="mb-2"
-                            >
+                                className="mb-2" >
                                 {/* เปลี่ยน Label ให้เป็น Trigger ที่กดได้ */}
                                 <CollapsibleTrigger className="w-full flex items-center justify-between cursor-pointer px-4 py-2 hover:bg-white/5 transition-colors group" >
                                     <Label
                                         className="text-sidebar m-0 font-medium cursor-pointer"
                                         style={{ color: anyActive ? '#60a5fa' : 'var(--text-sidebar)' }}
                                     >
-                                        {menuLang}
+                                        {renderMenuIcon(item.icon, <LeaderboardIcon style={{ fontSize: '1.25rem' }} />)}
+                                        {!collapsed && (
+                                            <span className="font-medium">{menuLang}</span>
+                                        )}
                                     </Label>
 
                                     {/* ไอคอนลูกศรเปลี่ยนทิศทางตามสถานะการเปิด/ปิด */}
@@ -407,7 +390,9 @@ export function Sidebar() {
                                                         : 'text-slate-400 hover:text-white hover:bg-white/5'
                                                     }`}
                                             >
-                                                <span className="text-sm">{child.icon || '📄'}</span>
+                                                <span className="text-sm flex items-center justify-center shrink-0">
+                                                    {renderMenuIcon(child.icon, <LeaderboardIcon style={{ fontSize: '1.25rem' }} />)}
+                                                </span>
                                                 <span>{childLang}</span>
                                             </Link>
                                         );
@@ -429,7 +414,9 @@ export function Sidebar() {
                                     : 'text-slate-400 hover:text-white hover:bg-white/5'
                                 }`}
                         >
-                            <span className="text-base shrink-0">{item.icon || '📄'}</span>
+                            <span className="text-base shrink-0 flex items-center justify-center">
+                                {renderMenuIcon(item.icon, '📄')}
+                            </span>
                             {!collapsed && (
                                 <span className="font-medium">{menuLang}</span>
                             )}

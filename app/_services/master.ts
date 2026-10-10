@@ -1,94 +1,161 @@
 import type {
     MastItem, MastBrand, MastWarehouse, MastLocation, MastUom, MastVendor, MastCustomer,
-    ApiResponse, PaginationParams,
+    MastDocType, MastTransType,
+    PaginationParams, ApiResponse,
 } from '@/lib/types';
 import { apiClient } from '@/lib/api/client';
 
-// ─── Items ───────────────────────────────────────────────────
+export type MasterResult<T = unknown> = ApiResponse<T>;
+
 export const masterService = {
+    // ─── Items ───────────────────────────────────────────────────
     items: {
         list: (p?: PaginationParams) => {
-            // const q = new URLSearchParams();
-            // if (p?.page) q.set('page', String(p.page));
-            // if (p?.limit) q.set('limit', String(p.limit));
-            // if (p?.search) q.set('search', p.search);
-            return apiClient.post<any>(`/api/MastItem/list`, { isActive: true, isDelete: false });
+            return apiClient.post<MasterResult<MastItem[]>>('/api/MastItem/list', {
+                itemCode: p?.search || '',
+            });
         },
-        get: (id: number) => apiClient.get<MastItem>(`/api/master/items/${id}`),
-        create: (data: Omit<MastItem, 'id' | 'createDate' | 'updateDate'>) =>
-            apiClient.post<MastItem>('/api/master/items', data),
-        update: (id: number, data: Partial<MastItem>) =>
-            apiClient.put<MastItem>(`/api/master/items/${id}`, data),
-        remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/items/${id}`),
+        getByCode: (code: string) =>
+            apiClient.get<MasterResult<MastItem>>(`/api/MastItem/getByCode?code=${encodeURIComponent(code)}`),
+        create: (data: Partial<MastItem>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastItem/create', data),
+        update: (data: Partial<MastItem>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastItem/update', data),
+        remove: (id: string | number) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastItem/delete', { id }),
     },
+
+    // ─── Brands ──────────────────────────────────────────────────
     brands: {
         list: (p?: PaginationParams) => {
-            const q = new URLSearchParams();
-            if (p?.search) q.set('search', p.search);
-            return apiClient.get<MastBrand[]>(`/api/master/brands?${q}`);
+            return apiClient.post<MasterResult<MastBrand[]>>('/api/MastBrand/list', {
+                nameTh: p?.search || '',
+            });
         },
-        create: (data: Omit<MastBrand, 'id' | 'createDate' | 'updateDate'>) =>
-            apiClient.post<MastBrand>('/api/master/brands', data),
-        update: (id: number, data: Partial<MastBrand>) =>
-            apiClient.put<MastBrand>(`/api/master/brands/${id}`, data),
-        remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/brands/${id}`),
+        getByName: (name: string) =>
+            apiClient.get<MasterResult<MastBrand>>(`/api/MastBrand/getByName?name=${encodeURIComponent(name)}`),
+        create: (data: Partial<MastBrand>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastBrand/create', data),
+        update: (data: Partial<MastBrand>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastBrand/update', data),
+        remove: (id: string | number) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastBrand/delete', { id }),
     },
+
+    // ─── Warehouses ──────────────────────────────────────────────
     warehouses: {
         list: (p?: PaginationParams) => {
-            const q = new URLSearchParams();
-            if (p?.search) q.set('search', p.search);
-
-            return apiClient.get<MastWarehouse[]>(`/api/mastwarehouse/getall`);
+            return apiClient.post<MasterResult<MastWarehouse[]>>('/api/MastWarehouse/list', {
+                Code: p?.search || '',
+            });
         },
-        create: (data: Omit<MastWarehouse, 'id' | 'createDate' | 'updateDate'>) =>
-            apiClient.post<MastWarehouse>('/api/master/warehouses', data),
-        update: (id: number, data: Partial<MastWarehouse>) =>
-            apiClient.put<MastWarehouse>(`/api/master/warehouses/${id}`, data),
-        remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/warehouses/${id}`),
+        getByCode: (code: string) =>
+            apiClient.get<MasterResult<MastWarehouse>>(`/api/MastWarehouse/getByCode?code=${encodeURIComponent(code)}`),
+        create: (data: Partial<MastWarehouse>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastWarehouse/create', data),
+        update: (data: Partial<MastWarehouse>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastWarehouse/update', data),
+        remove: (id: string | number) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastWarehouse/delete', { id }),
     },
+
+    // ─── Locations ───────────────────────────────────────────────
     locations: {
         list: (p?: PaginationParams) => {
-            const q = new URLSearchParams();
-            if (p?.search) q.set('search', p.search);
-            return apiClient.get<MastLocation[]>(`/api/master/locations?${q}`);
+            return apiClient.post<MasterResult<MastLocation[]>>('/api/MastLocation/list', {
+                code: p?.search || '',
+            });
         },
-        create: (data: Omit<MastLocation, 'id' | 'createDate' | 'updateDate'>) =>
-            apiClient.post<MastLocation>('/api/master/locations', data),
-        update: (id: number, data: Partial<MastLocation>) =>
-            apiClient.put<MastLocation>(`/api/master/locations/${id}`, data),
-        remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/locations/${id}`),
+        getByName: (name: string) =>
+            apiClient.get<MasterResult<MastLocation>>(`/api/MastLocation/getByName?name=${encodeURIComponent(name)}`),
+        create: (data: Partial<MastLocation>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastLocation/create', data),
+        update: (data: Partial<MastLocation>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastLocation/update', data),
+        remove: (id: string | number) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastLocation/delete', { id }),
     },
+
+    // ─── UOMs ────────────────────────────────────────────────────
     uoms: {
-        list: () => apiClient.get<MastUom[]>('/api/master/uom'),
-        create: (data: Omit<MastUom, 'id' | 'createDate' | 'updateDate'>) =>
-            apiClient.post<MastUom>('/api/master/uom', data),
-        update: (id: number, data: Partial<MastUom>) =>
-            apiClient.put<MastUom>(`/api/master/uom/${id}`, data),
-        remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/uom/${id}`),
+        list: (p?: PaginationParams) => {
+            return apiClient.post<MasterResult<MastUom[]>>('/api/MastUom/list', {
+                name: p?.search || '',
+            });
+        },
+        getByName: (name: string) =>
+            apiClient.get<MasterResult<MastUom>>(`/api/MastUom/getByName?name=${encodeURIComponent(name)}`),
+        create: (data: Partial<MastUom>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastUom/create', data),
+        update: (data: Partial<MastUom>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastUom/update', data),
+        remove: (id: string | number) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastUom/delete', { id }),
     },
+
+    // ─── Vendors ─────────────────────────────────────────────────
     vendors: {
         list: (p?: PaginationParams) => {
-            const q = new URLSearchParams();
-            if (p?.search) q.set('search', p.search);
-            return apiClient.get<MastVendor[]>(`/api/master/vendors?${q}`);
+            return apiClient.post<MasterResult<MastVendor[]>>('/api/MastVendor/list', {
+                vendCode: p?.search || '',
+                vendName: p?.search || '',
+            });
         },
-        create: (data: Omit<MastVendor, 'id' | 'createDate' | 'updateDate'>) =>
-            apiClient.post<MastVendor>('/api/master/vendors', data),
-        update: (id: number, data: Partial<MastVendor>) =>
-            apiClient.put<MastVendor>(`/api/master/vendors/${id}`, data),
-        remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/vendors/${id}`),
+        getByCode: (code: string) =>
+            apiClient.get<MasterResult<MastVendor>>(`/api/MastVendor/getByCode?code=${encodeURIComponent(code)}`),
+        create: (data: Partial<MastVendor>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastVendor/create', data),
+        update: (data: Partial<MastVendor>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastVendor/update', data),
+        remove: (id: string | number) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastVendor/delete', { id }),
     },
+
+    // ─── Customers ───────────────────────────────────────────────
     customers: {
         list: (p?: PaginationParams) => {
-            const q = new URLSearchParams();
-            if (p?.search) q.set('search', p.search);
-            return apiClient.get<MastCustomer[]>(`/api/master/customers?${q}`);
+            return apiClient.post<MasterResult<MastCustomer[]>>('/api/MastCustomer/list', {
+                custCode: p?.search || '',
+                custName: p?.search || '',
+            });
         },
-        create: (data: Omit<MastCustomer, 'id' | 'createDate' | 'updateDate'>) =>
-            apiClient.post<MastCustomer>('/api/master/customers', data),
-        update: (id: number, data: Partial<MastCustomer>) =>
-            apiClient.put<MastCustomer>(`/api/master/customers/${id}`, data),
-        remove: (id: number) => apiClient.delete<{ id: number }>(`/api/master/customers/${id}`),
+        getByCode: (code: string) =>
+            apiClient.get<MasterResult<MastCustomer>>(`/api/MastCustomer/getByCode?Code=${encodeURIComponent(code)}`),
+        create: (data: Partial<MastCustomer>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastCustomer/create', data),
+        update: (data: Partial<MastCustomer>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastCustomer/update', data),
+        remove: (id: string | number) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastCustomer/delete', { id }),
+    },
+
+    // ─── DocTypes ────────────────────────────────────────────────
+    docTypes: {
+        list: (p?: PaginationParams & { transTypeId?: number | string; menuId?: number | string; isActive?: boolean }) => {
+            const transId = p?.menuId ?? p?.transTypeId;
+            return apiClient.post<MasterResult<MastDocType[]>>('/api/MastDocType/list', {
+                name: p?.search || '',
+                transTypeId: transId ? String(transId) : undefined,
+                menuId: transId ? String(transId) : undefined,
+                isActive: p?.isActive !== undefined ? p.isActive : undefined,
+            });
+        },
+        getById: (id: string | number) =>
+            apiClient.get<MasterResult<MastDocType>>(`/api/MastDocType/getById?id=${id}`),
+        create: (data: Partial<MastDocType>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastDocType/create', data),
+        update: (data: Partial<MastDocType>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastDocType/update', data),
+        remove: (id: string | number) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastDocType/delete', { id }),
+    },
+
+    // ─── TransTypes ──────────────────────────────────────────────
+    transTypes: {
+        list: (p?: PaginationParams) => {
+            return apiClient.post<MasterResult<MastTransType[]>>('/api/MastTransType/list', {
+                name: p?.search || '',
+            });
+        },
     },
 };
-

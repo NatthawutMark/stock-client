@@ -5,7 +5,7 @@ import { AppLayout } from '@/app/components/layout/AppLayout';
 import { SearchInput } from '@/app/components/ui/SearchInput';
 import { useI18n, useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
-import type { MastLocation } from '@/lib/types';
+import type { MastWarehouse } from '@/lib/types';
 import {
     Button,
     Table,
@@ -19,15 +19,15 @@ import {
     Label,
     TablePagination,
 } from '@/components/ui';
-import { CreateLocationModal } from '@/app/components/modal/CreateLocationModal';
+import { CreateWarehouseModal } from '@/app/components/modal/CreateWarehouseModal';
 import Swal from 'sweetalert2';
 
-export default function LocationsPage() {
+export default function WarehousesPage() {
     const { t } = useI18n();
     const { pageTitle } = useLayout();
 
     // State
-    const [locationList, setLocationList] = useState<MastLocation[]>([]);
+    const [warehouseList, setWarehouseList] = useState<MastWarehouse[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
 
@@ -37,26 +37,24 @@ export default function LocationsPage() {
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingLocation, setEditingLocation] = useState<MastLocation | null>(null);
+    const [editingWarehouse, setEditingWarehouse] = useState<MastWarehouse | null>(null);
 
-    // Fetch locations from C# API (stock-api: /api/MastLocation/list)
-    const fetchLocations = useCallback(async () => {
+    // Fetch warehouses from C# API (stock-api: /api/MastWarehouse/list)
+    const fetchWarehouses = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await masterService.locations.list({ search });
+            const res = await masterService.warehouses.list({ search });
             if (res && res.success) {
-                const data = Array.isArray(res.results)
-                    ? res.results
-                    : Array.isArray(res.data)
-                    ? res.data
-                    : [];
-                setLocationList(data);
+                const data = Array.isArray(res.results) ? res.results : Array.isArray(res.data)
+                    ? res.data : [];
+                console.log('Fetched Warehouses:', data); // Debug log
+                setWarehouseList(data);
             } else {
-                setLocationList([]);
+                setWarehouseList([]);
             }
         } catch (error) {
-            console.error('Failed to fetch locations:', error);
-            setLocationList([]);
+            console.error('Failed to fetch warehouses:', error);
+            setWarehouseList([]);
         } finally {
             setLoading(false);
         }
@@ -64,27 +62,28 @@ export default function LocationsPage() {
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        fetchLocations();
-    }, [fetchLocations]);
+        fetchWarehouses();
+    }, [fetchWarehouses]);
 
-    const filteredLocations = useMemo(() => {
-        if (!search.trim()) return locationList;
+    const filteredWarehouses = useMemo(() => {
+        if (!search.trim()) return warehouseList;
         const q = search.toLowerCase();
-        return locationList.filter(
-            (l) =>
-                l.code?.toLowerCase().includes(q) ||
-                l.name?.toLowerCase().includes(q)
+        return warehouseList.filter(
+            (w) =>
+                w.code?.toLowerCase().includes(q) ||
+                w.warehouseName?.toLowerCase().includes(q) ||
+                w.description?.toLowerCase().includes(q)
         );
-    }, [locationList, search]);
+    }, [warehouseList, search]);
 
     // Pagination Calculations
-    const totalPages = Math.max(1, Math.ceil(filteredLocations.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(filteredWarehouses.length / pageSize));
     const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
 
-    const paginatedLocations = useMemo(() => {
+    const paginatedWarehouses = useMemo(() => {
         const startIndex = (safeCurrentPage - 1) * pageSize;
-        return filteredLocations.slice(startIndex, startIndex + pageSize);
-    }, [filteredLocations, safeCurrentPage, pageSize]);
+        return filteredWarehouses.slice(startIndex, startIndex + pageSize);
+    }, [filteredWarehouses, safeCurrentPage, pageSize]);
 
     const handleSearchChange = (val: string) => {
         setSearch(val);
@@ -92,19 +91,19 @@ export default function LocationsPage() {
     };
 
     const handleOpenCreate = () => {
-        setEditingLocation(null);
+        setEditingWarehouse(null);
         setIsModalOpen(true);
     };
 
-    const handleOpenEdit = (loc: MastLocation) => {
-        setEditingLocation({ ...loc });
+    const handleOpenEdit = (wh: MastWarehouse) => {
+        setEditingWarehouse({ ...wh });
         setIsModalOpen(true);
     };
 
-    const handleDelete = async (loc: MastLocation) => {
+    const handleDelete = async (wh: MastWarehouse) => {
         const confirmResult = await Swal.fire({
             title: 'ยืนยันการลบข้อมูล',
-            text: `คุณต้องการลบข้อมูลตำแหน่งจัดเก็บ "${loc.name} (${loc.code})" หรือไม่?`,
+            text: `คุณต้องการลบข้อมูลคลังสินค้า "${wh.warehouseName} (${wh.code})" หรือไม่?`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#dc2626',
@@ -115,8 +114,8 @@ export default function LocationsPage() {
 
         if (confirmResult.isConfirmed) {
             try {
-                const targetId = loc.id;
-                const res = await masterService.locations.remove(targetId);
+                const targetId = wh.id;
+                const res = await masterService.warehouses.remove(targetId);
 
                 if (res.success) {
                     await Swal.fire({
@@ -125,7 +124,7 @@ export default function LocationsPage() {
                         timer: 1500,
                         showConfirmButton: false,
                     });
-                    fetchLocations();
+                    fetchWarehouses();
                 } else {
                     Swal.fire({
                         icon: 'error',
@@ -134,20 +133,21 @@ export default function LocationsPage() {
                     });
                 }
             } catch (error: unknown) {
-                console.error('Delete location error:', error);
+                console.error('Delete warehouse error:', error);
                 const err = error as { message?: string };
                 Swal.fire({
                     icon: 'error',
                     title: 'เกิดข้อผิดพลาด',
-                    text: err.message || 'ไม่สามารถลบข้อมูลตำแหน่งได้',
+                    text: err.message || 'ไม่สามารถลบข้อมูลคลังสินค้าได้',
                 });
             }
         }
     };
 
     const columns = [
-        { Name: 'รหัสตำแหน่ง', key: 'code', width: '220px' },
-        { Name: 'ชื่อตำแหน่งจัดเก็บ', key: 'name', width: 'auto' },
+        { Name: 'รหัสคลังสินค้า', key: 'code', width: '180px' },
+        { Name: 'ชื่อคลังสินค้า', key: 'warehouseName', width: '260px' },
+        { Name: 'รายละเอียด', key: 'description', width: 'auto' },
         { Name: 'สถานะ', key: 'isActive', width: '120px' },
     ];
 
@@ -157,17 +157,17 @@ export default function LocationsPage() {
             <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                        {pageTitle || 'จัดการข้อมูลตำแหน่งจัดเก็บ'}
+                        {pageTitle || 'จัดการข้อมูลคลังสินค้า'}
                     </h1>
                     <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-                        จัดการข้อมูลตำแหน่งจัดเก็บสินค้าในคลัง (Location / Bin Management)
+                        จัดการข้อมูลคลังสินค้าทั้งหมดในระบบ (Warehouse Management)
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
                     <SearchInput
                         value={search}
                         onChange={handleSearchChange}
-                        placeholder="ค้นหารหัส หรือชื่อตำแหน่ง..."
+                        placeholder="ค้นหารหัส หรือชื่อคลังสินค้า..."
                         className="w-64"
                     />
                     <Button
@@ -175,7 +175,7 @@ export default function LocationsPage() {
                         variant={'green'}
                         className="px-4 py-2 text-sm font-medium text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity bg-emerald-600 hover:bg-emerald-700"
                     >
-                        + เพิ่มตำแหน่งใหม่
+                        + เพิ่มคลังสินค้าใหม่
                     </Button>
                 </div>
             </div>
@@ -200,20 +200,23 @@ export default function LocationsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                            {!loading && paginatedLocations && paginatedLocations.length > 0 ? (
-                                paginatedLocations.map((loc, indexKey) => (
+                            {!loading && paginatedWarehouses && paginatedWarehouses.length > 0 ? (
+                                paginatedWarehouses.map((wh, indexKey) => (
                                     <TableRow
-                                        key={loc.id || indexKey}
+                                        key={wh.id || indexKey}
                                         className="hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors"
                                     >
                                         <TableCell className="px-4 py-3 text-sm font-medium text-blue-600 dark:text-blue-400">
-                                            {loc.code || '-'}
+                                            {wh.code || '-'}
                                         </TableCell>
                                         <TableCell className="px-4 py-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                                            {loc.name || '-'}
+                                            {wh.warehouseName || '-'}
+                                        </TableCell>
+                                        <TableCell className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+                                            {wh.description || '-'}
                                         </TableCell>
                                         <TableCell className="px-4 py-3 text-sm">
-                                            {loc.isActive !== false ? (
+                                            {wh.isActive !== false ? (
                                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                                                     {t.common.active}
                                                 </span>
@@ -229,7 +232,7 @@ export default function LocationsPage() {
                                                 <Button
                                                     size="sm"
                                                     variant={'outline'}
-                                                    onClick={() => handleOpenEdit(loc)}
+                                                    onClick={() => handleOpenEdit(wh)}
                                                     className="h-8 px-2.5 text-xs rounded-lg border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                                                 >
                                                     {t.common.edit}
@@ -237,7 +240,7 @@ export default function LocationsPage() {
                                                 <Button
                                                     size="sm"
                                                     variant={'destructive'}
-                                                    onClick={() => handleDelete(loc)}
+                                                    onClick={() => handleDelete(wh)}
                                                     className="h-8 px-2.5 text-xs rounded-lg bg-red-600 hover:bg-red-700 text-white"
                                                 >
                                                     {t.common.delete}
@@ -252,11 +255,11 @@ export default function LocationsPage() {
                                         {loading ? (
                                             <div className="flex flex-col items-center justify-center gap-2">
                                                 <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                                                <span className="text-sm">กำลังโหลดข้อมูลตำแหน่งจัดเก็บ...</span>
+                                                <span className="text-sm">กำลังโหลดข้อมูลคลังสินค้า...</span>
                                             </div>
                                         ) : (
                                             <div className="py-6 text-zinc-400">
-                                                {search ? 'ไม่พบข้อมูลตำแหน่งที่ตรงกับคำค้นหา' : 'ยังไม่มีข้อมูลตำแหน่งจัดเก็บในระบบ'}
+                                                {search ? 'ไม่พบข้อมูลคลังสินค้าที่ตรงกับคำค้นหา' : 'ยังไม่มีข้อมูลคลังสินค้าในระบบ'}
                                             </div>
                                         )}
                                     </TableCell>
@@ -270,8 +273,8 @@ export default function LocationsPage() {
                 <TablePagination
                     currentPage={safeCurrentPage}
                     pageSize={pageSize}
-                    totalItems={locationList.length}
-                    filteredCount={filteredLocations.length}
+                    totalItems={warehouseList.length}
+                    filteredCount={filteredWarehouses.length}
                     onPageChange={setCurrentPage}
                     onPageSizeChange={(size) => {
                         setPageSize(size);
@@ -281,12 +284,12 @@ export default function LocationsPage() {
                 />
             </Card>
 
-            {/* Create / Edit Location Modal */}
-            <CreateLocationModal
+            {/* Create / Edit Warehouse Modal */}
+            <CreateWarehouseModal
                 open={isModalOpen}
                 onOpenChange={setIsModalOpen}
-                onSaved={fetchLocations}
-                dataEdit={editingLocation}
+                onSaved={fetchWarehouses}
+                dataEdit={editingWarehouse}
             />
         </AppLayout>
     );

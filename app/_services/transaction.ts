@@ -6,9 +6,12 @@ import { apiClient } from '@/lib/api/client';
 
 export const transactionService = {
     receive: {
-        list: (p?: PaginationParams) => {
+        list: (p?: PaginationParams & { docNo?: string; docDate?: string; menuId?: number | string }) => {
             const q = new URLSearchParams();
             if (p?.search) q.set('search', p.search);
+            if (p?.docNo) q.set('docNo', p.docNo);
+            if (p?.docDate) q.set('docDate', p.docDate);
+            if (p?.menuId) q.set('menuId', String(p.menuId));
             return apiClient.get<DocReceive[]>(`/api/transactions/receive?${q}`);
         },
         get: (id: number) => apiClient.get<DocReceive & { details: DocReceiveDetail[] }>(`/api/transactions/receive/${id}`),

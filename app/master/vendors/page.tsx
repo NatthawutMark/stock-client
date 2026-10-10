@@ -5,7 +5,7 @@ import { AppLayout } from '@/app/components/layout/AppLayout';
 import { SearchInput } from '@/app/components/ui/SearchInput';
 import { useI18n, useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
-import type { MastLocation } from '@/lib/types';
+import type { MastVendor } from '@/lib/types';
 import {
     Button,
     Table,
@@ -19,15 +19,15 @@ import {
     Label,
     TablePagination,
 } from '@/components/ui';
-import { CreateLocationModal } from '@/app/components/modal/CreateLocationModal';
+import { CreateVendorModal } from '@/app/components/modal/CreateVendorModal';
 import Swal from 'sweetalert2';
 
-export default function LocationsPage() {
+export default function VendorsPage() {
     const { t } = useI18n();
     const { pageTitle } = useLayout();
 
     // State
-    const [locationList, setLocationList] = useState<MastLocation[]>([]);
+    const [vendorList, setVendorList] = useState<MastVendor[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
 
@@ -37,26 +37,26 @@ export default function LocationsPage() {
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingLocation, setEditingLocation] = useState<MastLocation | null>(null);
+    const [editingVendor, setEditingVendor] = useState<MastVendor | null>(null);
 
-    // Fetch locations from C# API (stock-api: /api/MastLocation/list)
-    const fetchLocations = useCallback(async () => {
+    // Fetch vendors from C# API (stock-api: /api/MastVendor/list)
+    const fetchVendors = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await masterService.locations.list({ search });
+            const res = await masterService.vendors.list({ search });
             if (res && res.success) {
                 const data = Array.isArray(res.results)
                     ? res.results
                     : Array.isArray(res.data)
                     ? res.data
                     : [];
-                setLocationList(data);
+                setVendorList(data);
             } else {
-                setLocationList([]);
+                setVendorList([]);
             }
         } catch (error) {
-            console.error('Failed to fetch locations:', error);
-            setLocationList([]);
+            console.error('Failed to fetch vendors:', error);
+            setVendorList([]);
         } finally {
             setLoading(false);
         }
@@ -64,27 +64,29 @@ export default function LocationsPage() {
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        fetchLocations();
-    }, [fetchLocations]);
+        fetchVendors();
+    }, [fetchVendors]);
 
-    const filteredLocations = useMemo(() => {
-        if (!search.trim()) return locationList;
+    const filteredVendors = useMemo(() => {
+        if (!search.trim()) return vendorList;
         const q = search.toLowerCase();
-        return locationList.filter(
-            (l) =>
-                l.code?.toLowerCase().includes(q) ||
-                l.name?.toLowerCase().includes(q)
+        return vendorList.filter(
+            (v) =>
+                v.vendCode?.toLowerCase().includes(q) ||
+                v.vendName?.toLowerCase().includes(q) ||
+                v.contactName?.toLowerCase().includes(q) ||
+                v.tel?.toLowerCase().includes(q)
         );
-    }, [locationList, search]);
+    }, [vendorList, search]);
 
     // Pagination Calculations
-    const totalPages = Math.max(1, Math.ceil(filteredLocations.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(filteredVendors.length / pageSize));
     const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
 
-    const paginatedLocations = useMemo(() => {
+    const paginatedVendors = useMemo(() => {
         const startIndex = (safeCurrentPage - 1) * pageSize;
-        return filteredLocations.slice(startIndex, startIndex + pageSize);
-    }, [filteredLocations, safeCurrentPage, pageSize]);
+        return filteredVendors.slice(startIndex, startIndex + pageSize);
+    }, [filteredVendors, safeCurrentPage, pageSize]);
 
     const handleSearchChange = (val: string) => {
         setSearch(val);
@@ -92,19 +94,19 @@ export default function LocationsPage() {
     };
 
     const handleOpenCreate = () => {
-        setEditingLocation(null);
+        setEditingVendor(null);
         setIsModalOpen(true);
     };
 
-    const handleOpenEdit = (loc: MastLocation) => {
-        setEditingLocation({ ...loc });
+    const handleOpenEdit = (v: MastVendor) => {
+        setEditingVendor({ ...v });
         setIsModalOpen(true);
     };
 
-    const handleDelete = async (loc: MastLocation) => {
+    const handleDelete = async (v: MastVendor) => {
         const confirmResult = await Swal.fire({
             title: 'ยืนยันการลบข้อมูล',
-            text: `คุณต้องการลบข้อมูลตำแหน่งจัดเก็บ "${loc.name} (${loc.code})" หรือไม่?`,
+            text: `คุณต้องการลบข้อมูลผู้จำหน่าย "${v.vendName} (${v.vendCode})" หรือไม่?`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#dc2626',
@@ -115,8 +117,8 @@ export default function LocationsPage() {
 
         if (confirmResult.isConfirmed) {
             try {
-                const targetId = loc.id;
-                const res = await masterService.locations.remove(targetId);
+                const targetId = v.id;
+                const res = await masterService.vendors.remove(targetId);
 
                 if (res.success) {
                     await Swal.fire({
@@ -125,7 +127,7 @@ export default function LocationsPage() {
                         timer: 1500,
                         showConfirmButton: false,
                     });
-                    fetchLocations();
+                    fetchVendors();
                 } else {
                     Swal.fire({
                         icon: 'error',
@@ -134,21 +136,24 @@ export default function LocationsPage() {
                     });
                 }
             } catch (error: unknown) {
-                console.error('Delete location error:', error);
+                console.error('Delete vendor error:', error);
                 const err = error as { message?: string };
                 Swal.fire({
                     icon: 'error',
                     title: 'เกิดข้อผิดพลาด',
-                    text: err.message || 'ไม่สามารถลบข้อมูลตำแหน่งได้',
+                    text: err.message || 'ไม่สามารถลบข้อมูลผู้จำหน่ายได้',
                 });
             }
         }
     };
 
     const columns = [
-        { Name: 'รหัสตำแหน่ง', key: 'code', width: '220px' },
-        { Name: 'ชื่อตำแหน่งจัดเก็บ', key: 'name', width: 'auto' },
-        { Name: 'สถานะ', key: 'isActive', width: '120px' },
+        { Name: 'รหัสผู้จำหน่าย', key: 'vendCode', width: '150px' },
+        { Name: 'ชื่อผู้จำหน่าย / บริษัท', key: 'vendName', width: '240px' },
+        { Name: 'ชื่อผู้ติดต่อ', key: 'contactName', width: '180px' },
+        { Name: 'เบอร์โทรศัพท์', key: 'tel', width: '140px' },
+        { Name: 'ที่อยู่', key: 'address', width: 'auto' },
+        { Name: 'สถานะ', key: 'isActive', width: '110px' },
     ];
 
     return (
@@ -157,17 +162,17 @@ export default function LocationsPage() {
             <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                        {pageTitle || 'จัดการข้อมูลตำแหน่งจัดเก็บ'}
+                        {pageTitle || 'จัดการข้อมูลผู้จำหน่าย'}
                     </h1>
                     <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-                        จัดการข้อมูลตำแหน่งจัดเก็บสินค้าในคลัง (Location / Bin Management)
+                        จัดการข้อมูลผู้จำหน่ายและคู่ค้าทั้งหมดในระบบ (Vendor / Supplier Management)
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
                     <SearchInput
                         value={search}
                         onChange={handleSearchChange}
-                        placeholder="ค้นหารหัส หรือชื่อตำแหน่ง..."
+                        placeholder="ค้นหารหัส, ชื่อผู้จำหน่าย..."
                         className="w-64"
                     />
                     <Button
@@ -175,7 +180,7 @@ export default function LocationsPage() {
                         variant={'green'}
                         className="px-4 py-2 text-sm font-medium text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity bg-emerald-600 hover:bg-emerald-700"
                     >
-                        + เพิ่มตำแหน่งใหม่
+                        + เพิ่มผู้จำหน่ายใหม่
                     </Button>
                 </div>
             </div>
@@ -200,20 +205,29 @@ export default function LocationsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                            {!loading && paginatedLocations && paginatedLocations.length > 0 ? (
-                                paginatedLocations.map((loc, indexKey) => (
+                            {!loading && paginatedVendors && paginatedVendors.length > 0 ? (
+                                paginatedVendors.map((v, indexKey) => (
                                     <TableRow
-                                        key={loc.id || indexKey}
+                                        key={v.id || indexKey}
                                         className="hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors"
                                     >
                                         <TableCell className="px-4 py-3 text-sm font-medium text-blue-600 dark:text-blue-400">
-                                            {loc.code || '-'}
+                                            {v.vendCode || '-'}
                                         </TableCell>
                                         <TableCell className="px-4 py-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                                            {loc.name || '-'}
+                                            {v.vendName || '-'}
+                                        </TableCell>
+                                        <TableCell className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+                                            {v.contactName || '-'}
+                                        </TableCell>
+                                        <TableCell className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+                                            {v.tel || '-'}
+                                        </TableCell>
+                                        <TableCell className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400 max-w-[200px] truncate" title={v.address}>
+                                            {v.address || '-'}
                                         </TableCell>
                                         <TableCell className="px-4 py-3 text-sm">
-                                            {loc.isActive !== false ? (
+                                            {v.isActive !== false ? (
                                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                                                     {t.common.active}
                                                 </span>
@@ -229,7 +243,7 @@ export default function LocationsPage() {
                                                 <Button
                                                     size="sm"
                                                     variant={'outline'}
-                                                    onClick={() => handleOpenEdit(loc)}
+                                                    onClick={() => handleOpenEdit(v)}
                                                     className="h-8 px-2.5 text-xs rounded-lg border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                                                 >
                                                     {t.common.edit}
@@ -237,7 +251,7 @@ export default function LocationsPage() {
                                                 <Button
                                                     size="sm"
                                                     variant={'destructive'}
-                                                    onClick={() => handleDelete(loc)}
+                                                    onClick={() => handleDelete(v)}
                                                     className="h-8 px-2.5 text-xs rounded-lg bg-red-600 hover:bg-red-700 text-white"
                                                 >
                                                     {t.common.delete}
@@ -252,11 +266,11 @@ export default function LocationsPage() {
                                         {loading ? (
                                             <div className="flex flex-col items-center justify-center gap-2">
                                                 <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                                                <span className="text-sm">กำลังโหลดข้อมูลตำแหน่งจัดเก็บ...</span>
+                                                <span className="text-sm">กำลังโหลดข้อมูลผู้จำหน่าย...</span>
                                             </div>
                                         ) : (
                                             <div className="py-6 text-zinc-400">
-                                                {search ? 'ไม่พบข้อมูลตำแหน่งที่ตรงกับคำค้นหา' : 'ยังไม่มีข้อมูลตำแหน่งจัดเก็บในระบบ'}
+                                                {search ? 'ไม่พบข้อมูลผู้จำหน่ายที่ตรงกับคำค้นหา' : 'ยังไม่มีข้อมูลผู้จำหน่ายในระบบ'}
                                             </div>
                                         )}
                                     </TableCell>
@@ -270,8 +284,8 @@ export default function LocationsPage() {
                 <TablePagination
                     currentPage={safeCurrentPage}
                     pageSize={pageSize}
-                    totalItems={locationList.length}
-                    filteredCount={filteredLocations.length}
+                    totalItems={vendorList.length}
+                    filteredCount={filteredVendors.length}
                     onPageChange={setCurrentPage}
                     onPageSizeChange={(size) => {
                         setPageSize(size);
@@ -281,12 +295,12 @@ export default function LocationsPage() {
                 />
             </Card>
 
-            {/* Create / Edit Location Modal */}
-            <CreateLocationModal
+            {/* Create / Edit Vendor Modal */}
+            <CreateVendorModal
                 open={isModalOpen}
                 onOpenChange={setIsModalOpen}
-                onSaved={fetchLocations}
-                dataEdit={editingLocation}
+                onSaved={fetchVendors}
+                dataEdit={editingVendor}
             />
         </AppLayout>
     );

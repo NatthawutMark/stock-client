@@ -4,13 +4,13 @@
 
 // ─── Common base ────────────────────────────────────────────
 export interface BaseEntity {
-    id: number;
-    isActive: boolean;
-    isDelete: boolean;
-    createDate: string;
-    createBy: string;
-    updateDate: string;
-    updateBy: string;
+    id: string | number;
+    isActive?: boolean;
+    isDelete?: boolean;
+    createDate?: string;
+    createBy?: string;
+    updateDate?: string;
+    updateBy?: string;
 }
 
 // ─── Master Data ─────────────────────────────────────────────
@@ -18,17 +18,23 @@ export interface BaseEntity {
 export interface MastItem extends BaseEntity {
     itemCode: string;
     itemName: string;
-    brandId: number;
-    minAlter: number;
-    maxAlter: number;
-    uomId: number;
-    locationId: number;
-    buyPrice: number;
-    sellPrice: number;
-    isLotNo: boolean;
-    isSerialNo: boolean;
-    groupId?: number;
-    warehouseId?: number;
+    brandId?: string | number;
+    brandName?: string;
+    minAlert?: number;
+    maxAlert?: number;
+    minAlter?: number;
+    maxAlter?: number;
+    uomId?: string | number;
+    uomName?: string;
+    locationId?: string | number;
+    locationName?: string;
+    buyPrice?: number;
+    sellPrice?: number;
+    isLotNo?: boolean;
+    isLotno?: boolean;
+    isSerialNo?: boolean;
+    groupId?: string | number;
+    warehouseId?: string | number;
 }
 
 export interface MastBrand extends BaseEntity {
@@ -42,15 +48,15 @@ export interface MastGroup extends BaseEntity {
 }
 
 export interface MastItemGroup {
-    id: number;
-    itemId: number;
-    groupId: number;
-    isActive: boolean;
-    isDelete: boolean;
-    createDate: string;
-    createBy: string;
-    updateDate: string;
-    updateBy: string;
+    id: string | number;
+    itemId: string | number;
+    groupId: string | number;
+    isActive?: boolean;
+    isDelete?: boolean;
+    createDate?: string;
+    createBy?: string;
+    updateDate?: string;
+    updateBy?: string;
 }
 
 export interface MastLocation extends BaseEntity {
@@ -61,19 +67,19 @@ export interface MastLocation extends BaseEntity {
 export interface MastWarehouse extends BaseEntity {
     code: string;
     warehouseName: string;
-    description: string;
+    description?: string;
 }
 
 export interface MastItemWarehouse {
-    id: number;
-    itemId: number;
-    warehouseId: number;
-    isActive: boolean;
-    isDelete: boolean;
-    createDate: string;
-    createBy: string;
-    updateDate: string;
-    updateBy: string;
+    id: string | number;
+    itemId: string | number;
+    warehouseId: string | number;
+    isActive?: boolean;
+    isDelete?: boolean;
+    createDate?: string;
+    createBy?: string;
+    updateDate?: string;
+    updateBy?: string;
 }
 
 export interface MastUom extends BaseEntity {
@@ -83,19 +89,19 @@ export interface MastUom extends BaseEntity {
 export interface MastVendor extends BaseEntity {
     vendCode: string;
     vendName: string;
-    contactName: string;
-    tel: string;
-    address: string;
-    remark: string;
+    contactName?: string;
+    tel?: string;
+    address?: string;
+    remark?: string;
 }
 
 export interface MastCustomer extends BaseEntity {
     custCode: string;
     custName: string;
-    contactName: string;
-    tel: string;
-    address: string;
-    remark: string;
+    contactName?: string;
+    tel?: string;
+    address?: string;
+    remark?: string;
 }
 
 export interface MastEmployee extends BaseEntity {
@@ -106,15 +112,23 @@ export interface MastEmployee extends BaseEntity {
 }
 
 export interface MastStatus extends BaseEntity {
-    transTypeId: number;
+    transTypeId: number | string;
     nameTh: string;
     nameEn: string;
     orderNo: number;
 }
 
 export interface MastDocType extends BaseEntity {
-    transTypeId: number;
-    name: string;
+    docTypeId?: number | string;
+    transTypeId?: number | string;
+    menuId?: number | string;
+    menuID?: number | string;
+    menuName?: string;
+    transTypeName?: string;
+    transName?: string;
+    name?: string;
+    docTypeName?: string;
+    DocTypeName?: string;
 }
 
 export interface MastReason extends BaseEntity {
@@ -122,18 +136,40 @@ export interface MastReason extends BaseEntity {
 }
 
 export interface MastTransType extends BaseEntity {
-    name: string;
+    menuId?: number | string;
+    menuName?: string;
+    transTypeId?: number | string;
+    transTypeName?: string;
+    name?: string;
+    nameTh?: string;
+    nameEn?: string;
 }
 
 // ─── Transactions ────────────────────────────────────────────
 
 export interface DocReceive extends BaseEntity {
     docNo: string;
-    docTypeId: number;
-    statusId: number;
-    warehouseId: number;
-    vendorId: number;
+    doc_no?: string;
+    DOC_NO?: string;
+    docDate?: string;
+    doc_date?: string;
+    DOC_DATE?: string;
+    docTypeId?: number;
+    menuId?: number | string;
+    menu_id?: number | string;
+    Menu_id?: number | string;
+    menuName?: string;
+    statusId?: number;
+    docStatus?: string | number;
+    doc_status?: string | number;
+    DOC_STATUS?: string | number;
+    statusName?: string;
+    warehouseId?: number;
+    warehouseName?: string;
+    vendorId?: number;
+    vendorName?: string;
     remark?: string;
+    details?: DocReceiveDetail[];
 }
 
 export interface DocReceiveDetail extends BaseEntity {
@@ -310,6 +346,8 @@ export interface SysMenu extends BaseEntity {
     parentId: number | null;
     nameTh: string;
     nameEn: string;
+    menuType: string;
+    orderNo: number;
 }
 
 // ─── Joined / View types for UI ──────────────────────────────
@@ -369,6 +407,7 @@ export interface ApiResponse<T> {
     results?: T;
     data: T;
     message?: string;
+    error?: string;
     total?: number;
     page?: number;
     limit?: number;
@@ -389,8 +428,13 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-    token: string;
-    user: UserProfile & { username: string; role: string; isAdmin: boolean };
+    token?: string;
+    accessToken?: string;
+    refreshToken?: string;
+    AccessToken?: string;
+    RefreshToken?: string;
+    response?: CurrentUser;
+    user?: UserProfile & { username: string; role: string; isAdmin: boolean };
 }
 
 export interface CurrentUser {

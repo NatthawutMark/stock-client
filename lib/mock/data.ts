@@ -105,9 +105,12 @@ export const reasons: MastReason[] = [
 // ─── Transactions ─────────────────────────────────────────────
 
 export const docReceives: DocReceive[] = [
-  { id: 1, docNo: 'GR2024001', docTypeId: 1, statusId: 3, warehouseId: 1, vendorId: 1, isActive: true, isDelete: false, createDate: '2024-01-10T10:00:00Z', createBy: by, updateDate: '2024-01-10T14:00:00Z', updateBy: by },
-  { id: 2, docNo: 'GR2024002', docTypeId: 1, statusId: 2, warehouseId: 1, vendorId: 2, isActive: true, isDelete: false, createDate: '2024-01-15T09:00:00Z', createBy: by, updateDate: '2024-01-15T09:00:00Z', updateBy: by },
-  { id: 3, docNo: 'GR2024003', docTypeId: 1, statusId: 1, warehouseId: 2, vendorId: 1, isActive: true, isDelete: false, createDate: '2024-01-20T11:00:00Z', createBy: by, updateDate: '2024-01-20T11:00:00Z', updateBy: by },
+  { id: 1, docNo: 'GR2024001', docDate: '2024-01-10', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 3, docStatus: 'Completed', warehouseId: 1, warehouseName: 'คลังสินค้าหลัก (WH-MAIN)', vendorId: 1, vendorName: 'บริษัท ทีพี ซัพพลาย จำกัด', remark: 'รับสินค้าตาม PO-2024-001 ครบถ้วน', isActive: true, isDelete: false, createDate: '2024-01-10T10:00:00Z', createBy: by, updateDate: '2024-01-10T14:00:00Z', updateBy: by },
+  { id: 2, docNo: 'GR2024002', docDate: '2024-01-15', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 2, docStatus: 'Pending', warehouseId: 1, warehouseName: 'คลังสินค้าหลัก (WH-MAIN)', vendorId: 2, vendorName: 'บริษัท แอดวานซ์ ไอที จำกัด', remark: 'รอตรวจนับสินค้าจากฝ่าย QC', isActive: true, isDelete: false, createDate: '2024-01-15T09:00:00Z', createBy: by, updateDate: '2024-01-15T09:00:00Z', updateBy: by },
+  { id: 3, docNo: 'GR2024003', docDate: '2024-01-20', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 1, docStatus: 'Draft', warehouseId: 2, warehouseName: 'คลังสินค้าสาขา 1 (WH-BKK1)', vendorId: 1, vendorName: 'บริษัท ทีพี ซัพพลาย จำกัด', remark: 'บันทึกฉบับร่าง', isActive: true, isDelete: false, createDate: '2024-01-20T11:00:00Z', createBy: by, updateDate: '2024-01-20T11:00:00Z', updateBy: by },
+  { id: 4, docNo: 'GR2024004', docDate: '2024-02-01', menuId: 1, menuName: 'Receive', docTypeId: 2, statusId: 3, docStatus: 'Completed', warehouseId: 1, warehouseName: 'คลังสินค้าหลัก (WH-MAIN)', vendorId: 3, vendorName: 'บริษัท สยามโลจิสติกส์ จำกัด', remark: 'รับสินค้าคืนจากลูกค้า', isActive: true, isDelete: false, createDate: '2024-02-01T08:30:00Z', createBy: by, updateDate: '2024-02-01T10:00:00Z', updateBy: by },
+  { id: 5, docNo: 'GR2024005', docDate: '2024-02-10', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 2, docStatus: 'Pending', warehouseId: 3, warehouseName: 'คลังสินค้าสาขา 2 (WH-CNX)', vendorId: 2, vendorName: 'บริษัท แอดวานซ์ ไอที จำกัด', remark: 'สินค้าส่งถึงคลัง รอขนถ่าย', isActive: true, isDelete: false, createDate: '2024-02-10T14:15:00Z', createBy: by, updateDate: '2024-02-10T14:15:00Z', updateBy: by },
+  { id: 6, docNo: 'GR2024006', docDate: '2024-02-15', menuId: 2, menuName: 'Issue', docTypeId: 1, statusId: 1, docStatus: 'Draft', warehouseId: 2, warehouseName: 'คลังสินค้าสาขา 1 (WH-BKK1)', vendorId: 1, vendorName: 'บริษัท ทีพี ซัพพลาย จำกัด', remark: 'เตรียมเอกสารตรวจรับ', isActive: true, isDelete: false, createDate: '2024-02-15T16:00:00Z', createBy: by, updateDate: '2024-02-15T16:00:00Z', updateBy: by },
 ];
 
 export const docReceiveDetails: DocReceiveDetail[] = [
@@ -171,7 +174,7 @@ export const getDashboardStats = () => ({
   totalStock: inventories.reduce((s, i) => s + i.itemQty, 0),
   lowStock: items.filter(item => {
     const stock = inventories.filter(inv => inv.itemId === item.id).reduce((s, i) => s + i.itemQty, 0);
-    return stock < item.minAlter;
+    return stock < (item.minAlter ?? item.minAlert ?? 0);
   }).length,
   pendingDocs: [
     ...docReceives.filter(d => d.statusId === 2),

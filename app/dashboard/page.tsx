@@ -5,8 +5,6 @@ import { AppLayout } from '../components/layout/AppLayout';
 import { StatCard } from '../components/ui/StatCard';
 import { useI18n } from '../providers';
 import { apiClient } from '@/lib/api/client';
-import { masterService } from '@/lib/api/services/master';
-import { env } from 'process';
 
 export default function DashboardPage() {
     const { t } = useI18n();

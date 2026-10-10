@@ -5,7 +5,7 @@ import { AppLayout } from '@/app/components/layout/AppLayout';
 import { SearchInput } from '@/app/components/ui/SearchInput';
 import { useI18n, useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
-import type { MastLocation } from '@/lib/types';
+import type { MastCustomer } from '@/lib/types';
 import {
     Button,
     Table,
@@ -19,15 +19,15 @@ import {
     Label,
     TablePagination,
 } from '@/components/ui';
-import { CreateLocationModal } from '@/app/components/modal/CreateLocationModal';
+import { CreateCustomerModal } from '@/app/components/modal/CreateCustomerModal';
 import Swal from 'sweetalert2';
 
-export default function LocationsPage() {
+export default function CustomersPage() {
     const { t } = useI18n();
     const { pageTitle } = useLayout();
 
     // State
-    const [locationList, setLocationList] = useState<MastLocation[]>([]);
+    const [customerList, setCustomerList] = useState<MastCustomer[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
 
@@ -37,26 +37,26 @@ export default function LocationsPage() {
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingLocation, setEditingLocation] = useState<MastLocation | null>(null);
+    const [editingCustomer, setEditingCustomer] = useState<MastCustomer | null>(null);
 
-    // Fetch locations from C# API (stock-api: /api/MastLocation/list)
-    const fetchLocations = useCallback(async () => {
+    // Fetch customers from C# API (stock-api: /api/MastCustomer/list)
+    const fetchCustomers = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await masterService.locations.list({ search });
+            const res = await masterService.customers.list({ search });
             if (res && res.success) {
                 const data = Array.isArray(res.results)
                     ? res.results
                     : Array.isArray(res.data)
                     ? res.data
                     : [];
-                setLocationList(data);
+                setCustomerList(data);
             } else {
-                setLocationList([]);
+                setCustomerList([]);
             }
         } catch (error) {
-            console.error('Failed to fetch locations:', error);
-            setLocationList([]);
+            console.error('Failed to fetch customers:', error);
+            setCustomerList([]);
         } finally {
             setLoading(false);
         }
@@ -64,27 +64,30 @@ export default function LocationsPage() {
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        fetchLocations();
-    }, [fetchLocations]);
+        fetchCustomers();
+    }, [fetchCustomers]);
 
-    const filteredLocations = useMemo(() => {
-        if (!search.trim()) return locationList;
+    // Client-side search filtering
+    const filteredCustomers = useMemo(() => {
+        if (!search.trim()) return customerList;
         const q = search.toLowerCase();
-        return locationList.filter(
-            (l) =>
-                l.code?.toLowerCase().includes(q) ||
-                l.name?.toLowerCase().includes(q)
+        return customerList.filter(
+            (c) =>
+                c.custCode?.toLowerCase().includes(q) ||
+                c.custName?.toLowerCase().includes(q) ||
+                c.contactName?.toLowerCase().includes(q) ||
+                c.tel?.toLowerCase().includes(q)
         );
-    }, [locationList, search]);
+    }, [customerList, search]);
 
     // Pagination Calculations
-    const totalPages = Math.max(1, Math.ceil(filteredLocations.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
     const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
 
-    const paginatedLocations = useMemo(() => {
+    const paginatedCustomers = useMemo(() => {
         const startIndex = (safeCurrentPage - 1) * pageSize;
-        return filteredLocations.slice(startIndex, startIndex + pageSize);
-    }, [filteredLocations, safeCurrentPage, pageSize]);
+        return filteredCustomers.slice(startIndex, startIndex + pageSize);
+    }, [filteredCustomers, safeCurrentPage, pageSize]);
 
     const handleSearchChange = (val: string) => {
         setSearch(val);
@@ -92,19 +95,19 @@ export default function LocationsPage() {
     };
 
     const handleOpenCreate = () => {
-        setEditingLocation(null);
+        setEditingCustomer(null);
         setIsModalOpen(true);
     };
 
-    const handleOpenEdit = (loc: MastLocation) => {
-        setEditingLocation({ ...loc });
+    const handleOpenEdit = (customer: MastCustomer) => {
+        setEditingCustomer({ ...customer });
         setIsModalOpen(true);
     };
 
-    const handleDelete = async (loc: MastLocation) => {
+    const handleDelete = async (customer: MastCustomer) => {
         const confirmResult = await Swal.fire({
             title: 'ยืนยันการลบข้อมูล',
-            text: `คุณต้องการลบข้อมูลตำแหน่งจัดเก็บ "${loc.name} (${loc.code})" หรือไม่?`,
+            text: `คุณต้องการลบข้อมูลลูกค้า "${customer.custName} (${customer.custCode})" หรือไม่?`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#dc2626',
@@ -115,8 +118,8 @@ export default function LocationsPage() {
 
         if (confirmResult.isConfirmed) {
             try {
-                const targetId = loc.id;
-                const res = await masterService.locations.remove(targetId);
+                const targetId = customer.id || customer.custCode;
+                const res = await masterService.customers.remove(targetId);
 
                 if (res.success) {
                     await Swal.fire({
@@ -125,7 +128,7 @@ export default function LocationsPage() {
                         timer: 1500,
                         showConfirmButton: false,
                     });
-                    fetchLocations();
+                    fetchCustomers();
                 } else {
                     Swal.fire({
                         icon: 'error',
@@ -134,21 +137,25 @@ export default function LocationsPage() {
                     });
                 }
             } catch (error: unknown) {
-                console.error('Delete location error:', error);
+                console.error('Delete customer error:', error);
                 const err = error as { message?: string };
                 Swal.fire({
                     icon: 'error',
                     title: 'เกิดข้อผิดพลาด',
-                    text: err.message || 'ไม่สามารถลบข้อมูลตำแหน่งได้',
+                    text: err.message || 'ไม่สามารถลบข้อมูลลูกค้าได้',
                 });
             }
         }
     };
 
     const columns = [
-        { Name: 'รหัสตำแหน่ง', key: 'code', width: '220px' },
-        { Name: 'ชื่อตำแหน่งจัดเก็บ', key: 'name', width: 'auto' },
-        { Name: 'สถานะ', key: 'isActive', width: '120px' },
+        { Name: 'รหัสลูกค้า', key: 'custCode', width: '140px' },
+        { Name: 'ชื่อลูกค้า / บริษัท', key: 'custName', width: '220px' },
+        { Name: 'ผู้ติดต่อ', key: 'contactName', width: '160px' },
+        { Name: 'เบอร์โทรศัพท์', key: 'tel', width: '140px' },
+        { Name: 'ที่อยู่', key: 'address', width: 'auto' },
+        { Name: 'หมายเหตุ', key: 'remark', width: '160px' },
+        { Name: 'สถานะ', key: 'isActive', width: '110px' },
     ];
 
     return (
@@ -157,17 +164,17 @@ export default function LocationsPage() {
             <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                        {pageTitle || 'จัดการข้อมูลตำแหน่งจัดเก็บ'}
+                        {pageTitle || 'จัดการข้อมูลลูกค้า'}
                     </h1>
                     <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-                        จัดการข้อมูลตำแหน่งจัดเก็บสินค้าในคลัง (Location / Bin Management)
+                        จัดการข้อมูลลูกค้าทั้งหมดในระบบ (Customer Management)
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
                     <SearchInput
                         value={search}
                         onChange={handleSearchChange}
-                        placeholder="ค้นหารหัส หรือชื่อตำแหน่ง..."
+                        placeholder="ค้นหารหัส, ชื่อ, ผู้ติดต่อ..."
                         className="w-64"
                     />
                     <Button
@@ -175,45 +182,58 @@ export default function LocationsPage() {
                         variant={'green'}
                         className="px-4 py-2 text-sm font-medium text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity bg-emerald-600 hover:bg-emerald-700"
                     >
-                        + เพิ่มตำแหน่งใหม่
+                        + สร้างลูกค้าใหม่
                     </Button>
                 </div>
             </div>
 
+            {/* Customer Table Card */}
             <Card className="flex flex-col w-full border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl overflow-hidden bg-white dark:bg-zinc-900">
                 <CardContent className="p-0 w-full overflow-x-auto">
                     <Table className="w-full">
                         <TableHeader className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-800">
                             <TableRow>
-                                {columns.map((item) => (
+                                {columns.map((col) => (
                                     <TableHead
+                                        key={col.key}
                                         className="font-semibold text-zinc-700 dark:text-zinc-300 py-3.5 px-4"
-                                        style={{ width: item.width ?? 'auto' }}
-                                        key={item.key}
+                                        style={{ width: col.width }}
                                     >
-                                        <Label className="cursor-pointer">{item.Name}</Label>
+                                        <Label className="cursor-pointer">{col.Name}</Label>
                                     </TableHead>
                                 ))}
-                                <TableHead key={'action'} className="w-[160px] text-right font-semibold text-zinc-700 dark:text-zinc-300 py-3.5 px-4">
+                                <TableHead key="actions" className="w-[160px] text-right font-semibold text-zinc-700 dark:text-zinc-300 py-3.5 px-4">
                                     {t.common.actions}
                                 </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                            {!loading && paginatedLocations && paginatedLocations.length > 0 ? (
-                                paginatedLocations.map((loc, indexKey) => (
+                            {!loading && paginatedCustomers && paginatedCustomers.length > 0 ? (
+                                paginatedCustomers.map((customer, index) => (
                                     <TableRow
-                                        key={loc.id || indexKey}
+                                        key={customer.id ? String(customer.id) : index}
                                         className="hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors"
                                     >
                                         <TableCell className="px-4 py-3 text-sm font-medium text-blue-600 dark:text-blue-400">
-                                            {loc.code || '-'}
+                                            {customer.custCode}
                                         </TableCell>
                                         <TableCell className="px-4 py-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                                            {loc.name || '-'}
+                                            {customer.custName}
+                                        </TableCell>
+                                        <TableCell className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+                                            {customer.contactName || '-'}
+                                        </TableCell>
+                                        <TableCell className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400">
+                                            {customer.tel || '-'}
+                                        </TableCell>
+                                        <TableCell className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400 max-w-[240px] truncate" title={customer.address || ''}>
+                                            {customer.address || '-'}
+                                        </TableCell>
+                                        <TableCell className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400 max-w-[160px] truncate" title={customer.remark || ''}>
+                                            {customer.remark || '-'}
                                         </TableCell>
                                         <TableCell className="px-4 py-3 text-sm">
-                                            {loc.isActive !== false ? (
+                                            {customer.isActive !== false ? (
                                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                                                     {t.common.active}
                                                 </span>
@@ -223,21 +243,20 @@ export default function LocationsPage() {
                                                 </span>
                                             )}
                                         </TableCell>
-
-                                        <TableCell key={'action'} className="text-right px-4 py-3">
+                                        <TableCell className="text-right px-4 py-3">
                                             <div className="flex items-center justify-end gap-2">
                                                 <Button
-                                                    size="sm"
                                                     variant={'outline'}
-                                                    onClick={() => handleOpenEdit(loc)}
+                                                    size="sm"
+                                                    onClick={() => handleOpenEdit(customer)}
                                                     className="h-8 px-2.5 text-xs rounded-lg border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                                                 >
                                                     {t.common.edit}
                                                 </Button>
                                                 <Button
-                                                    size="sm"
                                                     variant={'destructive'}
-                                                    onClick={() => handleDelete(loc)}
+                                                    size="sm"
+                                                    onClick={() => handleDelete(customer)}
                                                     className="h-8 px-2.5 text-xs rounded-lg bg-red-600 hover:bg-red-700 text-white"
                                                 >
                                                     {t.common.delete}
@@ -252,11 +271,11 @@ export default function LocationsPage() {
                                         {loading ? (
                                             <div className="flex flex-col items-center justify-center gap-2">
                                                 <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                                                <span className="text-sm">กำลังโหลดข้อมูลตำแหน่งจัดเก็บ...</span>
+                                                <span className="text-sm">กำลังโหลดข้อมูลลูกค้า...</span>
                                             </div>
                                         ) : (
                                             <div className="py-6 text-zinc-400">
-                                                {search ? 'ไม่พบข้อมูลตำแหน่งที่ตรงกับคำค้นหา' : 'ยังไม่มีข้อมูลตำแหน่งจัดเก็บในระบบ'}
+                                                {search ? 'ไม่พบข้อมูลลูกค้าที่ตรงกับคำค้นหา' : 'ยังไม่มีข้อมูลลูกค้าในระบบ'}
                                             </div>
                                         )}
                                     </TableCell>
@@ -270,8 +289,8 @@ export default function LocationsPage() {
                 <TablePagination
                     currentPage={safeCurrentPage}
                     pageSize={pageSize}
-                    totalItems={locationList.length}
-                    filteredCount={filteredLocations.length}
+                    totalItems={customerList.length}
+                    filteredCount={filteredCustomers.length}
                     onPageChange={setCurrentPage}
                     onPageSizeChange={(size) => {
                         setPageSize(size);
@@ -281,12 +300,17 @@ export default function LocationsPage() {
                 />
             </Card>
 
-            {/* Create / Edit Location Modal */}
-            <CreateLocationModal
+            {/* Add / Edit Customer Modal */}
+            <CreateCustomerModal
                 open={isModalOpen}
-                onOpenChange={setIsModalOpen}
-                onSaved={fetchLocations}
-                dataEdit={editingLocation}
+                onOpenChange={(open) => {
+                    setIsModalOpen(open);
+                    if (!open) {
+                        setEditingCustomer(null);
+                    }
+                }}
+                onSaved={fetchCustomers}
+                dataEdit={editingCustomer}
             />
         </AppLayout>
     );

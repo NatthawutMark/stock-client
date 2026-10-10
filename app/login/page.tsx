@@ -30,7 +30,10 @@ export default function LoginPage() {
             const res = await authService.login({ username, password });
             if (res.success && res.results) {
                 setUser(res.results?.response || null);
-                setToken({ accessToken: res.results?.accessToken || null, refreshToken: res.results?.refreshToken || null });
+                setToken({
+                    accessToken: res.results?.accessToken || res.results?.AccessToken || '',
+                    refreshToken: res.results?.refreshToken || res.results?.RefreshToken || '',
+                });
                 router.push('/');
             } else {
                 setError(res.message || t.auth.loginFailed);
@@ -118,15 +121,6 @@ export default function LoginPage() {
                                 {error}
                             </div>
                         )}
-
-                        {/* <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full py-2.5 rounded-xl text-white font-medium transition-colors"
-                            style={{ background: 'var(--accent)' }}
-                        >
-                            {loading ? t.common.loading : t.auth.loginButton}
-                        </button> */}
                         <Button type='submit' disabled={loading} variant='default' className='w-full' size='icon'>
                             {loading ? t.common.loading : t.auth.loginButton}
                         </Button>
