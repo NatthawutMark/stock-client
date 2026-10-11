@@ -59,6 +59,16 @@ export const customers: MastCustomer[] = [
   { id: 3, custCode: 'C003', custName: 'ร้าน ไอที คอร์เนอร์', contactName: 'คุณกมล', tel: '076-666-666', address: '30 ถ.ราษฎร์ อุทิศ ภูเก็ต', remark: '', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
 ];
 
+export const employees: MastEmployee[] = [
+  { id: 1, empCode: 'EMP001', fName: 'สมชาย', lName: 'ใจดี', tel: '081-111-1111', email: 'somchai.j@company.com', position: 'เจ้าหน้าที่คลังสินค้า', department: 'คลังสินค้า (Warehouse)', remark: 'หัวหน้างานคลังสินค้า', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, empCode: 'EMP002', fName: 'สมหญิง', lName: 'รักงาน', tel: '082-222-2222', email: 'somying.r@company.com', position: 'เจ้าหน้าที่ตรวจรับ', department: 'คลังสินค้า (Warehouse)', remark: 'ตรวจรับสินค้าเข้า', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, empCode: 'EMP003', fName: 'วิชัย', lName: 'มั่นคง', tel: '083-333-3333', email: 'wichai.m@company.com', position: 'เจ้าหน้าที่จ่ายสินค้า', department: 'คลังสินค้า (Warehouse)', remark: 'ควบคุมการเบิกจ่าย', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 4, empCode: 'EMP004', fName: 'กานดา', lName: 'สุขสม', tel: '084-444-4444', email: 'kanda.s@company.com', position: 'พนักงานจัดสต็อก', department: 'คลังสินค้า (Warehouse)', remark: 'จัดเรียงและย้ายตำแหน่งสินค้า', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 5, empCode: 'EMP005', fName: 'ธนพล', lName: 'เจริญผล', tel: '085-555-5555', email: 'thanapol.c@company.com', position: 'ผู้จัดการฝ่ายโลจิสติกส์', department: 'โลจิสติกส์ (Logistics)', remark: 'ผู้จัดการแผนก', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+];
+
+export const mockEmployees = employees;
+
 export const items: MastItem[] = [
   { id: 1, itemCode: 'ITM001', itemName: 'โน๊ตบุ๊ค Dell Inspiron 15', brandId: 3, minAlter: 5, maxAlter: 50, uomId: 1, locationId: 1, buyPrice: 18000, sellPrice: 22000, isLotNo: false, isSerialNo: true, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
   { id: 2, itemCode: 'ITM002', itemName: 'iPhone 15 Pro 256GB', brandId: 2, minAlter: 3, maxAlter: 30, uomId: 1, locationId: 2, buyPrice: 35000, sellPrice: 42000, isLotNo: false, isSerialNo: true, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },

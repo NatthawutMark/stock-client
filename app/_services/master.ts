@@ -1,6 +1,6 @@
 import type {
     MastItem, MastBrand, MastWarehouse, MastLocation, MastUom, MastVendor, MastCustomer,
-    MastDocType, MastTransType,
+    MastEmployee, MastDocType, MastTransType,
     PaginationParams, ApiResponse,
 } from '@/lib/types';
 import { apiClient } from '@/lib/api/client';
@@ -10,11 +10,15 @@ export type MasterResult<T = unknown> = ApiResponse<T>;
 export const masterService = {
     // ─── Items ───────────────────────────────────────────────────
     items: {
-        list: (p?: PaginationParams) => {
-            return apiClient.post<MasterResult<MastItem[]>>('/api/MastItem/list', {
-                itemCode: p?.search || '',
-            });
+        list: (obj?: MastItem) => {
+            return apiClient.post<MasterResult<MastItem[]>>('/api/MastItem/list', obj);
         },
+        // list: (p?: PaginationParams) => {
+        //     return apiClient.post<MasterResult<MastItem[]>>('/api/MastItem/list', {
+        //         itemCode: p?.search || '',
+        //         isActive: p?.isActive || null
+        //     });
+        // },
         getByCode: (code: string) =>
             apiClient.get<MasterResult<MastItem>>(`/api/MastItem/getByCode?code=${encodeURIComponent(code)}`),
         create: (data: Partial<MastItem>) =>
@@ -127,6 +131,27 @@ export const masterService = {
             apiClient.post<MasterResult<unknown>>('/api/MastCustomer/update', data),
         remove: (id: string | number) =>
             apiClient.post<MasterResult<unknown>>('/api/MastCustomer/delete', { id }),
+    },
+
+    // ─── Employees ───────────────────────────────────────────────
+    employees: {
+        list: (p?: PaginationParams) => {
+            return apiClient.post<MasterResult<MastEmployee[]>>('/api/MastEmployee/list', {
+                empCode: p?.search || '',
+                fName: p?.search || '',
+                lName: p?.search || '',
+            });
+        },
+        getByCode: (code: string) =>
+            apiClient.get<MasterResult<MastEmployee>>(`/api/MastEmployee/getByCode?code=${encodeURIComponent(code)}`),
+        getById: (id: string | number) =>
+            apiClient.get<MasterResult<MastEmployee>>(`/api/MastEmployee/getById?id=${id}`),
+        create: (data: Partial<MastEmployee>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastEmployee/create', data),
+        update: (data: Partial<MastEmployee>) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastEmployee/update', data),
+        remove: (id: string | number) =>
+            apiClient.post<MasterResult<unknown>>('/api/MastEmployee/delete', { id }),
     },
 
     // ─── DocTypes ────────────────────────────────────────────────

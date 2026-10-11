@@ -54,9 +54,11 @@ export const iconMap: Record<string, React.ComponentType<{ className?: string; s
     LocalShippingIcon: LocalShippingOutlinedIcon,
     LocalShippingOutlinedIcon,
 
-    // Customer / People
+    // Customer / People / Employee
     CustomerIcon: PeopleOutlinedIcon,
     Customer: PeopleOutlinedIcon,
+    EmployeeIcon: PeopleOutlinedIcon,
+    Employee: PeopleOutlinedIcon,
     PeopleIcon: PeopleOutlinedIcon,
     PeopleOutlinedIcon,
 

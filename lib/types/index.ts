@@ -16,8 +16,8 @@ export interface BaseEntity {
 // ─── Master Data ─────────────────────────────────────────────
 
 export interface MastItem extends BaseEntity {
-    itemCode: string;
-    itemName: string;
+    itemCode?: string;
+    itemName?: string;
     brandId?: string | number;
     brandName?: string;
     minAlert?: number;
@@ -62,6 +62,7 @@ export interface MastItemGroup {
 export interface MastLocation extends BaseEntity {
     code: string;
     name: string;
+    warehouseId?: string | number;
 }
 
 export interface MastWarehouse extends BaseEntity {
@@ -108,7 +109,19 @@ export interface MastEmployee extends BaseEntity {
     empCode: string;
     fName: string;
     lName: string;
-    tel: string;
+    tel?: string;
+    email?: string;
+    position?: string;
+    department?: string;
+    remark?: string;
+    emp_code?: string;
+    EMP_CODE?: string;
+    f_name?: string;
+    F_NAME?: string;
+    l_name?: string;
+    L_NAME?: string;
+    TEL?: string;
+    EMAIL?: string;
 }
 
 export interface MastStatus extends BaseEntity {
@@ -148,26 +161,15 @@ export interface MastTransType extends BaseEntity {
 // ─── Transactions ────────────────────────────────────────────
 
 export interface DocReceive extends BaseEntity {
-    docNo: string;
-    doc_no?: string;
-    DOC_NO?: string;
+    docNo?: string;
     docDate?: string;
-    doc_date?: string;
-    DOC_DATE?: string;
-    docTypeId?: number;
+    docNoRef?: string;
+    employeeId?: number | string;
+    docTypeId?: number | string;
     menuId?: number | string;
-    menu_id?: number | string;
-    Menu_id?: number | string;
-    menuName?: string;
-    statusId?: number;
     docStatus?: string | number;
-    doc_status?: string | number;
-    DOC_STATUS?: string | number;
-    statusName?: string;
-    warehouseId?: number;
-    warehouseName?: string;
-    vendorId?: number;
-    vendorName?: string;
+    warehouseId?: number | string;
+    vendorId?: number | string;
     remark?: string;
     details?: DocReceiveDetail[];
 }
@@ -175,9 +177,18 @@ export interface DocReceive extends BaseEntity {
 export interface DocReceiveDetail extends BaseEntity {
     docId: number;
     itemId: number;
+    itemCode?: string;
     itemName: string;
     uomId: number;
+    uomName?: string;
     itemQty: number;
+    unitPrice?: number;
+    totalPrice?: number;
+    lotNo?: string;
+    serialNo?: string;
+    locationId?: number;
+    locationName?: string;
+    remark?: string;
 }
 
 export interface DocIssue extends BaseEntity {

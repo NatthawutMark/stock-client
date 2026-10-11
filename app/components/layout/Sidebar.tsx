@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useI18n, useLayout } from '@/app/providers';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { Label, Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui';
 import { LeaderboardIcon, renderMenuIcon } from '@/components/icon/index';
 
 interface NavItem {
@@ -88,6 +88,12 @@ export function Sidebar() {
         listMenu.forEach(item => {
             if (item.subMenus && item.subMenus.length > 0) {
                 const menuKey = (lang === 'th' ? item.nameTh : item.nameEn) || '';
+
+                // ตรวจสอบว่าหน้าปัจจุบันตรงกับ URL ของ Parent หรือไม่
+                if (item.url && pathname === item.url) {
+                    currentActiveTitle = (lang === 'th' ? item.nameTh : item.nameEn) || '';
+                    if (menuKey) newGroupsToOpen[menuKey] = true;
+                }
 
                 // ตรวจสอบว่ามีเมนูย่อยไหนตรงกับ URL ไหม
                 item.subMenus.forEach(child => {
@@ -342,37 +348,87 @@ export function Sidebar() {
 
                     if (item.subMenus && item.subMenus.length > 0) {
                         const isOpen = openGroups[menuLang] ?? false;
-                        const anyActive = item.subMenus.some(c => c.url && pathname.startsWith(c.url));
+                        const hasUrl = Boolean(item.url && item.url !== '#');
+                        const isParentActive = hasUrl && pathname === item.url;
+                        const anyActive = isParentActive || item.subMenus.some(c => c.url && pathname.startsWith(c.url));
 
                         return (
                             <Collapsible
                                 key={menuLang}
                                 open={isOpen}
                                 onOpenChange={() => toggle(menuLang)}
-                                className="mb-2" >
-                                {/* เปลี่ยน Label ให้เป็น Trigger ที่กดได้ */}
-                                <CollapsibleTrigger className="w-full flex items-center justify-between cursor-pointer px-4 py-2 hover:bg-white/5 transition-colors group" >
-                                    <Label
-                                        className="text-sidebar m-0 font-medium cursor-pointer"
-                                        style={{ color: anyActive ? '#60a5fa' : 'var(--text-sidebar)' }}
+                                className="mb-2"
+                            >
+                                {hasUrl ? (
+                                    /* กรณี Parent มี URL สำหรับกดดูภาพรวม */
+                                    <div
+                                        className={`flex items-center justify-between mx-2 mb-0.5 rounded-lg transition-colors group
+                                            ${isParentActive
+                                                ? 'bg-blue-600 text-white'
+                                                : anyActive
+                                                    ? 'text-blue-400 bg-white/5'
+                                                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                            }`}
                                     >
-                                        {renderMenuIcon(item.icon, <LeaderboardIcon style={{ fontSize: '1.25rem' }} />)}
-                                        {!collapsed && (
-                                            <span className="font-medium">{menuLang}</span>
-                                        )}
-                                    </Label>
+                                        <Link
+                                            href={item.url!}
+                                            onClick={() => {
+                                                if (!isOpen) toggle(menuLang);
+                                            }}
+                                            className="flex items-center gap-3 flex-1 px-3 py-2 text-sm font-medium transition-colors"
+                                            title={collapsed ? menuLang : undefined}
+                                        >
+                                            <span className="text-sm flex items-center justify-center shrink-0">
+                                                {renderMenuIcon(item.icon, <LeaderboardIcon style={{ fontSize: '1.25rem' }} />)}
+                                            </span>
+                                            {!collapsed && (
+                                                <span className="truncate">{menuLang}</span>
+                                            )}
+                                        </Link>
 
-                                    {/* ไอคอนลูกศรเปลี่ยนทิศทางตามสถานะการเปิด/ปิด */}
-                                    {!collapsed && (
-                                        <div className="shrink-0 text-slate-400 group-hover:text-white transition-transform duration-200">
-                                            {isOpen ? (
-                                                <ChevronDown className="h-4 w-4" />
-                                            ) : (
-                                                <ChevronRight className="h-4 w-4" />
+                                        {/* ปุ่มลูกศรสำหรับพับ/กางเมนูย่อย */}
+                                        {!collapsed && (
+                                            <CollapsibleTrigger
+                                                className="p-1.5 mr-1 rounded-md hover:bg-white/10 text-slate-400 group-hover:text-white transition-colors shrink-0"
+                                                title={isOpen ? 'พับเก็บเมนูย่อย' : 'กางเมนูย่อย'}
+                                            >
+                                                {isOpen ? (
+                                                    <ChevronDown className="h-4 w-4" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4" />
+                                                )}
+                                            </CollapsibleTrigger>
+                                        )}
+                                    </div>
+                                ) : (
+                                    /* กรณี Parent ไม่มี URL (กดทั้งแถวเพื่อพับ/กาง) */
+                                    <CollapsibleTrigger
+                                        className={`w-full flex items-center justify-between px-3 py-2 mx-2 mb-0.5 rounded-lg transition-colors group cursor-pointer
+                                            ${anyActive
+                                                ? 'text-blue-400 bg-white/5'
+                                                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-3 text-sm font-medium">
+                                            <span className="text-sm flex items-center justify-center shrink-0">
+                                                {renderMenuIcon(item.icon, <LeaderboardIcon style={{ fontSize: '1.25rem' }} />)}
+                                            </span>
+                                            {!collapsed && (
+                                                <span className="truncate">{menuLang}</span>
                                             )}
                                         </div>
-                                    )}
-                                </CollapsibleTrigger>
+
+                                        {!collapsed && (
+                                            <div className="shrink-0 text-slate-400 group-hover:text-white transition-transform duration-200 mr-1">
+                                                {isOpen ? (
+                                                    <ChevronDown className="h-4 w-4" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4" />
+                                                )}
+                                            </div>
+                                        )}
+                                    </CollapsibleTrigger>
+                                )}
 
                                 {/* ส่วนเมนูย่อยที่จะพับ/กาง */}
                                 <CollapsibleContent className="pl-4 pt-1 space-y-0.5 overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
@@ -408,7 +464,8 @@ export function Sidebar() {
                         <Link
                             key={item.url || menuLang}
                             href={item.url || '#'}
-                            className={`flex items-center gap-3 px-4 py-2.5 mx-2 mb-0.5 rounded-lg text-sm transition-colors
+                            className={`
+                                mb-2 flex items-center gap-3 px-4 py-2.5  transition-colors text-sm mb-0.5
                                 ${active
                                     ? 'bg-blue-600 text-white'
                                     : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -424,7 +481,7 @@ export function Sidebar() {
                     );
                 })}
             </nav>
-        </aside>
+        </aside >
     );
 }
 

@@ -1,45 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/app/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { transactionService } from '@/app/_services/transaction';
 import { SystemMenuService } from '@/app/_services/systemMenu';
-import { masterService } from '@/app/_services/master';
 import { docReceives, docReceiveDetails } from '@/lib/mock/data';
-import type { DocReceive, MastWarehouse, MastVendor, MastTransType } from '@/lib/types';
+import type { DocReceive, MastTransType } from '@/lib/types';
 import {
-    Button,
-    Table,
-    TableHeader,
-    TableHead,
-    TableBody,
-    TableRow,
-    TableCell,
-    Card,
-    CardContent,
-    Label,
-    TablePagination,
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
+    Button, Table, TableHeader, TableHead, TableBody, TableRow, TableCell, Card, CardContent, Label, TablePagination, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DatePicker,
 } from '@/components/ui';
-import Swal from 'sweetalert2';
+
 import {
-    Search,
-    RotateCcw,
-    Plus,
-    Eye,
-    Layers,
-    Calendar,
-    FileText,
-    Clock,
-    CheckCircle2,
-    AlertCircle,
-    Building2,
-    Truck,
+    Search, RotateCcw, Plus, Eye, Layers, Calendar, FileText, Clock, CheckCircle2, AlertCircle, Building2, Truck, Pencil,
 } from 'lucide-react';
 
 // Helper เพื่อดึงค่าฟิลด์แบบ non-case-sensitive และรองรับทั้ง camelCase, PascalCase, snake_case
@@ -61,6 +35,7 @@ function getField<T = unknown>(item: Record<string, unknown>, ...keys: string[])
 }
 
 export default function ReceivePage() {
+    const router = useRouter();
     const { pageTitle } = useLayout();
 
     // ─────────────────────────────────────────────────────────────
@@ -84,19 +59,6 @@ export default function ReceivePage() {
     // Detail Modal State
     const [selectedDoc, setSelectedDoc] = useState<DocReceive | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState<boolean>(false);
-
-    // Create Modal State
-    const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
-    const [warehouses, setWarehouses] = useState<MastWarehouse[]>([]);
-    const [vendors, setVendors] = useState<MastVendor[]>([]);
-    const [newDocData, setNewDocData] = useState({
-        docNo: '',
-        docDate: new Date().toISOString().split('T')[0],
-        menuId: '1',
-        warehouseId: '',
-        vendorId: '',
-        remark: '',
-    });
 
     // ─────────────────────────────────────────────────────────────
     // 1. โหลดข้อมูล Menu สำหรับ Dropdown
@@ -143,28 +105,7 @@ export default function ReceivePage() {
         fetchMenus();
     }, []);
 
-    // ─────────────────────────────────────────────────────────────
-    // 2. โหลดข้อมูล Warehouse & Vendor สำหรับ Modal สร้างเอกสาร
-    // ─────────────────────────────────────────────────────────────
-    useEffect(() => {
-        const loadMasterHelpers = async () => {
-            try {
-                const [whRes, vendRes] = await Promise.all([
-                    masterService.warehouses.list(),
-                    masterService.vendors.list(),
-                ]);
-                if (whRes && whRes.success && Array.isArray(whRes.results)) {
-                    setWarehouses(whRes.results);
-                }
-                if (vendRes && vendRes.success && Array.isArray(vendRes.results)) {
-                    setVendors(vendRes.results);
-                }
-            } catch (err) {
-                console.warn('Failed to load warehouses/vendors master:', err);
-            }
-        };
-        loadMasterHelpers();
-    }, []);
+
 
     // ─────────────────────────────────────────────────────────────
     // 3. โหลดข้อมูลเอกสารรับเข้า (Fetch Documents)
@@ -259,53 +200,7 @@ export default function ReceivePage() {
         setIsDetailOpen(true);
     };
 
-    // บันทึกสร้างเอกสารใหม่
-    const handleCreateDocument = () => {
-        if (!newDocData.docNo.trim()) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'กรุณากรอกเลขที่เอกสาร (Docno)',
-                confirmButtonColor: '#2563eb',
-            });
-            return;
-        }
 
-        const newDoc: DocReceive = {
-            id: Date.now(),
-            docNo: newDocData.docNo.trim(),
-            docDate: newDocData.docDate,
-            menuId: newDocData.menuId,
-            statusId: 1,
-            docStatus: 'Draft',
-            warehouseId: Number(newDocData.warehouseId) || 1,
-            warehouseName: warehouses.find((w) => String(w.id) === newDocData.warehouseId)?.warehouseName || 'คลังสินค้าหลัก',
-            vendorId: Number(newDocData.vendorId) || 1,
-            vendorName: vendors.find((v) => String(v.id) === newDocData.vendorId)?.vendName || 'บริษัทผู้จัดจำหน่าย',
-            remark: newDocData.remark || 'เอกสารสร้างใหม่',
-            isActive: true,
-            isDelete: false,
-            createDate: new Date().toISOString(),
-        };
-
-        setDocList((prev) => [newDoc, ...prev]);
-        setIsCreateOpen(false);
-        setNewDocData({
-            docNo: '',
-            docDate: new Date().toISOString().split('T')[0],
-            menuId: '1',
-            warehouseId: '',
-            vendorId: '',
-            remark: '',
-        });
-
-        Swal.fire({
-            icon: 'success',
-            title: 'สร้างเอกสารสำเร็จ',
-            text: `สร้างใบรับสินค้าเลขที่ ${newDoc.docNo} เรียบร้อยแล้ว`,
-            timer: 1800,
-            showConfirmButton: false,
-        });
-    };
 
     // Helper แสดง Badge สถานะ DOC_STATUS
     const renderStatusBadge = (statusValue: unknown) => {
@@ -361,7 +256,7 @@ export default function ReceivePage() {
                 </div>
                 <div className="flex items-center gap-2">
                     <Button
-                        onClick={() => setIsCreateOpen(true)}
+                        onClick={() => router.push('/transaction/receive/create')}
                         className="px-4 py-2 text-sm font-medium text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5"
                     >
                         <Plus className="w-4 h-4" />
@@ -451,26 +346,19 @@ export default function ReceivePage() {
                                 </Label>
                                 <span className="text-xs text-zinc-400">วันที่เอกสาร</span>
                             </div>
-                            <div className="relative">
-                                <input
+                            <div>
+                                <DatePicker
                                     id="docdate-input"
-                                    type="date"
                                     value={docDateInput}
-                                    onChange={(e) => {
-                                        setDocDateInput(e.target.value);
+                                    onChange={(val) => {
+                                        setDocDateInput(val);
                                         setCurrentPage(1);
                                     }}
-                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer transition-all"
+                                    clearable={true}
+                                    placeholder="เลือกวันที่..."
+                                    formatString="dd/MM/yyyy"
+                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 shadow-sm"
                                 />
-                                {docDateInput && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setDocDateInput('')}
-                                        className="absolute right-8 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 text-xs"
-                                    >
-                                        ✕
-                                    </button>
-                                )}
                             </div>
                         </div>
 
@@ -631,16 +519,28 @@ export default function ReceivePage() {
 
                                             {/* Actions */}
                                             <TableCell className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => handleViewDetail(item)}
-                                                    className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
-                                                    title="ดูรายละเอียดเอกสาร"
-                                                >
-                                                    <Eye className="w-3.5 h-3.5 mr-1 text-zinc-500" />
-                                                    รายละเอียด
-                                                </Button>
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => router.push(`/transaction/receive/create?id=${item.id}`)}
+                                                        className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                                                        title="แก้ไขเอกสาร"
+                                                    >
+                                                        <Pencil className="w-3.5 h-3.5 mr-1 text-zinc-500" />
+                                                        แก้ไข
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handleViewDetail(item)}
+                                                        className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                                                        title="ดูรายละเอียดเอกสาร"
+                                                    >
+                                                        <Eye className="w-3.5 h-3.5 mr-1 text-zinc-500" />
+                                                        รายละเอียด
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     );
@@ -782,7 +682,18 @@ export default function ReceivePage() {
                             </div>
                         </div>
 
-                        <DialogFooter>
+                        <DialogFooter className="flex items-center justify-between sm:justify-between">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setIsDetailOpen(false);
+                                    router.push(`/transaction/receive/create?id=${selectedDoc.id}`);
+                                }}
+                                className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                            >
+                                <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                                แก้ไขเอกสารนี้
+                            </Button>
                             <Button
                                 variant="outline"
                                 onClick={() => setIsDetailOpen(false)}
@@ -794,116 +705,6 @@ export default function ReceivePage() {
                     </DialogContent>
                 </Dialog>
             )}
-
-            {/* ─────────────────────────────────────────────────────────────
-                Modal: สร้างใบรับสินค้าใหม่ (Create Receive Document)
-               ───────────────────────────────────────────────────────────── */}
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogContent className="max-w-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                            <Plus className="w-5 h-5 text-blue-600" />
-                            สร้างใบรับสินค้าใหม่ (New Receive)
-                        </DialogTitle>
-                    </DialogHeader>
-
-                    <div className="py-4 space-y-4">
-                        {/* Docno */}
-                        <div>
-                            <Label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 mb-1.5">
-                                เลขที่เอกสาร (DOC_NO) <span className="text-red-500">*</span>
-                            </Label>
-                            <input
-                                type="text"
-                                value={newDocData.docNo}
-                                onChange={(e) => setNewDocData((prev) => ({ ...prev, docNo: e.target.value }))}
-                                placeholder="เช่น GR2024007"
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-
-                        {/* Docdate */}
-                        <div>
-                            <Label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 mb-1.5">
-                                วันที่เอกสาร (DOC_DATE) <span className="text-red-500">*</span>
-                            </Label>
-                            <input
-                                type="date"
-                                value={newDocData.docDate}
-                                onChange={(e) => setNewDocData((prev) => ({ ...prev, docDate: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                            />
-                        </div>
-
-                        {/* Menu_id */}
-                        <div>
-                            <Label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 mb-1.5">
-                                ประเภทเมนู (Menu_id)
-                            </Label>
-                            <select
-                                value={newDocData.menuId}
-                                onChange={(e) => setNewDocData((prev) => ({ ...prev, menuId: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                            >
-                                {menuOptions.map((opt) => (
-                                    <option key={opt.id} value={String(opt.id)}>
-                                        {opt.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Warehouse */}
-                        <div>
-                            <Label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 mb-1.5">
-                                คลังสินค้ารับเข้า
-                            </Label>
-                            <select
-                                value={newDocData.warehouseId}
-                                onChange={(e) => setNewDocData((prev) => ({ ...prev, warehouseId: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                            >
-                                <option value="">-- เลือกคลังสินค้า --</option>
-                                {warehouses.map((wh) => (
-                                    <option key={wh.id} value={String(wh.id)}>
-                                        {wh.warehouseName}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Remark */}
-                        <div>
-                            <Label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 mb-1.5">
-                                หมายเหตุ
-                            </Label>
-                            <textarea
-                                rows={2}
-                                value={newDocData.remark}
-                                onChange={(e) => setNewDocData((prev) => ({ ...prev, remark: e.target.value }))}
-                                placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                    </div>
-
-                    <DialogFooter className="gap-2 sm:gap-0">
-                        <Button
-                            variant="outline"
-                            onClick={() => setIsCreateOpen(false)}
-                            className="px-4 py-2 text-sm"
-                        >
-                            ยกเลิก
-                        </Button>
-                        <Button
-                            onClick={handleCreateDocument}
-                            className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white"
-                        >
-                            บันทึกสร้างเอกสาร
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </AppLayout>
     );
 }
