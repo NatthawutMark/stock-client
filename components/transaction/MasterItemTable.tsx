@@ -20,7 +20,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { masterService } from '@/app/_services/master';
-import { items as mockItems, locations as mockLocations, uoms as mockUoms } from '@/lib/mock/data';
 import type { MastItem, MastLocation, MastUom } from '@/lib/types';
 import type { TransactionItem, MasterItemTableProps } from './types';
 import {
@@ -78,20 +77,19 @@ export function MasterItemTable({
                     masterService.uoms.list(),
                 ]);
 
-                if (locRes?.success && Array.isArray(locRes.results) && locRes.results.length > 0) {
-                    setLocationList(locRes.results);
-                } else {
-                    setLocationList(mockLocations);
-                }
+                const locData = locRes?.success
+                    ? (Array.isArray(locRes.results) ? locRes.results : Array.isArray(locRes.data) ? locRes.data : [])
+                    : [];
+                setLocationList(locData);
 
-                if (uomRes?.success && Array.isArray(uomRes.results) && uomRes.results.length > 0) {
-                    setUomList(uomRes.results);
-                } else {
-                    setUomList(mockUoms);
-                }
-            } catch {
-                setLocationList(mockLocations);
-                setUomList(mockUoms);
+                const uomData = uomRes?.success
+                    ? (Array.isArray(uomRes.results) ? uomRes.results : Array.isArray(uomRes.data) ? uomRes.data : [])
+                    : [];
+                setUomList(uomData);
+            } catch (err) {
+                console.error('Failed to load locations or uoms from DB:', err);
+                setLocationList([]);
+                setUomList([]);
             }
         };
 
@@ -105,13 +103,13 @@ export function MasterItemTable({
         setLoadingMaster(true);
         try {
             const res = await masterService.items.list({ id: '', isActive: true });
-            if (res?.success && Array.isArray(res.results) && res.results.length > 0) {
-                setMasterItemList(res.results);
-            } else {
-                setMasterItemList(mockItems);
-            }
-        } catch {
-            setMasterItemList(mockItems);
+            const itemData = res?.success
+                ? (Array.isArray(res.results) ? res.results : Array.isArray(res.data) ? res.data : [])
+                : [];
+            setMasterItemList(itemData);
+        } catch (err) {
+            console.error('Failed to load master items from DB:', err);
+            setMasterItemList([]);
         } finally {
             setLoadingMaster(false);
         }

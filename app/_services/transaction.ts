@@ -3,7 +3,6 @@ import type {
     DocTransfer, DocRequest, DocDisposal, PaginationParams,
 } from '@/lib/types';
 import { apiClient } from '@/lib/api/client';
-import { TransactionItem } from '@/components/transaction';
 
 export const transactionService = {
     receive: {
@@ -16,11 +15,9 @@ export const transactionService = {
             return apiClient.get<DocReceive[]>(`/api/transactions/receive?${q}`);
         },
         get: (id: number) => apiClient.get<DocReceive & { details: DocReceiveDetail[] }>(`/api/transactions/receive/${id}`),
-        // create: (data: Omit<DocReceive, 'id' | 'createDate' | 'updateDate'> & { details: Omit<DocReceiveDetail, 'id' | 'docId' | 'createDate' | 'updateDate'>[] }) =>
-        //     apiClient.post<DocReceive>('/api/doctran/create', data),
-        create: (data: any) =>
+        create: (data: unknown) =>
             apiClient.post<DocReceive>('/api/doctrans/create', data),
-        update: (id: number, data: Partial<DocReceive>) =>
+        update: (id: number, data: unknown) =>
             apiClient.put<DocReceive>(`/api/transactions/receive/${id}`, data),
         approve: (id: number) =>
             apiClient.post<DocReceive>(`/api/transactions/receive/${id}/approve`, {}),

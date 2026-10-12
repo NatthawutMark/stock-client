@@ -162,14 +162,31 @@ export interface MastTransType extends BaseEntity {
 
 export interface DocReceive extends BaseEntity {
     docNo?: string;
+    doc_no?: string;
+    DOC_NO?: string;
     docDate?: string;
+    doc_date?: string;
+    DOC_DATE?: string;
     docNoRef?: string;
+    doc_no_ref?: string;
+    DOC_NO_REF?: string;
+    employee?: string;
     employeeId?: number | string;
     docTypeId?: number | string;
     menuId?: number | string;
+    menu_id?: number | string;
+    Menu_id?: number | string;
+    menuName?: string;
+    statusId?: number;
+    statusCode?: number;
+    statusName?: string;
     docStatus?: string | number;
+    doc_status?: string | number;
+    DOC_STATUS?: string | number;
     warehouseId?: number | string;
+    warehouseName?: string;
     vendorId?: number | string;
+    vendorName?: string;
     remark?: string;
     details?: DocReceiveDetail[];
 }

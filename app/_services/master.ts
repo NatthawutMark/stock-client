@@ -10,7 +10,7 @@ export type MasterResult<T = unknown> = ApiResponse<T>;
 export const masterService = {
     // ─── Items ───────────────────────────────────────────────────
     items: {
-        list: (obj?: MastItem) => {
+        list: (obj?: Partial<MastItem> | (PaginationParams & Record<string, unknown>)) => {
             return apiClient.post<MasterResult<MastItem[]>>('/api/MastItem/list', obj);
         },
         // list: (p?: PaginationParams) => {
@@ -160,7 +160,6 @@ export const masterService = {
             const transId = p?.menuId ?? p?.transTypeId;
             return apiClient.post<MasterResult<MastDocType[]>>('/api/MastDocType/list', {
                 name: p?.search || '',
-                transTypeId: transId ? String(transId) : undefined,
                 menuId: transId ? String(transId) : undefined,
                 isActive: p?.isActive !== undefined ? p.isActive : undefined,
             });

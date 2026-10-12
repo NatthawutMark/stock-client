@@ -6,17 +6,16 @@ import { AppLayout } from '@/app/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import { transactionService } from '@/app/_services/transaction';
-import { docReceives, docReceiveDetails, vendors as mockVendors, warehouses as mockWarehouses, employees as mockEmployees } from '@/lib/mock/data';
-import type { DocReceive, MastEmployee, MastVendor, MastWarehouse } from '@/lib/types';
+import type { DocReceive, DocReceiveDetail, MastDocType, MastEmployee, MastVendor, MastWarehouse } from '@/lib/types';
 import { MasterItemTable, TransactionItem } from '@/components/transaction';
 import { Button, Card, CardContent, DatePicker, Label } from '@/components/ui';
 import Swal from 'sweetalert2';
 import {
-    Save, FileCheck, Building2, Calendar, FileText, Truck, User, Hash, Layers,
+    Save, FileCheck, Building2, Calendar, FileText, Truck, User, Layers,
 } from 'lucide-react';
-import { apiClient } from '@/lib/api/client';
 
 function ReceiveFormContent() {
+    const menuId = '00E03A994280450ABF7E2EE62A7AD4D6';
     const router = useRouter();
     const searchParams = useSearchParams();
     const editId = searchParams.get('id');
@@ -33,13 +32,13 @@ function ReceiveFormContent() {
     const [docDate, setDocDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [vendorId, setVendorId] = useState<string>('');
     const [vendorName, setVendorName] = useState<string>('');
-
+    const [docTypeId, setDocTypeId] = useState<string>('');
     const [docNoRef, setDocNoRef] = useState<string>('');
     const [employeeId, setEmployeeId] = useState<string>('');
     const [remark, setRemark] = useState<string>('');
 
     // ฟิลด์เพิ่มเติมที่จำเป็นในระบบ WMS (เช่น คลังสินค้า)
-    const [warehouseId, setWarehouseId] = useState<string>('');// 
+    const [warehouseId, setWarehouseId] = useState<string>('');
     const [statusId, setStatusId] = useState<number>(1);
     const [docStatus, setDocStatus] = useState<string>('Draft');
 
@@ -50,6 +49,7 @@ function ReceiveFormContent() {
     const [vendorList, setVendorList] = useState<MastVendor[]>([]);
     const [warehouseList, setWarehouseList] = useState<MastWarehouse[]>([]);
     const [employeeList, setEmployeeList] = useState<MastEmployee[]>([]);
+    const [docTypeList, setDocTypeList] = useState<MastDocType[]>([]);
 
     const [loading, setLoading] = useState<boolean>(false);
     const [saving, setSaving] = useState<boolean>(false);
@@ -63,44 +63,57 @@ function ReceiveFormContent() {
     }, [isEditMode, setPageTitle]);
 
     // ─────────────────────────────────────────────────────────────
-    // 2. โหลด Master Dropdowns (Vendor, Warehouse, Employee)
+    // 2. โหลด Master Dropdowns (Vendor, Warehouse, Employee) จาก DB
     // ─────────────────────────────────────────────────────────────
     useEffect(() => {
         const loadMasters = async () => {
             try {
-                const [vendRes, whRes, empRes] = await Promise.all([
+                const [vendRes, whRes, empRes, dTypeRes] = await Promise.all([
                     masterService.vendors.list(),
                     masterService.warehouses.list(),
-                    masterService.employees.list()
+                    masterService.employees.list(),
+                    masterService.docTypes.list({ menuId: menuId }),
                 ]);
 
-                if (vendRes?.success && Array.isArray(vendRes.results) && vendRes.results.length > 0) {
-                    setVendorList(vendRes.results);
-                } else {
-                    setVendorList(mockVendors);
+                // Vendor
+                const vData = vendRes?.success
+                    ? (Array.isArray(vendRes.results) ? vendRes.results : Array.isArray(vendRes.data) ? vendRes.data : [])
+                    : [];
+                setVendorList(vData);
+
+                // Warehouse
+                const wData = whRes?.success
+                    ? (Array.isArray(whRes.results) ? whRes.results : Array.isArray(whRes.data) ? whRes.data : [])
+                    : [];
+                setWarehouseList(wData);
+
+                if (wData.length > 0 && !warehouseId) {
+                    setWarehouseId(String(wData[0].id));
                 }
 
-                if (whRes?.success && Array.isArray(whRes.results) && whRes.results.length > 0) {
-                    setWarehouseList(whRes.results);
-                } else {
-                    setWarehouseList(mockWarehouses);
-                }
+                //Employee
+                const eData = empRes?.success
+                    ? (Array.isArray(empRes.results) ? empRes.results : Array.isArray(empRes.data) ? empRes.data : [])
+                    : [];
+                setEmployeeList(eData);
 
-                if (empRes?.success && Array.isArray(empRes.results) && empRes.results.length > 0) {
-                    setEmployeeList(empRes.results);
-                } else {
-                    setEmployeeList(mockEmployees);
-                }
-            } catch {
-                setVendorList(mockVendors);
-                setWarehouseList(mockWarehouses);
-                setEmployeeList(mockEmployees);
+                //DocType
+                const dTypedata = dTypeRes?.success ? (Array.isArray(dTypeRes.results) ? dTypeRes.results : Array.isArray(dTypeRes.data) ? dTypeRes.data : []) : []
+                console.log(dTypedata);
+
+                setDocTypeList(dTypedata)
+
+            } catch (err) {
+                console.error('Failed to load masters from DB:', err);
+                setVendorList([]);
+                setWarehouseList([]);
+                setEmployeeList([]);
+                setDocTypeList([]);
             }
-
         };
 
         loadMasters();
-    }, [isEditMode]);
+    }, [isEditMode, warehouseId]);
 
     // ─────────────────────────────────────────────────────────────
     // 3. โหลดข้อมูลเมื่อเป็น Edit Mode หรือตั้งค่าเริ่มต้นสำหรับ Create Mode
@@ -111,45 +124,44 @@ function ReceiveFormContent() {
             setLoading(true);
             const loadEditDoc = async () => {
                 try {
-                    // ลองเรียก API หรือค้นหาจาก Mock
-                    let foundDoc: DocReceive | undefined;
-                    try {
-                        const res = await transactionService.receive.get(Number(editId));
-                        if (res?.success && res.results) {
-                            foundDoc = res.results;
-                        }
-                    } catch {
-                        // ignore API error
-                    }
-
-                    if (!foundDoc) {
-                        foundDoc = docReceives.find((d) => String(d.id) === String(editId));
-                    }
+                    const res = await transactionService.receive.get(Number(editId));
+                    const foundDoc: (DocReceive & { details?: DocReceiveDetail[] }) | null = res?.success
+                        ? (res.results || res.data)
+                        : null;
 
                     if (foundDoc) {
                         setDocNo(foundDoc.docNo || '');
                         const rawDate = foundDoc.docDate || '';
                         setDocDate(rawDate.length >= 10 ? rawDate.slice(0, 10) : new Date().toISOString().split('T')[0]);
                         setVendorId(foundDoc.vendorId ? String(foundDoc.vendorId) : '');
+                        setVendorName(foundDoc.vendorName || '');
                         setDocNoRef(foundDoc.docNoRef || '');
-                        setEmployeeId(String(foundDoc.employeeId));
+                        setEmployeeId(foundDoc.employeeId ? String(foundDoc.employeeId) : '');
                         setRemark(foundDoc.remark || '');
-                        setWarehouseId(String(foundDoc.warehouseId));
+                        if (foundDoc.warehouseId) {
+                            setWarehouseId(String(foundDoc.warehouseId));
+                        }
+                        if (foundDoc.docStatus || foundDoc.statusName) {
+                            setDocStatus(String(foundDoc.docStatus || foundDoc.statusName));
+                        }
+                        if (foundDoc.statusCode || foundDoc.statusId) {
+                            setStatusId(Number(foundDoc.statusCode || foundDoc.statusId));
+                        }
 
-                        // โหลดรายการสินค้าที่มีอยู่เดิม
-                        const matchedDetails = docReceiveDetails.filter((d) => String(d.docId) === String(editId));
-                        if (matchedDetails.length > 0) {
+                        // โหลดรายการสินค้าที่มีอยู่จริงจาก DB
+                        const details = Array.isArray(foundDoc.details) ? foundDoc.details : [];
+                        if (details.length > 0) {
                             setItems(
-                                matchedDetails.map((d, index) => ({
+                                details.map((d: DocReceiveDetail, index: number) => ({
                                     id: d.id || `edit-item-${index}`,
                                     itemId: d.itemId,
-                                    itemCode: d.itemCode || `ITM00${d.itemId}`,
-                                    itemName: d.itemName,
+                                    itemCode: d.itemCode || `ITM${d.itemId}`,
+                                    itemName: d.itemName || '',
                                     uomId: d.uomId,
                                     uomName: d.uomName || 'ชิ้น',
-                                    itemQty: d.itemQty || 1,
-                                    unitPrice: d.unitPrice || 0,
-                                    totalPrice: (d.itemQty || 1) * (d.unitPrice || 0),
+                                    itemQty: Number(d.itemQty) || 1,
+                                    unitPrice: Number(d.unitPrice) || 0,
+                                    totalPrice: (Number(d.itemQty) || 1) * (Number(d.unitPrice) || 0),
                                     lotNo: d.lotNo || '',
                                     serialNo: d.serialNo || '',
                                     locationId: d.locationId,
@@ -158,44 +170,31 @@ function ReceiveFormContent() {
                                 }))
                             );
                         } else {
-                            // ถ้าไม่มี detail ให้สร้าง 1 รายการตัวอย่าง
-                            setItems([
-                                {
-                                    id: 'initial-1',
-                                    itemId: 1,
-                                    itemCode: 'ITM001',
-                                    itemName: 'โน๊ตบุ๊ค Dell Inspiron 15',
-                                    uomId: 1,
-                                    uomName: 'เครื่อง',
-                                    itemQty: 5,
-                                    unitPrice: 18000,
-                                    totalPrice: 90000,
-                                    lotNo: 'LOT-2024-01',
-                                    serialNo: '',
-                                    locationId: 1,
-                                    locationName: 'ชั้น A แถว 01 ช่อง 01',
-                                    remark: '',
-                                },
-                            ]);
+                            setItems([]);
                         }
                     } else {
                         Swal.fire({
                             icon: 'error',
                             title: 'ไม่พบเอกสาร',
-                            text: `ไม่พบเอกสารรับสินค้ารหัส #${editId}`,
+                            text: `ไม่พบเอกสารรับสินค้ารหัส #${editId} ในฐานข้อมูล`,
                         });
                         router.push('/transaction/receive');
                     }
+                } catch (err) {
+                    console.error('Failed to load receive doc from API:', err);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'เกิดข้อผิดพลาด',
+                        text: 'ไม่สามารถโหลดข้อมูลเอกสารจากฐานข้อมูลได้',
+                    });
+                    router.push('/transaction/receive');
                 } finally {
                     setLoading(false);
                 }
             };
             loadEditDoc();
         } else {
-            // Create Mode: รันเลขที่เอกสารอัตโนมัติ
-            const currentYear = new Date().getFullYear();
-            const randomCode = Math.floor(1000 + Math.random() * 9000);
-            // setDocNo(`GR${currentYear}${randomCode}`);
+            // Create Mode: วันที่เอกสารวันนี้ และล้างรายการสินค้า
             setDocDate(new Date().toISOString().split('T')[0]);
             setItems([]);
         }
@@ -214,19 +213,15 @@ function ReceiveFormContent() {
         setEmployeeId(idEmp);
     };
 
+    const handleDocTypeChange = (iddocType: string) => {
+        setDocTypeId(iddocType);
+    };
+
     // ─────────────────────────────────────────────────────────────
     // 4. บันทึกข้อมูลเอกสาร (Save / Submit)
     // ─────────────────────────────────────────────────────────────
     const handleSubmit = async (targetStatus: 'Draft' | 'Completed' = 'Completed') => {
         // Validation
-        // if (!docNo.trim()) {
-        //     Swal.fire({
-        //         icon: 'warning',
-        //         title: 'กรุณากรอกเลขที่เอกสาร (DocNo)',
-        //         confirmButtonColor: '#2563eb',
-        //     });
-        //     return;
-        // }
 
         if (!docDate) {
             Swal.fire({
@@ -264,48 +259,71 @@ function ReceiveFormContent() {
             const currentStatusId = targetStatus === 'Completed' ? 3 : (statusId || 1);
             const currentStatusName = targetStatus;
 
-            const payload: Partial<DocReceive> = {
-                // id: isEditMode && editId ? Number(editId) : Date.now(),
+            const selectedVendor = vendorList.find((v) => String(v.id) === String(vendorId));
+            const selectedWarehouse = warehouseList.find((w) => String(w.id) === String(warehouseId));
+
+            const payload = {
                 docNo: docNo.trim(),
                 docDate: docDate,
                 docNoRef: docNoRef.trim(),
-                employeeId: employeeId.trim(),
-                vendorId: Number(vendorId) || 1,
-                warehouseId: String(warehouseId),
+                employeeId: employeeId.trim() || undefined,
+                vendorId: vendorId ? Number(vendorId) : undefined,
+                vendorName: vendorName || selectedVendor?.vendName || undefined,
+                warehouseId: warehouseId ? String(warehouseId) : undefined,
+                warehouseName: selectedWarehouse?.warehouseName || undefined,
                 remark: remark.trim(),
-                menuId: "00E03A994280450ABF7E2EE62A7AD4D6",
-                docTypeId:"4B9CF1F93A5E4A1E95EDF6986502BCA0",
+                menuId: menuId,
+                docTypeId: "4B9CF1F93A5E4A1E95EDF6986502BCA0",
+                statusCode: currentStatusId,
+                statusName: currentStatusName,
                 isActive: true,
                 isDelete: false,
                 updateDate: new Date().toISOString(),
+                details: items.map((item) => ({
+                    itemId: Number(item.itemId) || item.itemId,
+                    itemCode: item.itemCode,
+                    itemName: item.itemName,
+                    uomId: item.uomId ? (Number(item.uomId) || item.uomId) : undefined,
+                    uomName: item.uomName,
+                    itemQty: Number(item.itemQty) || 1,
+                    unitPrice: Number(item.unitPrice) || 0,
+                    totalPrice: Number(item.totalPrice) || ((Number(item.itemQty) || 1) * (Number(item.unitPrice) || 0)),
+                    lotNo: item.lotNo || '',
+                    serialNo: item.serialNo || '',
+                    locationId: item.locationId ? (Number(item.locationId) || item.locationId) : undefined,
+                    locationName: item.locationName || '',
+                    remark: item.remark || '',
+                })),
             };
 
-            // บันทึกลง Mock data เพื่อให้หน้าหลักสามารถมองเห็นข้อมูลได้ทันที
             if (isEditMode && editId) {
-                const idx = docReceives.findIndex((d) => String(d.id) === String(editId));
-                if (idx !== -1) {
-                    docReceives[idx] = { ...docReceives[idx], ...payload };
+                const res = await transactionService.receive.update(Number(editId), payload);
+                if (res && !res.success) {
+                    throw new Error(res.message || 'ไม่สามารถแก้ไขเอกสารได้');
                 }
             } else {
-                transactionService.receive.create({ ...payload, details: items })
-                return;
+                const res = await transactionService.receive.create(payload);
+                if (res && !res.success) {
+                    throw new Error(res.message || 'ไม่สามารถสร้างเอกสารได้');
+                }
             }
 
             await Swal.fire({
                 icon: 'success',
                 title: isEditMode ? 'แก้ไขเอกสารสำเร็จ' : 'สร้างเอกสารสำเร็จ',
-                text: `${isEditMode ? 'อัปเดต' : 'สร้าง'}ใบรับสินค้าเลขที่ ${docNo} เรียบร้อยแล้ว`,
+                text: `${isEditMode ? 'อัปเดต' : 'สร้าง'}ใบรับสินค้าเรียบร้อยแล้ว`,
                 timer: 1800,
                 showConfirmButton: false,
             });
 
             router.push('/transaction/receive');
-        } catch (error) {
+        } catch (error: unknown) {
             console.error('Save error:', error);
+            const errMsg = error instanceof Error ? error.message : 'ไม่สามารถบันทึกข้อมูลเอกสารได้';
             Swal.fire({
                 icon: 'error',
                 title: 'เกิดข้อผิดพลาด',
-                text: 'ไม่สามารถบันทึกข้อมูลเอกสารได้',
+                text: errMsg,
             });
         } finally {
             setSaving(false);
@@ -328,15 +346,6 @@ function ReceiveFormContent() {
             {/* Top Navigation & Breadcrumb */}
             <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                    {/* <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => router.push('/transaction/receive')}
-                        className="h-9 px-3 rounded-xl border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                    >
-                        <ArrowLeft className="w-4 h-4 mr-1" />
-                        ย้อนกลับ (Back)
-                    </Button> */}
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
                             <span className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400">
@@ -388,30 +397,15 @@ function ReceiveFormContent() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         {/* ─── ฝั่งซ้าย (Left Column) ─── */}
                         <div className="space-y-4">
-                            {/* 1. DocNo */}
-                            {/* <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="docNo" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                                    <Hash className="w-3.5 h-3.5 text-blue-500" />
-                                    DocNo <span className="text-red-500">*</span>
-                                </Label>
-                                <input
-                                    id="docNo"
-                                    type="text"
-                                    value={docNo}
-                                    onChange={(e) => setDocNo(e.target.value)}
-                                    placeholder="เช่น GR2024001"
-                                    className="w-full h-10 px-3.5 text-sm font-mono font-semibold rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-                                />
-                            </div> */}
 
-                            {/* 2. Docdate (Shadcn DatePicker) */}
+                            {/* Docdate (Shadcn DatePicker) */}
                             <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
                                 <Label
                                     htmlFor="docDate"
-                                    className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 select-none"
+                                    className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5 select-none"
                                 >
-                                    <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                                    Docdate <span className="text-red-500">*</span>
+                                    {/* <Calendar className="w-3.5 h-3.5 text-blue-500" /> */}
+                                    <span className="text-red-500">*</span> วันที่เอกสาร :
                                 </Label>
                                 <DatePicker
 
@@ -425,88 +419,34 @@ function ReceiveFormContent() {
                                 />
                             </div>
 
-                            {/* 3. Vendor */}
+                            {/* DocType */}
                             <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="vendor" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                                    <Truck className="w-3.5 h-3.5 text-blue-500" />
-                                    Vendor {/* <span className="text-red-500">*</span> */}
+                                <Label htmlFor="DocType" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 justify-end">
+                                    {/* <Truck className="w-3.5 h-3.5 text-blue-500" /> */}
+                                    <span className="text-red-500">*</span> ประเภทเอกสาร :{/* <span className="text-red-500">*</span> */}
                                 </Label>
                                 <select
-                                    id="vendor"
-                                    value={vendorId}
-                                    onChange={(e) => handleVendorChange(e.target.value)}
+                                    id="DocType"
+                                    value={docTypeId}
+                                    onChange={(e) => handleDocTypeChange(e.target.value)}
                                     className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
                                 >
-                                    <option value="">-- เลือกผู้จำหน่าย (Vendor) --</option>
-                                    {vendorList.map((v) => (
+                                    <option value="">-- เลือกประเภทเอกสาร (Doctype) --</option>
+                                    {docTypeList.map((v) => (
                                         <option key={v.id} value={String(v.id)}>
-                                            {v.vendCode ? `[${v.vendCode}] ` : ''}{v.vendName}
+                                            {v.docTypeName}
                                         </option>
                                     ))}
                                 </select>
-                            </div>
-
-                            {/* เสริม: Warehouse (คลังสินค้ารับเข้า) */}
-                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="warehouse" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                                    <Building2 className="w-3.5 h-3.5 text-blue-500" />
-                                    คลังรับเข้า
-                                </Label>
-                                <select
-                                    id="warehouse"
-                                    value={warehouseId}
-                                    onChange={(e) => setWarehouseId(e.target.value)}
-                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
-                                >
-                                    {warehouseList.map((wh) => (
-                                        <option key={wh.id} value={String(wh.id)}>
-                                            {wh.warehouseName} ({wh.code})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* ─── ฝั่งขวา (Right Column) ─── */}
-                        <div className="space-y-4">
-                            {/* 4. DocnoRef */}
-                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="docNoRef" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                                    <FileText className="w-3.5 h-3.5 text-blue-500" />
-                                    DocnoRef
-                                </Label>
-                                <input
-                                    id="docNoRef"
-                                    type="text"
-                                    value={docNoRef}
-                                    onChange={(e) => setDocNoRef(e.target.value)}
-                                    placeholder="เช่น เลขที่ PO, เลขที่ใบส่งของ..."
-                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-                                />
                             </div>
 
                             {/* 5. Employee */}
                             <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="employeeId" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                                    <User className="w-3.5 h-3.5 text-blue-500" />
-                                    Employee
+                                <Label htmlFor="employeeId" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
+                                    {/* <User className="w-3.5 h-3.5 text-blue-500" /> */}
+                                    <span className="text-red-500">*</span>พนักงาน :
                                 </Label>
                                 <div>
-                                    {/* <input
-                                        id="employeeId"
-                                        list="employeeId-options"
-                                        type="text"
-                                        value={employeeId}
-                                        onChange={(e) => setEmployeeId(e.target.value)}
-                                        placeholder="ชื่อผู้รับสินค้า / พนักงาน..."
-                                        className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-                                    />
-                                    <datalist id="employeeId-options">
-                                        {employeeList.map((emp) => (
-                                            <option key={emp.id} value={emp.name} />
-                                        ))}
-                                    </datalist> */}
-
                                     <select
                                         id="employee"
                                         value={employeeId}
@@ -523,10 +463,74 @@ function ReceiveFormContent() {
                                 </div>
                             </div>
 
+                            {/* เสริม: Warehouse (คลังสินค้ารับเข้า) */}
+                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
+                                <Label htmlFor="warehouse" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
+                                    {/* <Building2 className="w-3.5 h-3.5 text-blue-500" /> */}
+                                    <span className="text-red-500">*</span>คลังรับเข้า :
+                                </Label>
+                                <select
+                                    id="warehouse"
+                                    value={warehouseId}
+                                    onChange={(e) => setWarehouseId(e.target.value)}
+                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
+                                    required
+                                >
+                                    {warehouseList.map((wh) => (
+                                        <option key={wh.id} value={String(wh.id)}>
+                                            {wh.warehouseName} ({wh.code})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* ─── กลาง (Middle Column) ─── */}
+                        <div className="space-y-4">
+
+                            {/* Vendor */}
+                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
+                                <Label htmlFor="vendor" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
+                                    {/* <Truck className="w-3.5 h-3.5 text-blue-500" /> */}
+                                    {/*  <span className="text-red-500">*</span> */}ผู้จำหน่าย :
+                                </Label>
+                                <select
+                                    id="vendor"
+                                    value={vendorId}
+                                    onChange={(e) => handleVendorChange(e.target.value)}
+                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
+                                >
+                                    <option value="">-- เลือกผู้จำหน่าย (Vendor) --</option>
+                                    {vendorList.map((v) => (
+                                        <option key={v.id} value={String(v.id)}>
+                                            {v.vendCode ? `[${v.vendCode}] ` : ''}{v.vendName}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* DocnoRef */}
+                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
+                                <Label htmlFor="docNoRef" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
+                                    {/* <FileText className="w-3.5 h-3.5 text-blue-500" /> */}
+                                    เอกสารอ้างอิง :
+                                </Label>
+                                <input
+                                    id="docNoRef"
+                                    type="text"
+                                    value={docNoRef}
+                                    onChange={(e) => setDocNoRef(e.target.value)}
+                                    placeholder="เช่น เลขที่ PO, เลขที่ใบส่งของ..."
+                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+                                />
+                            </div>
+
+
+
                             {/* 6. Remark (ช่อง textarea สูงตาม Wireframe) */}
-                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-start gap-2">
-                                <Label htmlFor="remark" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 pt-2">
-                                    Remark
+                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-start gap-2 col-span-2">
+                                <Label htmlFor="remark" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 justify-end pt-2">
+                                    Remark :
                                 </Label>
                                 <textarea
                                     id="remark"
@@ -538,6 +542,7 @@ function ReceiveFormContent() {
                                 />
                             </div>
                         </div>
+
                     </div>
                 </CardContent>
             </Card>
