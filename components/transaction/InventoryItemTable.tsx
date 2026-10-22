@@ -50,9 +50,9 @@ import {
 
 // ตัวสร้าง Unique Key ประจำแถวแบบปลอดภัย
 let rowCounter = 0;
-function generateRowId(invId: string | number) {
+function generateRowId(invId?: string | number) {
     rowCounter += 1;
-    return `inv-row-${invId}-${rowCounter}`;
+    return `inv-row-${invId ?? 'item'}-${rowCounter}`;
 }
 
 export function InventoryItemTable({
@@ -144,7 +144,10 @@ export function InventoryItemTable({
     // ─────────────────────────────────────────────────────────────
     // 3.1 เพิ่มหลายรายการพร้อมกันจาก Checkbox
     const handleAddSelectedItems = () => {
-        const toAdd = inventoryList.filter((inv) => selectedInvIds.includes(inv.id));
+        const toAdd = inventoryList.filter(
+            (inv): inv is InventoryView & { id: string | number } =>
+                inv.id !== undefined && selectedInvIds.includes(inv.id)
+        );
         const newItems: TransactionItem[] = [...items];
 
         toAdd.forEach((inv) => {
@@ -633,7 +636,11 @@ export function InventoryItemTable({
                                                 }
                                                 onChange={(e) => {
                                                     if (e.target.checked) {
-                                                        setSelectedInvIds(filteredInventoryItems.map((i) => i.id));
+                                                        setSelectedInvIds(
+                                                            filteredInventoryItems
+                                                                .map((i) => i.id)
+                                                                .filter((id): id is string | number => id !== undefined)
+                                                        );
                                                     } else {
                                                         setSelectedInvIds([]);
                                                     }
@@ -665,22 +672,24 @@ export function InventoryItemTable({
                                         </TableRow>
                                     ) : (
                                         filteredInventoryItems.map((inv) => {
-                                            const isSelected = selectedInvIds.includes(inv.id);
-                                            const isAlreadyAdded = items.some((it) => it.invId === inv.id);
+                                            const invId = inv.id;
+                                            if (invId === undefined) return null;
+                                            const isSelected = selectedInvIds.includes(invId);
+                                            const isAlreadyAdded = items.some((it) => it.invId === invId);
 
                                             return (
                                                 <TableRow
-                                                    key={inv.id}
+                                                    key={invId}
                                                     className={`hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 cursor-pointer transition-colors ${
                                                         isSelected ? 'bg-emerald-50/60 dark:bg-emerald-950/30' : ''
                                                     }`}
                                                     onClick={() => {
                                                         if (isSelected) {
                                                             setSelectedInvIds((prev) =>
-                                                                prev.filter((id) => id !== inv.id)
+                                                                prev.filter((id) => id !== invId)
                                                             );
                                                         } else {
-                                                            setSelectedInvIds((prev) => [...prev, inv.id]);
+                                                            setSelectedInvIds((prev) => [...prev, invId]);
                                                         }
                                                     }}
                                                 >
@@ -693,10 +702,10 @@ export function InventoryItemTable({
                                                             checked={isSelected}
                                                             onChange={(e) => {
                                                                 if (e.target.checked) {
-                                                                    setSelectedInvIds((prev) => [...prev, inv.id]);
+                                                                    setSelectedInvIds((prev) => [...prev, invId]);
                                                                 } else {
                                                                     setSelectedInvIds((prev) =>
-                                                                        prev.filter((id) => id !== inv.id)
+                                                                        prev.filter((id) => id !== invId)
                                                                     );
                                                                 }
                                                             }}

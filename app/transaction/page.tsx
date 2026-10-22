@@ -25,6 +25,7 @@ import {
     DialogHeader,
     DialogTitle,
     DialogFooter,
+    renderStatusBadge,
 } from '@/components/ui';
 import Swal from 'sweetalert2';
 import {
@@ -35,9 +36,6 @@ import {
     Layers,
     Calendar,
     FileText,
-    Clock,
-    CheckCircle2,
-    AlertCircle,
     Building2,
     Truck,
 } from 'lucide-react';
@@ -276,11 +274,11 @@ export default function ReceivePage() {
             docDate: newDocData.docDate,
             menuId: newDocData.menuId,
             statusId: 1,
-            docStatus: 'Draft',
+            statusCode: 'Draft',
             warehouseId: Number(newDocData.warehouseId) || 1,
             warehouseName: warehouses.find((w) => String(w.id) === newDocData.warehouseId)?.warehouseName || 'คลังสินค้าหลัก',
-            vendorId: Number(newDocData.vendorId) || 1,
-            vendorName: vendors.find((v) => String(v.id) === newDocData.vendorId)?.vendName || 'บริษัทผู้จัดจำหน่าย',
+            vendId: Number(newDocData.vendorId) || 1,
+            vendName: vendors.find((v) => String(v.id) === newDocData.vendorId)?.vendName || 'บริษัทผู้จัดจำหน่าย',
             remark: newDocData.remark || 'เอกสารสร้างใหม่',
             isActive: true,
             isDelete: false,
@@ -307,45 +305,7 @@ export default function ReceivePage() {
         });
     };
 
-    // Helper แสดง Badge สถานะ DOC_STATUS
-    const renderStatusBadge = (statusValue: unknown) => {
-        const val = String(statusValue ?? '').trim().toLowerCase();
 
-        if (val === 'completed' || val === 'approved' || val === '3' || val === 'รับแล้ว' || val === 'สำเร็จ') {
-            return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    Completed
-                </span>
-            );
-        }
-
-        if (val === 'pending' || val === 'waiting' || val === '2' || val === 'รอรับ' || val === 'รอตรวจนับ') {
-            return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800">
-                    <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                    Pending
-                </span>
-            );
-        }
-
-        if (val === 'cancelled' || val === 'rejected' || val === '4' || val === 'ยกเลิก') {
-            return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800">
-                    <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                    Cancelled
-                </span>
-            );
-        }
-
-        // ค่าเริ่มต้น / Draft
-        return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
-                <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                Draft
-            </span>
-        );
-    };
 
     return (
         <AppLayout>
@@ -688,25 +648,25 @@ export default function ReceivePage() {
                                 <div>
                                     <span className="block text-xs font-semibold text-zinc-400">DOC_NO</span>
                                     <span className="text-sm font-bold font-mono text-zinc-900 dark:text-zinc-100">
-                                        {selectedDoc.docNo || selectedDoc.DOC_NO || '-'}
+                                        {selectedDoc.docNo || '-'}
                                     </span>
                                 </div>
                                 <div>
                                     <span className="block text-xs font-semibold text-zinc-400">DOC_DATE</span>
                                     <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.docDate || selectedDoc.DOC_DATE || selectedDoc.createDate?.slice(0, 10) || '-'}
+                                        {selectedDoc.docDate || selectedDoc.createDate?.slice(0, 10) || '-'}
                                     </span>
                                 </div>
                                 <div>
                                     <span className="block text-xs font-semibold text-zinc-400">Menu_id</span>
                                     <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.menuId || selectedDoc.Menu_id || '-'}
+                                        {selectedDoc.menuId || '-'}
                                     </span>
                                 </div>
                                 <div>
                                     <span className="block text-xs font-semibold text-zinc-400">DOC_STATUS</span>
                                     <div className="mt-0.5">
-                                        {renderStatusBadge(selectedDoc.docStatus || selectedDoc.DOC_STATUS || selectedDoc.statusId)}
+                                        {renderStatusBadge(selectedDoc.statusCode || selectedDoc.statusName || selectedDoc.statusId)}
                                     </div>
                                 </div>
                             </div>
@@ -728,7 +688,7 @@ export default function ReceivePage() {
                                         ผู้จำหน่าย (Vendor)
                                     </div>
                                     <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.vendorName || `Vendor ID: ${selectedDoc.vendorId || '-'}`}
+                                        {selectedDoc.vendName || `Vendor ID: ${selectedDoc.vendId || '-'}`}
                                     </p>
                                 </div>
                             </div>
@@ -765,7 +725,7 @@ export default function ReceivePage() {
                                                             {detail.itemName}
                                                         </TableCell>
                                                         <TableCell className="py-2.5 px-3 text-xs text-right font-bold text-zinc-900 dark:text-zinc-100">
-                                                            {detail.itemQty.toLocaleString()}
+                                                            {(detail.itemQty ?? 0).toLocaleString()}
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}

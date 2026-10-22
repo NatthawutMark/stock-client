@@ -8,14 +8,15 @@ import { masterService } from '@/app/_services/master';
 import { transactionService } from '@/app/_services/transaction';
 import type { DocReceive, DocReceiveDetail, MastDocType, MastEmployee, MastVendor, MastWarehouse } from '@/lib/types';
 import { MasterItemTable, TransactionItem } from '@/components/transaction';
-import { Button, Card, CardContent, DatePicker, Label } from '@/components/ui';
+import { Button, Card, CardContent, DatePicker, Label, SearchableSelect, renderStatusBadge } from '@/components/ui';
 import Swal from 'sweetalert2';
 import {
-    Save, FileCheck, Building2, Calendar, FileText, Truck, User, Layers,
+    Save, FileCheck, FileText, Layers,
 } from 'lucide-react';
 
+const MENU_ID = '00E03A994280450ABF7E2EE62A7AD4D6';
+
 function ReceiveFormContent() {
-    const menuId = '00E03A994280450ABF7E2EE62A7AD4D6';
     const router = useRouter();
     const searchParams = useSearchParams();
     const editId = searchParams.get('id');
@@ -24,25 +25,19 @@ function ReceiveFormContent() {
     const { setPageTitle } = useLayout();
 
     // ─────────────────────────────────────────────────────────────
-    // Form Header States (ตาม Wireframe กล่องเขียวด้านบน)
-    // - Left Column: DocNo, Docdate, Vendor
-    // - Right Column: DocnoRef, Employee, Remark
+    // Form Header States
     // ─────────────────────────────────────────────────────────────
     const [docNo, setDocNo] = useState<string>('');
     const [docDate, setDocDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [vendorId, setVendorId] = useState<string>('');
-    const [vendorName, setVendorName] = useState<string>('');
     const [docTypeId, setDocTypeId] = useState<string>('');
     const [docNoRef, setDocNoRef] = useState<string>('');
     const [employeeId, setEmployeeId] = useState<string>('');
     const [remark, setRemark] = useState<string>('');
-
-    // ฟิลด์เพิ่มเติมที่จำเป็นในระบบ WMS (เช่น คลังสินค้า)
     const [warehouseId, setWarehouseId] = useState<string>('');
-    const [statusId, setStatusId] = useState<number>(1);
-    const [docStatus, setDocStatus] = useState<string>('Draft');
+    const [statusCode, setStatusCode] = useState<string>('DRAFT');
 
-    // รายการสินค้าในเอกสาร (ส่งให้ Table add Item Component)
+    // รายการสินค้าในเอกสาร
     const [items, setItems] = useState<TransactionItem[]>([]);
 
     // Master Dropdowns
@@ -63,7 +58,7 @@ function ReceiveFormContent() {
     }, [isEditMode, setPageTitle]);
 
     // ─────────────────────────────────────────────────────────────
-    // 2. โหลด Master Dropdowns (Vendor, Warehouse, Employee) จาก DB
+    // 2. โหลด Master Dropdowns (Vendor, Warehouse, Employee, DocType)
     // ─────────────────────────────────────────────────────────────
     useEffect(() => {
         const loadMasters = async () => {
@@ -72,7 +67,7 @@ function ReceiveFormContent() {
                     masterService.vendors.list(),
                     masterService.warehouses.list(),
                     masterService.employees.list(),
-                    masterService.docTypes.list({ menuId: menuId }),
+                    masterService.docTypes.list({ menuId: MENU_ID }),
                 ]);
 
                 // Vendor
@@ -87,22 +82,21 @@ function ReceiveFormContent() {
                     : [];
                 setWarehouseList(wData);
 
-                if (wData.length > 0 && !warehouseId) {
-                    setWarehouseId(String(wData[0].id));
+                if (!isEditMode && wData.length > 0) {
+                    setWarehouseId((prev) => prev || String(wData[0].id));
                 }
 
-                //Employee
+                // Employee
                 const eData = empRes?.success
                     ? (Array.isArray(empRes.results) ? empRes.results : Array.isArray(empRes.data) ? empRes.data : [])
                     : [];
                 setEmployeeList(eData);
 
-                //DocType
-                const dTypedata = dTypeRes?.success ? (Array.isArray(dTypeRes.results) ? dTypeRes.results : Array.isArray(dTypeRes.data) ? dTypeRes.data : []) : []
-                console.log(dTypedata);
-
-                setDocTypeList(dTypedata)
-
+                // DocType
+                const dTypeData = dTypeRes?.success
+                    ? (Array.isArray(dTypeRes.results) ? dTypeRes.results : Array.isArray(dTypeRes.data) ? dTypeRes.data : [])
+                    : [];
+                setDocTypeList(dTypeData);
             } catch (err) {
                 console.error('Failed to load masters from DB:', err);
                 setVendorList([]);
@@ -113,7 +107,7 @@ function ReceiveFormContent() {
         };
 
         loadMasters();
-    }, [isEditMode, warehouseId]);
+    }, [isEditMode]);
 
     // ─────────────────────────────────────────────────────────────
     // 3. โหลดข้อมูลเมื่อเป็น Edit Mode หรือตั้งค่าเริ่มต้นสำหรับ Create Mode
@@ -124,61 +118,65 @@ function ReceiveFormContent() {
             setLoading(true);
             const loadEditDoc = async () => {
                 try {
-                    const res = await transactionService.receive.get(Number(editId));
-                    const foundDoc: (DocReceive & { details?: DocReceiveDetail[] }) | null = res?.success
-                        ? (res.results || res.data)
-                        : null;
+                    const res = await transactionService.receive.get(editId);
+                    if (res && res.success) {
+                        const foundDoc: (DocReceive & { details?: DocReceiveDetail[] }) | null = res?.success
+                            ? (res.results || res.data)
+                            : null;
 
-                    if (foundDoc) {
-                        setDocNo(foundDoc.docNo || '');
-                        const rawDate = foundDoc.docDate || '';
-                        setDocDate(rawDate.length >= 10 ? rawDate.slice(0, 10) : new Date().toISOString().split('T')[0]);
-                        setVendorId(foundDoc.vendorId ? String(foundDoc.vendorId) : '');
-                        setVendorName(foundDoc.vendorName || '');
-                        setDocNoRef(foundDoc.docNoRef || '');
-                        setEmployeeId(foundDoc.employeeId ? String(foundDoc.employeeId) : '');
-                        setRemark(foundDoc.remark || '');
-                        if (foundDoc.warehouseId) {
-                            setWarehouseId(String(foundDoc.warehouseId));
-                        }
-                        if (foundDoc.docStatus || foundDoc.statusName) {
-                            setDocStatus(String(foundDoc.docStatus || foundDoc.statusName));
-                        }
-                        if (foundDoc.statusCode || foundDoc.statusId) {
-                            setStatusId(Number(foundDoc.statusCode || foundDoc.statusId));
-                        }
+                        if (foundDoc) {
+                            setDocNo(foundDoc.docNo || '');
+                            const rawDate = foundDoc.docDate || '';
+                            setDocDate(rawDate.length >= 10 ? rawDate.slice(0, 10) : new Date().toISOString().split('T')[0]);
+                            setVendorId(foundDoc.vendId ? String(foundDoc.vendId) : '');
+                            setDocTypeId(foundDoc.docTypeId ? String(foundDoc.docTypeId) : '');
+                            setDocNoRef(foundDoc.refDocNo || '');
+                            setEmployeeId(foundDoc.empId ? String(foundDoc.empId) : '');
+                            setRemark(foundDoc.remark || '');
+                            if (foundDoc.warehouseId) {
+                                setWarehouseId(String(foundDoc.warehouseId));
+                            }
+                            if (foundDoc.statusCode) {
+                                setStatusCode(foundDoc.statusCode);
+                            }
 
-                        // โหลดรายการสินค้าที่มีอยู่จริงจาก DB
-                        const details = Array.isArray(foundDoc.details) ? foundDoc.details : [];
-                        if (details.length > 0) {
-                            setItems(
-                                details.map((d: DocReceiveDetail, index: number) => ({
-                                    id: d.id || `edit-item-${index}`,
-                                    itemId: d.itemId,
-                                    itemCode: d.itemCode || `ITM${d.itemId}`,
-                                    itemName: d.itemName || '',
-                                    uomId: d.uomId,
-                                    uomName: d.uomName || 'ชิ้น',
-                                    itemQty: Number(d.itemQty) || 1,
-                                    unitPrice: Number(d.unitPrice) || 0,
-                                    totalPrice: (Number(d.itemQty) || 1) * (Number(d.unitPrice) || 0),
-                                    lotNo: d.lotNo || '',
-                                    serialNo: d.serialNo || '',
-                                    locationId: d.locationId,
-                                    locationName: d.locationName || '',
-                                    remark: d.remark || '',
-                                }))
-                            );
+                            // โหลดรายการสินค้าที่มีอยู่จริงจาก DB
+                            const details = Array.isArray(foundDoc.details) ? foundDoc.details : [];
+                            if (details.length > 0) {
+                                console.log('details', details);
+
+                                setItems(
+                                    details.map((d: DocReceiveDetail, index: number) => ({
+                                        id: d.id || `edit-item-${index}`,
+                                        itemId: d.itemId ?? '',
+                                        itemCode: d.itemCode || `ITM${d.itemId}`,
+                                        itemName: d.itemName || '',
+                                        uomId: d.uomId,
+                                        uomName: d.uomName || 'ชิ้น',
+                                        itemQty: Number(d.itemQty) || 1,
+                                        putawayQty: Number(d.putawayQty) || 0,
+                                        itemPrice: Number(d.itemPrice) || 0,
+                                        totalPrice: (Number(d.itemQty) || 1) * (Number(d.itemPrice) || 0),
+                                        lotNo: d.lotNo || '',
+                                        serialNo: d.serialNo || '',
+                                        isLotNo: d.isLotNo || false,
+                                        isSerialNo: d.isSerialNo || false,
+                                        locationId: d.locationId,
+                                        locationName: d.locationName || '',
+                                        remark: d.remark || '',
+                                    }))
+                                );
+                            } else {
+                                setItems([]);
+                            }
                         } else {
-                            setItems([]);
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'ไม่พบเอกสาร',
+                                text: `ไม่พบเอกสารรับสินค้ารหัส #${editId} ในฐานข้อมูล`,
+                            });
+                            router.push('/transaction/receive');
                         }
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'ไม่พบเอกสาร',
-                            text: `ไม่พบเอกสารรับสินค้ารหัส #${editId} ในฐานข้อมูล`,
-                        });
-                        router.push('/transaction/receive');
                     }
                 } catch (err) {
                     console.error('Failed to load receive doc from API:', err);
@@ -194,39 +192,47 @@ function ReceiveFormContent() {
             };
             loadEditDoc();
         } else {
-            // Create Mode: วันที่เอกสารวันนี้ และล้างรายการสินค้า
             setDocDate(new Date().toISOString().split('T')[0]);
             setItems([]);
         }
     }, [isEditMode, editId, router]);
 
-    // เมื่อเปลี่ยน Vendor ใน Dropdown
-    const handleVendorChange = (idVal: string) => {
-        setVendorId(idVal);
-        const vend = vendorList.find((v) => String(v.id) === idVal);
-        if (vend) {
-            setVendorName(vend.vendName);
-        }
-    };
-
-    const handleEmployeeChange = (idEmp: string) => {
-        setEmployeeId(idEmp);
-    };
-
-    const handleDocTypeChange = (iddocType: string) => {
-        setDocTypeId(iddocType);
-    };
-
     // ─────────────────────────────────────────────────────────────
     // 4. บันทึกข้อมูลเอกสาร (Save / Submit)
     // ─────────────────────────────────────────────────────────────
-    const handleSubmit = async (targetStatus: 'Draft' | 'Completed' = 'Completed') => {
+    const handleSubmit = async (targetStatus: 'Draft' | 'Save' | 'Complete' | 'Confirm' = 'Save') => {
         // Validation
-
         if (!docDate) {
             Swal.fire({
                 icon: 'warning',
                 title: 'กรุณาระบุวันที่เอกสาร (Docdate)',
+                confirmButtonColor: '#2563eb',
+            });
+            return;
+        }
+
+        if (!docTypeId) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'กรุณาเลือกประเภทเอกสาร',
+                confirmButtonColor: '#2563eb',
+            });
+            return;
+        }
+
+        if (!employeeId) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'กรุณาเลือกพนักงาน (Employee)',
+                confirmButtonColor: '#2563eb',
+            });
+            return;
+        }
+
+        if (!warehouseId) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'กรุณาเลือกคลังสินค้า (Warehouse)',
                 confirmButtonColor: '#2563eb',
             });
             return;
@@ -254,31 +260,40 @@ function ReceiveFormContent() {
             return;
         }
 
+        const invalidLotNo = items.find((i) => i.isLotNo && !i.lotNo?.trim());
+        if (invalidLotNo) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'มีบางรายการไม่ได้ระบุ LotNo',
+                text: `กรุณาตรวจสอบสินค้า: ${invalidLotNo.itemName}`,
+                confirmButtonColor: '#2563eb',
+            });
+            return;
+        }
+
+        const invalidSerialNo = items.find((i) => i.isSerialNo && !i.serialNo?.trim());
+        if (invalidSerialNo) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'มีบางรายการไม่ได้ระบุ Serial No',
+                text: `กรุณาตรวจสอบสินค้า: ${invalidSerialNo.itemName}`,
+                confirmButtonColor: '#2563eb',
+            });
+            return;
+        }
+
         setSaving(true);
         try {
-            const currentStatusId = targetStatus === 'Completed' ? 3 : (statusId || 1);
-            const currentStatusName = targetStatus;
-
-            const selectedVendor = vendorList.find((v) => String(v.id) === String(vendorId));
-            const selectedWarehouse = warehouseList.find((w) => String(w.id) === String(warehouseId));
-
             const payload = {
-                docNo: docNo.trim(),
-                docDate: docDate,
-                docNoRef: docNoRef.trim(),
-                employeeId: employeeId.trim() || undefined,
-                vendorId: vendorId ? Number(vendorId) : undefined,
-                vendorName: vendorName || selectedVendor?.vendName || undefined,
-                warehouseId: warehouseId ? String(warehouseId) : undefined,
-                warehouseName: selectedWarehouse?.warehouseName || undefined,
+                docDate,
+                refDocNo: docNoRef.trim(),
+                empId: employeeId.trim() || undefined,
+                vendId: vendorId || undefined,
+                warehouseId: warehouseId || undefined,
                 remark: remark.trim(),
-                menuId: menuId,
-                docTypeId: "4B9CF1F93A5E4A1E95EDF6986502BCA0",
-                statusCode: currentStatusId,
-                statusName: currentStatusName,
-                isActive: true,
-                isDelete: false,
-                updateDate: new Date().toISOString(),
+                menuId: MENU_ID,
+                docTypeId,
+                statusCode: targetStatus,
                 details: items.map((item) => ({
                     itemId: Number(item.itemId) || item.itemId,
                     itemCode: item.itemCode,
@@ -286,8 +301,8 @@ function ReceiveFormContent() {
                     uomId: item.uomId ? (Number(item.uomId) || item.uomId) : undefined,
                     uomName: item.uomName,
                     itemQty: Number(item.itemQty) || 1,
-                    unitPrice: Number(item.unitPrice) || 0,
-                    totalPrice: Number(item.totalPrice) || ((Number(item.itemQty) || 1) * (Number(item.unitPrice) || 0)),
+                    itemPrice: Number(item.itemPrice) || 0,
+                    totalPrice: Number(item.totalPrice) || ((Number(item.itemQty) || 1) * (Number(item.itemPrice) || 0)),
                     lotNo: item.lotNo || '',
                     serialNo: item.serialNo || '',
                     locationId: item.locationId ? (Number(item.locationId) || item.locationId) : undefined,
@@ -296,15 +311,46 @@ function ReceiveFormContent() {
                 })),
             };
 
+            // แสดง Loading Modal ขณะกำลังบันทึกข้อมูล
+            Swal.fire({
+                title: 'กำลังบันทึกข้อมูล',
+                html: 'โปรดรอสักครู่...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                },
+            });
+
+            let createdId: string | undefined = undefined;
+
             if (isEditMode && editId) {
-                const res = await transactionService.receive.update(Number(editId), payload);
-                if (res && !res.success) {
-                    throw new Error(res.message || 'ไม่สามารถแก้ไขเอกสารได้');
+                if (['Draft', 'Save'].includes(targetStatus)) {
+                    const res = await transactionService.receive.update(editId, payload);
+                    console.log('editId', editId);
+                    console.log('payload', payload);
+                    if (res && res.success === false) {
+                        throw new Error(res.message || 'ไม่สามารถแก้ไขเอกสารได้');
+                    }
+                }
+                if (['Confirm'].includes(targetStatus)) {
+                    await transactionService.receive.confirm(editId);
                 }
             } else {
                 const res = await transactionService.receive.create(payload);
-                if (res && !res.success) {
+                if (res && res.success === false) {
                     throw new Error(res.message || 'ไม่สามารถสร้างเอกสารได้');
+                }
+
+                // ดึง id เอกสารที่สร้างขึ้นใหม่จาก response
+                if (res) {
+                    const raw = res as unknown as Record<string, unknown>;
+                    const data = (raw.results ?? raw.data ?? raw) as Record<string, unknown> | string;
+                    if (typeof data === 'string' || typeof data === 'number') {
+                        createdId = data;
+                    } else if (data && typeof data === 'object') {
+                        createdId = (data.id ?? data.docId ?? data.DocId ?? data.ID) as string
+                    }
                 }
             }
 
@@ -316,10 +362,26 @@ function ReceiveFormContent() {
                 showConfirmButton: false,
             });
 
-            router.push('/transaction/receive');
+            const targetId = isEditMode ? editId : createdId;
+            if (targetId) {
+                router.push(`/transaction/receive/${targetId}`);
+            } else {
+                router.push('/transaction/receive');
+            }
+
         } catch (error: unknown) {
             console.error('Save error:', error);
-            const errMsg = error instanceof Error ? error.message : 'ไม่สามารถบันทึกข้อมูลเอกสารได้';
+            let errMsg = 'ไม่สามารถบันทึกข้อมูลเอกสารได้';
+            if (error instanceof Error) {
+                errMsg = error.message;
+            }
+            const axiosErr = error as { response?: { data?: { message?: string; error?: string } } };
+            if (axiosErr.response?.data?.message) {
+                errMsg = axiosErr.response.data.message;
+            } else if (axiosErr.response?.data?.error) {
+                errMsg = axiosErr.response.data.error;
+            }
+
             Swal.fire({
                 icon: 'error',
                 title: 'เกิดข้อผิดพลาด',
@@ -364,21 +426,14 @@ function ReceiveFormContent() {
                 {/* Status Badge */}
                 <div className="flex items-center gap-2">
                     <span className="text-xs text-zinc-400">สถานะ:</span>
-                    <span
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${docStatus === 'Completed'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-                            }`}
-                    >
-                        {docStatus === 'Completed' ? 'Completed (รับแล้ว)' : 'Draft (ร่าง)'}
-                    </span>
+                    {renderStatusBadge(statusCode)}
                 </div>
             </div>
 
             {/* ─────────────────────────────────────────────────────────────
-                1. Form Header Section (ตรงตามส่วนกล่องสีเขียวใน Wireframe)
-                - Left Column: DocNo, Docdate, Vendor
-                - Right Column: DocnoRef, Employee, Remark
+                1. Form Header Section
+                - Left Column: Docdate, DocType, Employee, Warehouse
+                - Right Column: Vendor, DocnoRef, Remark
                ───────────────────────────────────────────────────────────── */}
             <Card className="mb-6 border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden">
                 <div className="px-6 py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 flex items-center justify-between">
@@ -397,21 +452,18 @@ function ReceiveFormContent() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         {/* ─── ฝั่งซ้าย (Left Column) ─── */}
                         <div className="space-y-4">
-
-                            {/* Docdate (Shadcn DatePicker) */}
+                            {/* Docdate */}
                             <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
                                 <Label
                                     htmlFor="docDate"
                                     className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5 select-none"
                                 >
-                                    {/* <Calendar className="w-3.5 h-3.5 text-blue-500" /> */}
                                     <span className="text-red-500">*</span> วันที่เอกสาร :
                                 </Label>
                                 <DatePicker
-
                                     id="docDate"
                                     value={docDate}
-                                    isRequire={true}
+                                    isRequire
                                     onChange={(val) => setDocDate(val)}
                                     placeholder="เลือกวันที่เอกสาร (Docdate)..."
                                     formatString="dd/MM/yyyy"
@@ -421,98 +473,92 @@ function ReceiveFormContent() {
 
                             {/* DocType */}
                             <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="DocType" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 justify-end">
-                                    {/* <Truck className="w-3.5 h-3.5 text-blue-500" /> */}
-                                    <span className="text-red-500">*</span> ประเภทเอกสาร :{/* <span className="text-red-500">*</span> */}
+                                <Label htmlFor="docType" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 justify-end">
+                                    <span className="text-red-500">*</span> ประเภทเอกสาร :
                                 </Label>
-                                <select
-                                    id="DocType"
+                                <SearchableSelect
+                                    id="docType"
                                     value={docTypeId}
-                                    onChange={(e) => handleDocTypeChange(e.target.value)}
-                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
-                                >
-                                    <option value="">-- เลือกประเภทเอกสาร (Doctype) --</option>
-                                    {docTypeList.map((v) => (
-                                        <option key={v.id} value={String(v.id)}>
-                                            {v.docTypeName}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={setDocTypeId}
+                                    options={docTypeList.map((v) => ({
+                                        value: String(v.id),
+                                        label: `${v.docTypeName}`,
+                                    }))}
+                                    placeholder="-- เลือกประเภทเอกสาร (DocType) --"
+                                    searchPlaceholder="ค้นหารหัส หรือประเภทเอกสาร..."
+                                    clearable={false}
+                                />
                             </div>
 
-                            {/* 5. Employee */}
+                            {/* Employee */}
                             <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="employeeId" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
-                                    {/* <User className="w-3.5 h-3.5 text-blue-500" /> */}
-                                    <span className="text-red-500">*</span>พนักงาน :
+                                <Label htmlFor="employee" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
+                                    <span className="text-red-500">*</span> พนักงาน :
                                 </Label>
                                 <div>
-                                    <select
+                                    <SearchableSelect
                                         id="employee"
                                         value={employeeId}
-                                        onChange={(e) => handleEmployeeChange(e.target.value)}
-                                        className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
-                                    >
-                                        <option value="">-- เลือกพนักงาน (Employee) --</option>
-                                        {employeeList.map((e) => (
-                                            <option key={e.id} value={String(e.id)}>
-                                                {e.fName} {e.lName}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        onChange={setEmployeeId}
+                                        options={employeeList.map((v) => ({
+                                            value: String(v.id),
+                                            label: `${v.empCode ? `[${v.empCode}] ` : ''}${v.fName} ${v.lName}`,
+                                            subLabel: v.tel ? `โทร: ${v.tel}` : '',
+                                        }))}
+                                        placeholder="-- เลือกพนักงาน (Employee) --"
+                                        searchPlaceholder="ค้นหารหัส หรือชื่อพนักงาน..."
+                                        clearable={false}
+                                    />
                                 </div>
                             </div>
 
-                            {/* เสริม: Warehouse (คลังสินค้ารับเข้า) */}
+                            {/* Warehouse */}
                             <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
                                 <Label htmlFor="warehouse" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
-                                    {/* <Building2 className="w-3.5 h-3.5 text-blue-500" /> */}
-                                    <span className="text-red-500">*</span>คลังรับเข้า :
+                                    <span className="text-red-500">*</span> คลังรับเข้า :
                                 </Label>
-                                <select
+                                <SearchableSelect
                                     id="warehouse"
                                     value={warehouseId}
-                                    onChange={(e) => setWarehouseId(e.target.value)}
-                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
-                                    required
-                                >
-                                    {warehouseList.map((wh) => (
-                                        <option key={wh.id} value={String(wh.id)}>
-                                            {wh.warehouseName} ({wh.code})
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={setWarehouseId}
+                                    options={warehouseList.map((v) => ({
+                                        value: String(v.id),
+                                        label: `${v.code ? `[${v.code}] ` : ''}${v.warehouseName}`,
+                                    }))}
+                                    placeholder="-- เลือกคลังเก็บสินค้า (Warehouse) --"
+                                    searchPlaceholder="ค้นหารหัส หรือคลังเก็บสินค้า..."
+                                    clearable={false}
+                                />
                             </div>
                         </div>
 
-                        {/* ─── กลาง (Middle Column) ─── */}
+                        {/* ─── ฝั่งขวา (Right Column) ─── */}
                         <div className="space-y-4">
-
                             {/* Vendor */}
                             <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
                                 <Label htmlFor="vendor" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
-                                    {/* <Truck className="w-3.5 h-3.5 text-blue-500" /> */}
-                                    {/*  <span className="text-red-500">*</span> */}ผู้จำหน่าย :
+                                    ผู้จำหน่าย :
                                 </Label>
-                                <select
+                                <SearchableSelect
                                     id="vendor"
                                     value={vendorId}
-                                    onChange={(e) => handleVendorChange(e.target.value)}
-                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
-                                >
-                                    <option value="">-- เลือกผู้จำหน่าย (Vendor) --</option>
-                                    {vendorList.map((v) => (
-                                        <option key={v.id} value={String(v.id)}>
-                                            {v.vendCode ? `[${v.vendCode}] ` : ''}{v.vendName}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={setVendorId}
+                                    options={vendorList.map((v) => ({
+                                        value: String(v.id),
+                                        label: `${v.vendCode ? `[${v.vendCode}] ` : ''}${v.vendName}`,
+                                        subLabel: v.contactName
+                                            ? `ผู้ติดต่อ: ${v.contactName}${v.tel ? ` (${v.tel})` : ''}`
+                                            : (v.tel ? `โทร: ${v.tel}` : undefined),
+                                    }))}
+                                    placeholder="-- เลือกผู้จำหน่าย (Vendor) --"
+                                    searchPlaceholder="ค้นหารหัส หรือชื่อผู้จำหน่าย..."
+                                    clearable
+                                />
                             </div>
 
                             {/* DocnoRef */}
                             <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
                                 <Label htmlFor="docNoRef" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
-                                    {/* <FileText className="w-3.5 h-3.5 text-blue-500" /> */}
                                     เอกสารอ้างอิง :
                                 </Label>
                                 <input
@@ -525,9 +571,7 @@ function ReceiveFormContent() {
                                 />
                             </div>
 
-
-
-                            {/* 6. Remark (ช่อง textarea สูงตาม Wireframe) */}
+                            {/* Remark */}
                             <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-start gap-2 col-span-2">
                                 <Label htmlFor="remark" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 justify-end pt-2">
                                     Remark :
@@ -542,82 +586,83 @@ function ReceiveFormContent() {
                                 />
                             </div>
                         </div>
-
                     </div>
                 </CardContent>
             </Card>
 
             {/* ─────────────────────────────────────────────────────────────
                 2. Table Section: Table add Item (Reusable Component)
-                - source="master" (สำหรับหน้า Receive)
-                - รองรับการเอาไปใช้หน้าอื่นด้วย source="inventory"
                ───────────────────────────────────────────────────────────── */}
             <div className="mb-6">
                 <MasterItemTable
                     items={items}
                     onChange={setItems}
                     warehouseId={warehouseId}
-                    showPrice={true}
-                    showLotSerial={true}
-                    showLocation={true}
+                    statusCode={statusCode}
+                    showPrice
+                    showLotSerial
+                    showLocation
                     title="Table add Item (รายการสินค้าที่จะรับเข้า)"
                     subtitle="เลือกสินค้าจาก Master Catalog เพื่อบันทึกการรับสินค้าเข้าคลัง"
                 />
             </div>
 
             {/* ─────────────────────────────────────────────────────────────
-                3. Action Button Section (ตรงตามแถบสีเหลืองใน Wireframe)
+                3. Action Button Section
                ───────────────────────────────────────────────────────────── */}
-            <Card className="mb-6 border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-zinc-50/80 dark:bg-zinc-800/40 overflow-hidden">
-                <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-end gap-3">
-                    {/* <div className="flex items-center gap-2 text-xs text-zinc-500">
-                        <span>รายการสินค้าทั้งหมด: <strong className="text-zinc-800 dark:text-zinc-200">{items.length}</strong> รายการ</span>
-                        <span>•</span>
-                        <span>จำนวนรวม: <strong className="text-zinc-800 dark:text-zinc-200">{items.reduce((s, i) => s + (Number(i.itemQty) || 0), 0)}</strong> ชิ้น</span>
-                    </div> */}
+            <div className="py-2 flex flex-col sm:flex-row sm:items-center justify-end gap-3">
+                <div className="flex items-end gap-3">
+                    {/* ปุ่มยกเลิก / ย้อนกลับ */}
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push('/transaction/receive')}
+                        className="px-4 py-2 text-sm rounded-xl border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                        ยกเลิก (Cancel)
+                    </Button>
 
-                    <div className="flex items-end gap-3">
-                        {/* ปุ่มยกเลิก / ย้อนกลับ */}
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => router.push('/transaction/receive')}
-                            className="px-4 py-2 text-sm rounded-xl border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        >
-                            ยกเลิก (Cancel)
-                        </Button>
+                    {/* ปุ่มบันทึกฉบับร่าง */}
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={saving}
+                        hidden={statusCode !== 'DRAFT'}
+                        onClick={() => handleSubmit('Draft')}
+                        className="px-4 py-2 text-sm rounded-xl border-amber-300 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5"
+                    >
+                        <Save className="w-4 h-4" />
+                        บันทึกฉบับร่าง (Save Draft)
+                    </Button>
 
-                        {/* ปุ่มบันทึกฉบับร่าง */}
-                        <Button
-                            type="button"
-                            variant="outline"
-                            disabled={saving}
-                            onClick={() => handleSubmit('Draft')}
-                            className="px-4 py-2 text-sm rounded-xl border-amber-300 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5"
-                        >
-                            <Save className="w-4 h-4" />
-                            บันทึกฉบับร่าง (Save Draft)
-                        </Button>
+                    {/* ปุ่มบันทึกรับสินค้า / ยืนยัน */}
+                    <Button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => handleSubmit('Save')}
+                        className="px-5 py-2 text-sm font-semibold rounded-xl text-white bg-blue-600 hover:bg-blue-700 shadow-sm flex items-center gap-1.5"
+                    >
+                        <FileCheck className="w-4 h-4" />
+                        {saving ? 'กำลังบันทึก...' : isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกรับสินค้า (Save)'}
+                    </Button>
 
-                        {/* ปุ่มบันทึกรับสินค้า / ยืนยัน */}
-                        <Button
-                            type="button"
-                            disabled={saving}
-                            onClick={() => handleSubmit('Completed')}
-                            className="px-5 py-2 text-sm font-semibold rounded-xl text-white bg-blue-600 hover:bg-blue-700 shadow-sm flex items-center gap-1.5"
-                        >
-                            <FileCheck className="w-4 h-4" />
-                            {saving ? 'กำลังบันทึก...' : isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกรับสินค้า (Save)'}
-                        </Button>
-                    </div>
+                    {/* <Button
+                        type="button"
+                        disabled={saving}
+                        hidden={statusCode === 'DRAFT'}
+                        onClick={() => handleSubmit('Complete')}
+                        className="px-5 py-2 text-sm font-semibold rounded-xl text-white bg-green-600 hover:bg-green-700 shadow-sm flex items-center gap-1.5"
+                    >
+                        <FileCheck className="w-4 h-4" />
+                        {saving ? 'กำลังบันทึก...' : 'ยืนยันเอกสาร'}
+                    </Button> */}
                 </div>
-            </Card>
-
+            </div>
         </AppLayout>
     );
 }
 
-export default function ReceiveCreatePage() {
+export default function ReceiveFormPage() {
     return (
         <Suspense
             fallback={

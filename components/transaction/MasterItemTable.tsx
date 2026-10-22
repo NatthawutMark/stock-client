@@ -34,9 +34,9 @@ import {
 
 // ตัวสร้าง Unique Key ประจำแถวแบบปลอดภัย (หลีกเลี่ยง Hydration Mismatch)
 let rowCounter = 0;
-function generateRowId(itemId: string | number) {
+function generateRowId(itemId?: string | number) {
     rowCounter += 1;
-    return `master-row-${itemId}-${rowCounter}`;
+    return `master-row-${itemId ?? 'item'}-${rowCounter}`;
 }
 
 export function MasterItemTable({
@@ -47,9 +47,38 @@ export function MasterItemTable({
     showPrice = true,
     showLotSerial = true,
     showLocation = true,
+    showPutawayQty,
+    statusCode,
     title = 'รายการสินค้า (Item List)',
     subtitle = 'เลือกสินค้าจากฐานข้อมูล Master เพื่อนำเข้าสู่ระบบ',
 }: MasterItemTableProps) {
+    // ตรวจสอบว่าจะแสดงคอลัมน์ putawayQty (จำนวนที่รับเข้า) หรือไม่
+    // แสดงเมื่อส่ง showPutawayQty=true หรือเมื่อสถานะเอกสารเป็น confirm (หรือหลังจาก confirm เช่น complete/approved)
+    const isShowPutawayQty = useMemo(() => {
+        if (showPutawayQty !== undefined) return showPutawayQty;
+        if (!statusCode) return false;
+        const normalized = String(statusCode).trim().toLowerCase();
+        return [
+            'confirm',
+            'confirmed',
+            'complete',
+            'completed',
+            'approve',
+            'approved',
+            'putaway',
+            'receive',
+            'received',
+            'ยืนยัน',
+            'ยืนยันเอกสาร',
+            'รับแล้ว',
+            'รับเข้าคลัง',
+            'สำเร็จ',
+            'เสร็จสิ้น',
+            '4',
+            '5',
+        ].includes(normalized);
+    }, [showPutawayQty, statusCode]);
+
     // ─────────────────────────────────────────────────────────────
     // 1. STATE MANAGEMENT
     // ─────────────────────────────────────────────────────────────
@@ -73,7 +102,9 @@ export function MasterItemTable({
         const loadHelperMasters = async () => {
             try {
                 const [locRes, uomRes] = await Promise.all([
-                    masterService.locations.list(),
+                    masterService.locations.list({
+                        warehouseId: warehouseId ? String(warehouseId) : undefined,
+                    }),
                     masterService.uoms.list(),
                 ]);
 
@@ -94,7 +125,40 @@ export function MasterItemTable({
         };
 
         loadHelperMasters();
-    }, []);
+    }, [warehouseId]);
+
+    // ตัวเลือก Locations ที่กรองตามคลังถ้ามีการระบุ warehouseId
+    const filteredLocations = useMemo(() => {
+        if (!warehouseId) return locationList;
+        return locationList.filter((l) => {
+            return String(l.warehouseId) === String(warehouseId);
+        });
+    }, [locationList, warehouseId]);
+
+    // ซิงค์ Location ของรายการในตารางเมื่อคลังเปลี่ยน ให้เป็น Location ของคลังใหม่
+    useEffect(() => {
+        if (!filteredLocations || filteredLocations.length === 0 || items.length === 0) return;
+
+        const validLocIds = new Set(filteredLocations.map((l) => String(l.id)));
+        let changed = false;
+
+        const updated = items.map((item) => {
+            if (item.locationId && !validLocIds.has(String(item.locationId))) {
+                changed = true;
+                const defaultLoc = filteredLocations[0];
+                return {
+                    ...item,
+                    locationId: defaultLoc?.id ?? '',
+                    locationName: defaultLoc?.name || defaultLoc?.code || '',
+                };
+            }
+            return item;
+        });
+
+        if (changed) {
+            onChange(updated);
+        }
+    }, [filteredLocations]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ─────────────────────────────────────────────────────────────
     // 3. โหลดรายการสินค้า Master จาก API เมื่อเปิด Modal
@@ -140,12 +204,15 @@ export function MasterItemTable({
     // ─────────────────────────────────────────────────────────────
     // 4.1 เพิ่มหลายรายการพร้อมกันจาก Checkbox
     const handleAddSelectedItems = () => {
-        const toAdd = masterItemList.filter((m) => selectedItemIds.includes(m.id));
+        const toAdd = masterItemList.filter(
+            (m): m is MastItem & { id: string | number } =>
+                m.id !== undefined && selectedItemIds.includes(m.id)
+        );
         const newItems: TransactionItem[] = [...items];
 
         toAdd.forEach((m) => {
             const uom = uomList.find((u) => u.id === m.uomId)?.name || m.uomName || 'ชิ้น';
-            const loc = locationList.find((l) => l.id === m.locationId)?.name || m.locationName || '';
+            const matchedLoc = filteredLocations.find((l) => String(l.id) === String(m.locationId)) || filteredLocations[0];
             const price = Number(m.buyPrice || 0);
 
             newItems.push({
@@ -156,20 +223,18 @@ export function MasterItemTable({
                 uomId: m.uomId,
                 uomName: uom,
                 itemQty: 1,
-                unitPrice: price,
+                putawayQty: 0,
+                itemPrice: price,
                 totalPrice: price * 1,
                 lotNo: '',
                 serialNo: '',
                 isLotNo: m.isLotno || false,
                 isSerialNo: m.isSerialNo || false,
-                locationId: m.locationId || (locationList[0]?.id ?? ''),
-                locationName: loc || locationList[0]?.name || '',
+                locationId: matchedLoc?.id ?? '',
+                locationName: matchedLoc?.name || matchedLoc?.code || '',
                 remark: '',
             });
         });
-
-        console.log('see data :', newItems);
-
         onChange(newItems);
         setIsAddModalOpen(false);
     };
@@ -177,25 +242,26 @@ export function MasterItemTable({
     // 4.2 เพิ่มทันที 1 รายการจากการกดปุ่ม (+) ใน Modal
     const handleAddSingleItem = (m: MastItem) => {
         const uom = uomList.find((u) => u.id === m.uomId)?.name || m.uomName || 'ชิ้น';
-        const loc = locationList.find((l) => l.id === m.locationId)?.name || m.locationName || '';
+        const matchedLoc = filteredLocations.find((l) => String(l.id) === String(m.locationId)) || filteredLocations[0];
         const price = Number(m.buyPrice || 0);
 
         const newRow: TransactionItem = {
             id: generateRowId(m.id),
-            itemId: m.id,
+            itemId: m.id ?? '',
             itemCode: m.itemCode || '',
             itemName: m.itemName || '',
             uomId: m.uomId,
             uomName: uom,
             itemQty: 1,
-            unitPrice: price,
+            putawayQty: 0,
+            itemPrice: price,
             totalPrice: price * 1,
             lotNo: '',
             serialNo: '',
             isLotNo: m.isLotno || false,
             isSerialNo: m.isSerialNo || false,
-            locationId: m.locationId || (locationList[0]?.id ?? ''),
-            locationName: loc || locationList[0]?.name || '',
+            locationId: matchedLoc?.id ?? '',
+            locationName: matchedLoc?.name || matchedLoc?.code || '',
             remark: '',
         };
 
@@ -205,15 +271,24 @@ export function MasterItemTable({
     // ─────────────────────────────────────────────────────────────
     // 5. ฟังก์ชันแก้ไขและลบแถวในตาราง
     // ─────────────────────────────────────────────────────────────
-    const handleUpdateRow = (id: string | number, field: keyof TransactionItem, value: unknown) => {
+    const handleUpdateRow = (
+        id: string | number,
+        fieldOrUpdates: keyof TransactionItem | Partial<TransactionItem>,
+        value?: unknown
+    ) => {
         const updated = items.map((item) => {
             if (item.id === id) {
-                const updatedItem = { ...item, [field]: value };
+                const patch: Partial<TransactionItem> =
+                    typeof fieldOrUpdates === 'string'
+                        ? { [fieldOrUpdates]: value }
+                        : fieldOrUpdates;
+
+                const updatedItem = { ...item, ...patch };
 
                 // คำนวณราคารวมอัตโนมัติเมื่อจำนวนหรือราคาต่อหน่วยเปลี่ยน
-                if (field === 'itemQty' || field === 'unitPrice') {
-                    const q = field === 'itemQty' ? Number(value) : item.itemQty;
-                    const p = field === 'unitPrice' ? Number(value) : (item.unitPrice || 0);
+                if ('itemQty' in patch || 'itemPrice' in patch) {
+                    const q = updatedItem.itemQty;
+                    const p = updatedItem.itemPrice || 0;
                     updatedItem.totalPrice = (Number.isNaN(q) ? 0 : q) * (Number.isNaN(p) ? 0 : p);
                 }
 
@@ -235,17 +310,13 @@ export function MasterItemTable({
         return items.reduce((sum, item) => sum + (Number(item.itemQty) || 0), 0);
     }, [items]);
 
+    const totalPutawayQty = useMemo(() => {
+        return items.reduce((sum, item) => sum + (Number(item.putawayQty) || 0), 0);
+    }, [items]);
+
     const grandTotal = useMemo(() => {
         return items.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
     }, [items]);
-
-    // ตัวเลือก Locations ที่กรองตามคลังถ้ามีการระบุ warehouseId
-    const filteredLocations = useMemo(() => {
-        if (!warehouseId) return locationList;
-        return locationList.filter(
-            (l) => !l.warehouseId || String(l.warehouseId) === String(warehouseId)
-        );
-    }, [locationList, warehouseId]);
 
     return (
         <Card className="w-full border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden">
@@ -318,6 +389,11 @@ export function MasterItemTable({
                             <TableHead className="w-[110px] text-right font-bold text-xs uppercase text-zinc-700 dark:text-zinc-300 py-3">
                                 จำนวนรับ
                             </TableHead>
+                            {isShowPutawayQty && (
+                                <TableHead className="w-[130px] text-right font-bold text-xs uppercase text-emerald-700 dark:text-emerald-400 py-3">
+                                    จำนวนที่รับเข้า
+                                </TableHead>
+                            )}
                             <TableHead className="w-[90px] text-center font-bold text-xs uppercase text-zinc-700 dark:text-zinc-300 py-3">
                                 หน่วยนับ
                             </TableHead>
@@ -336,9 +412,9 @@ export function MasterItemTable({
                                     </TableHead>
                                 </>
                             )}
-                            <TableHead className="min-w-[140px] text-left font-bold text-xs uppercase text-zinc-700 dark:text-zinc-300 py-3">
+                            {/* <TableHead className="min-w-[140px] text-left font-bold text-xs uppercase text-zinc-700 dark:text-zinc-300 py-3">
                                 หมายเหตุ
-                            </TableHead>
+                            </TableHead> */}
                             {!readOnly && (
                                 <TableHead className="w-[70px] text-center font-bold text-xs uppercase text-zinc-700 dark:text-zinc-300 py-3">
                                     จัดการ
@@ -354,6 +430,7 @@ export function MasterItemTable({
                                     colSpan={
                                         5 +
                                         (showLotSerial ? 2 : 0) +
+                                        (isShowPutawayQty ? 1 : 0) +
                                         (showLocation ? 1 : 0) +
                                         (showPrice ? 2 : 0) +
                                         (!readOnly ? 1 : 0)
@@ -472,6 +549,31 @@ export function MasterItemTable({
                                         )}
                                     </TableCell>
 
+                                    {/* จำนวนที่รับเข้า (Putaway Qty) */}
+                                    {isShowPutawayQty && (
+                                        <TableCell className="text-right py-2.5">
+                                            {readOnly ? (
+                                                <span className="font-bold font-mono text-xs text-emerald-600 dark:text-emerald-400">
+                                                    {(row.putawayQty ?? 0).toLocaleString()}
+                                                </span>
+                                            ) : (
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    value={row.putawayQty ?? 0}
+                                                    onChange={(e) =>
+                                                        handleUpdateRow(
+                                                            row.id,
+                                                            'putawayQty',
+                                                            Math.max(0, Number(e.target.value) || 0)
+                                                        )
+                                                    }
+                                                    className="w-20 h-8 px-2 text-right text-xs font-bold font-mono rounded-md border border-emerald-200 dark:border-emerald-700 bg-emerald-50/40 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                                />
+                                            )}
+                                        </TableCell>
+                                    )}
+
                                     {/* หน่วยนับ */}
                                     <TableCell className="text-center py-2.5">
                                         <span className="inline-block px-2 py-0.5 rounded text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
@@ -491,11 +593,15 @@ export function MasterItemTable({
                                                     value={row.locationId ? String(row.locationId) : ''}
                                                     onChange={(e) => {
                                                         const locId = e.target.value;
-                                                        const loc = locationList.find(
+                                                        const loc = filteredLocations.find(
+                                                            (l) => String(l.id) === locId
+                                                        ) || locationList.find(
                                                             (l) => String(l.id) === locId
                                                         );
-                                                        handleUpdateRow(row.id, 'locationId', locId);
-                                                        handleUpdateRow(row.id, 'locationName', loc?.name || '');
+                                                        handleUpdateRow(row.id, {
+                                                            locationId: locId,
+                                                            locationName: loc?.name || loc?.code || '',
+                                                        });
                                                     }}
                                                     className="w-full h-8 px-2 text-xs rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                                 >
@@ -515,7 +621,7 @@ export function MasterItemTable({
                                         <TableCell className="text-right py-2.5">
                                             {readOnly ? (
                                                 <span className="font-mono text-xs text-zinc-700 dark:text-zinc-300">
-                                                    {(row.unitPrice || 0).toLocaleString(undefined, {
+                                                    {(row.itemPrice || 0).toLocaleString(undefined, {
                                                         minimumFractionDigits: 2,
                                                     })}
                                                 </span>
@@ -524,11 +630,11 @@ export function MasterItemTable({
                                                     type="number"
                                                     min={0}
                                                     step="0.01"
-                                                    value={row.unitPrice ?? 0}
+                                                    value={row.itemPrice ?? 0}
                                                     onChange={(e) =>
                                                         handleUpdateRow(
                                                             row.id,
-                                                            'unitPrice',
+                                                            'itemPrice',
                                                             Math.max(0, Number(e.target.value) || 0)
                                                         )
                                                     }
@@ -541,7 +647,7 @@ export function MasterItemTable({
                                     {/* รวมเงิน */}
                                     {showPrice && (
                                         <TableCell className="text-right py-2.5 font-bold font-mono text-xs text-zinc-900 dark:text-zinc-100">
-                                            {(row.totalPrice || (row.itemQty * (row.unitPrice || 0))).toLocaleString(
+                                            {(row.totalPrice || (row.itemQty * (row.itemPrice || 0))).toLocaleString(
                                                 undefined,
                                                 { minimumFractionDigits: 2 }
                                             )}
@@ -549,7 +655,7 @@ export function MasterItemTable({
                                     )}
 
                                     {/* หมายเหตุ */}
-                                    <TableCell className="py-2.5">
+                                    {/* <TableCell className="py-2.5">
                                         {readOnly ? (
                                             <span className="text-xs text-zinc-500">{row.remark || '-'}</span>
                                         ) : (
@@ -561,7 +667,7 @@ export function MasterItemTable({
                                                 className="w-full h-8 px-2 text-xs rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                             />
                                         )}
-                                    </TableCell>
+                                    </TableCell> */}
 
                                     {/* จัดการ (ลบแถว) */}
                                     {!readOnly && (
@@ -597,6 +703,15 @@ export function MasterItemTable({
                             </strong>{' '}
                             ชิ้น
                         </span>
+                        {isShowPutawayQty && (
+                            <span>
+                                จำนวนที่รับเข้ารวม{' '}
+                                <strong className="text-emerald-600 dark:text-emerald-400 font-mono text-sm">
+                                    {totalPutawayQty.toLocaleString()}
+                                </strong>{' '}
+                                ชิ้น
+                            </span>
+                        )}
                     </div>
 
                     {showPrice && (
@@ -647,7 +762,11 @@ export function MasterItemTable({
                                                 }
                                                 onChange={(e) => {
                                                     if (e.target.checked) {
-                                                        setSelectedItemIds(filteredMasterItems.map((i) => i.id));
+                                                        setSelectedItemIds(
+                                                            filteredMasterItems
+                                                                .map((i) => i.id)
+                                                                .filter((id): id is string | number => id !== undefined)
+                                                        );
                                                     } else {
                                                         setSelectedItemIds([]);
                                                     }
@@ -677,21 +796,23 @@ export function MasterItemTable({
                                         </TableRow>
                                     ) : (
                                         filteredMasterItems.map((item) => {
-                                            const isSelected = selectedItemIds.includes(item.id);
-                                            const isAlreadyAdded = items.some((it) => it.itemId === item.id);
+                                            const itemId = item.id;
+                                            if (itemId === undefined) return null;
+                                            const isSelected = selectedItemIds.includes(itemId);
+                                            const isAlreadyAdded = items.some((it) => it.itemId === itemId);
 
                                             return (
                                                 <TableRow
-                                                    key={item.id}
+                                                    key={itemId}
                                                     className={`hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/60 dark:bg-blue-950/30' : ''
                                                         }`}
                                                     onClick={() => {
                                                         if (isSelected) {
                                                             setSelectedItemIds((prev) =>
-                                                                prev.filter((id) => id !== item.id)
+                                                                prev.filter((id) => id !== itemId)
                                                             );
                                                         } else {
-                                                            setSelectedItemIds((prev) => [...prev, item.id]);
+                                                            setSelectedItemIds((prev) => [...prev, itemId]);
                                                         }
                                                     }}
                                                 >
@@ -704,10 +825,10 @@ export function MasterItemTable({
                                                             checked={isSelected}
                                                             onChange={(e) => {
                                                                 if (e.target.checked) {
-                                                                    setSelectedItemIds((prev) => [...prev, item.id]);
+                                                                    setSelectedItemIds((prev) => [...prev, itemId]);
                                                                 } else {
                                                                     setSelectedItemIds((prev) =>
-                                                                        prev.filter((id) => id !== item.id)
+                                                                        prev.filter((id) => id !== itemId)
                                                                     );
                                                                 }
                                                             }}

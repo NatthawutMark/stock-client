@@ -176,6 +176,7 @@ export default function MasterDocTypePage() {
         if (confirmResult.isConfirmed) {
             try {
                 const targetId = docType.id;
+                if (targetId === undefined) return;
                 const res = await masterService.docTypes.remove(targetId);
 
                 if (res.success) {

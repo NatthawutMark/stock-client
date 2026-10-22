@@ -118,6 +118,7 @@ export default function VendorsPage() {
         if (confirmResult.isConfirmed) {
             try {
                 const targetId = v.id;
+                if (targetId === undefined) return;
                 const res = await masterService.vendors.remove(targetId);
 
                 if (res.success) {

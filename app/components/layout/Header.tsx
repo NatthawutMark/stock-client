@@ -29,11 +29,12 @@ export function Header() {
         >
             {/* Breadcrumb */}
             <div>
-                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                {/* <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                     {t.auth.systemName}
-                </p>
+                </p> */}
                 <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    {breadcrumb || t.nav.dashboard}
+                    {/* {breadcrumb || t.nav.dashboard} */}
+                    {t.auth.systemName}
                 </p>
             </div>
 

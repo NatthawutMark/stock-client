@@ -1,5 +1,5 @@
 import type {
-    MastItem, MastBrand, MastWarehouse, MastLocation, MastUom, MastVendor, MastCustomer,
+    MastItem, MastBrand, MastWarehouse, MastLocation, MastLocationParams, MastUom, MastVendor, MastCustomer,
     MastEmployee, MastDocType, MastTransType,
     PaginationParams, ApiResponse,
 } from '@/lib/types';
@@ -65,9 +65,11 @@ export const masterService = {
 
     // ─── Locations ───────────────────────────────────────────────
     locations: {
-        list: (p?: PaginationParams) => {
+        list: (p?: MastLocationParams) => {
             return apiClient.post<MasterResult<MastLocation[]>>('/api/MastLocation/list', {
-                code: p?.search || '',
+                code: p?.code || p?.search || '',
+                warehouseId: p?.warehouseId || '',
+                WarehouseId: p?.warehouseId || '',
             });
         },
         getByName: (name: string) =>

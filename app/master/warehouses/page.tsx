@@ -115,6 +115,7 @@ export default function WarehousesPage() {
         if (confirmResult.isConfirmed) {
             try {
                 const targetId = wh.id;
+                if (targetId === undefined) return;
                 const res = await masterService.warehouses.remove(targetId);
 
                 if (res.success) {

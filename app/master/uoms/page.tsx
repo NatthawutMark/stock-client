@@ -112,6 +112,7 @@ export default function UomsPage() {
         if (confirmResult.isConfirmed) {
             try {
                 const targetId = uom.id;
+                if (targetId === undefined) return;
                 const res = await masterService.uoms.remove(targetId);
 
                 if (res.success) {

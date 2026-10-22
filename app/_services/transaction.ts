@@ -1,10 +1,14 @@
 import type {
     DocReceive, DocReceiveDetail, DocIssue, DocIssueDetail,
     DocTransfer, DocRequest, DocDisposal, PaginationParams,
+    DocTrans,
 } from '@/lib/types';
 import { apiClient } from '@/lib/api/client';
 
 export const transactionService = {
+    docTrans: {
+        list: (data?: DocTrans) => apiClient.post<DocTrans[]>('/api/doctrans/list', data),
+    },
     receive: {
         list: (p?: PaginationParams & { docNo?: string; docDate?: string; menuId?: number | string }) => {
             const q = new URLSearchParams();
@@ -14,25 +18,36 @@ export const transactionService = {
             if (p?.menuId) q.set('menuId', String(p.menuId));
             return apiClient.get<DocReceive[]>(`/api/transactions/receive?${q}`);
         },
-        get: (id: number) => apiClient.get<DocReceive & { details: DocReceiveDetail[] }>(`/api/transactions/receive/${id}`),
+        listItem: (data?: DocReceiveDetail) => apiClient.post('api/docreceive/list', data),
+        get: (id: string | number) =>
+            apiClient.get<DocReceive & { details: DocReceiveDetail[] }>(`/api/docreceive/${id}`),
         create: (data: unknown) =>
-            apiClient.post<DocReceive>('/api/doctrans/create', data),
-        update: (id: number, data: unknown) =>
-            apiClient.put<DocReceive>(`/api/transactions/receive/${id}`, data),
-        approve: (id: number) =>
-            apiClient.post<DocReceive>(`/api/transactions/receive/${id}/approve`, {}),
+            apiClient.post<unknown>('/api/doctrans/create', data),
+        update: (id: string, data: unknown) =>
+            apiClient.put<DocReceive>(`/api/docreceive/${id}`, data),
+        confirm: (id: string) =>
+            apiClient.post<DocReceive>(`/api/docreceive/${id}/confirm`),
+        putaway: (id: string) =>
+            apiClient.post<DocReceive>(`/api/docreceive/${id}/putaway`),
     },
     issue: {
-        list: (p?: PaginationParams) => {
+        list: (p?: PaginationParams & { docNo?: string; docDate?: string; menuId?: number | string }) => {
             const q = new URLSearchParams();
             if (p?.search) q.set('search', p.search);
+            if (p?.docNo) q.set('docNo', p.docNo);
+            if (p?.docDate) q.set('docDate', p.docDate);
+            if (p?.menuId) q.set('menuId', String(p.menuId));
             return apiClient.get<DocIssue[]>(`/api/transactions/issue?${q}`);
         },
-        get: (id: number) => apiClient.get<DocIssue & { details: DocIssueDetail[] }>(`/api/transactions/issue/${id}`),
-        create: (data: Omit<DocIssue, 'id' | 'createDate' | 'updateDate'> & { details: Omit<DocIssueDetail, 'id' | 'docId' | 'createDate' | 'updateDate'>[] }) =>
-            apiClient.post<DocIssue>('/api/transactions/issue', data),
-        update: (id: number, data: Partial<DocIssue>) =>
-            apiClient.put<DocIssue>(`/api/transactions/issue/${id}`, data),
+        listItem: (data?: Partial<DocIssueDetail>) => apiClient.post('/api/docissue/list', data),
+        get: (id: string | number) =>
+            apiClient.get<DocIssue & { details: DocIssueDetail[] }>(`/api/docissue/${id}`),
+        create: (data: unknown) =>
+            apiClient.post<unknown>('/api/doctrans/create', data),
+        update: (id: string | number, data: unknown) =>
+            apiClient.put<DocIssue>(`/api/docissue/${id}`, data),
+        confirm: (id: string | number) =>
+            apiClient.post<DocIssue>(`/api/docissue/${id}/confirm`),
     },
     transfer: {
         list: (p?: PaginationParams) => {

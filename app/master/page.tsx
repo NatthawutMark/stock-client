@@ -114,6 +114,7 @@ export default function MasterItemPage() {
 
         if (confirmResult.isConfirmed) {
             try {
+                if (item.id === undefined) return;
                 const res = await masterService.items.remove(item.id);
 
                 if (res.success) {

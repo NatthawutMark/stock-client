@@ -16,6 +16,7 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import SwapHorizOutlinedIcon from '@mui/icons-material/SwapHorizOutlined';
 import LocationPinIcon from '@mui/icons-material/LocationPin';
 import StorageIcon from '@mui/icons-material/Storage';
+import NoteAltIcon from '@mui/icons-material/NoteAlt';
 
 // ตารางจับคู่ชื่อ Icon string กับ React Component
 export const iconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -100,6 +101,8 @@ export const iconMap: Record<string, React.ComponentType<{ className?: string; s
     TransferIcon: SwapHorizOutlinedIcon,
     Transfer: SwapHorizOutlinedIcon,
     SwapHorizOutlinedIcon,
+
+    NoteAltIcon: NoteAltIcon
 };
 
 /**

@@ -116,6 +116,7 @@ export default function BrandsPage() {
         if (confirmResult.isConfirmed) {
             try {
                 const targetId = brand.id;
+                if (targetId === undefined) return;
                 const res = await masterService.brands.remove(targetId);
 
                 if (res.success) {

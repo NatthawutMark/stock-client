@@ -77,7 +77,7 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
                     if (data.length > 0) {
                         setTransTypeList(
                             data.map((item: MastTransType) => {
-                                const id = item.menuId ?? item.transTypeId ?? item.id;
+                                const id = item.menuId ?? item.transTypeId ?? item.id ?? '';
                                 const name =
                                     item.menuName ??
                                     (item.nameTh && item.nameEn

@@ -40,11 +40,11 @@ export const warehouses: MastWarehouse[] = [
 ];
 
 export const locations: MastLocation[] = [
-  { id: 1, code: 'A-01-01', name: 'ชั้น A แถว 01 ช่อง 01', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
-  { id: 2, code: 'A-01-02', name: 'ชั้น A แถว 01 ช่อง 02', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
-  { id: 3, code: 'B-01-01', name: 'ชั้น B แถว 01 ช่อง 01', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
-  { id: 4, code: 'B-02-01', name: 'ชั้น B แถว 02 ช่อง 01', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
-  { id: 5, code: 'C-01-01', name: 'ชั้น C แถว 01 ช่อง 01', isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 1, code: 'A-01-01', name: 'ชั้น A แถว 01 ช่อง 01', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 2, code: 'A-01-02', name: 'ชั้น A แถว 01 ช่อง 02', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 3, code: 'B-01-01', name: 'ชั้น B แถว 01 ช่อง 01', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 4, code: 'B-02-01', name: 'ชั้น B แถว 02 ช่อง 01', warehouseId: 2, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 5, code: 'C-01-01', name: 'ชั้น C แถว 01 ช่อง 01', warehouseId: 2, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
 ];
 
 export const vendors: MastVendor[] = [
@@ -115,23 +115,23 @@ export const reasons: MastReason[] = [
 // ─── Transactions ─────────────────────────────────────────────
 
 export const docReceives: DocReceive[] = [
-  { id: 1, docNo: 'GR2024001', docDate: '2024-01-10', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 3, docStatus: 'Completed', warehouseId: 1, warehouseName: 'คลังสินค้าหลัก (WH-MAIN)', vendorId: 1, vendorName: 'บริษัท ทีพี ซัพพลาย จำกัด', remark: 'รับสินค้าตาม PO-2024-001 ครบถ้วน', isActive: true, isDelete: false, createDate: '2024-01-10T10:00:00Z', createBy: by, updateDate: '2024-01-10T14:00:00Z', updateBy: by },
-  { id: 2, docNo: 'GR2024002', docDate: '2024-01-15', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 2, docStatus: 'Pending', warehouseId: 1, warehouseName: 'คลังสินค้าหลัก (WH-MAIN)', vendorId: 2, vendorName: 'บริษัท แอดวานซ์ ไอที จำกัด', remark: 'รอตรวจนับสินค้าจากฝ่าย QC', isActive: true, isDelete: false, createDate: '2024-01-15T09:00:00Z', createBy: by, updateDate: '2024-01-15T09:00:00Z', updateBy: by },
-  { id: 3, docNo: 'GR2024003', docDate: '2024-01-20', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 1, docStatus: 'Draft', warehouseId: 2, warehouseName: 'คลังสินค้าสาขา 1 (WH-BKK1)', vendorId: 1, vendorName: 'บริษัท ทีพี ซัพพลาย จำกัด', remark: 'บันทึกฉบับร่าง', isActive: true, isDelete: false, createDate: '2024-01-20T11:00:00Z', createBy: by, updateDate: '2024-01-20T11:00:00Z', updateBy: by },
-  { id: 4, docNo: 'GR2024004', docDate: '2024-02-01', menuId: 1, menuName: 'Receive', docTypeId: 2, statusId: 3, docStatus: 'Completed', warehouseId: 1, warehouseName: 'คลังสินค้าหลัก (WH-MAIN)', vendorId: 3, vendorName: 'บริษัท สยามโลจิสติกส์ จำกัด', remark: 'รับสินค้าคืนจากลูกค้า', isActive: true, isDelete: false, createDate: '2024-02-01T08:30:00Z', createBy: by, updateDate: '2024-02-01T10:00:00Z', updateBy: by },
-  { id: 5, docNo: 'GR2024005', docDate: '2024-02-10', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 2, docStatus: 'Pending', warehouseId: 3, warehouseName: 'คลังสินค้าสาขา 2 (WH-CNX)', vendorId: 2, vendorName: 'บริษัท แอดวานซ์ ไอที จำกัด', remark: 'สินค้าส่งถึงคลัง รอขนถ่าย', isActive: true, isDelete: false, createDate: '2024-02-10T14:15:00Z', createBy: by, updateDate: '2024-02-10T14:15:00Z', updateBy: by },
-  { id: 6, docNo: 'GR2024006', docDate: '2024-02-15', menuId: 2, menuName: 'Issue', docTypeId: 1, statusId: 1, docStatus: 'Draft', warehouseId: 2, warehouseName: 'คลังสินค้าสาขา 1 (WH-BKK1)', vendorId: 1, vendorName: 'บริษัท ทีพี ซัพพลาย จำกัด', remark: 'เตรียมเอกสารตรวจรับ', isActive: true, isDelete: false, createDate: '2024-02-15T16:00:00Z', createBy: by, updateDate: '2024-02-15T16:00:00Z', updateBy: by },
+  { id: 1, docNo: 'GR2024001', docDate: '2024-01-10', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 3, statusCode: 'Completed', warehouseId: 1, warehouseName: 'คลังสินค้าหลัก (WH-MAIN)', vendId: 1, vendName: 'บริษัท ทีพี ซัพพลาย จำกัด', remark: 'รับสินค้าตาม PO-2024-001 ครบถ้วน', isActive: true, isDelete: false, createDate: '2024-01-10T10:00:00Z', createBy: by, updateDate: '2024-01-10T14:00:00Z', updateBy: by },
+  { id: 2, docNo: 'GR2024002', docDate: '2024-01-15', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 2, statusCode: 'Pending', warehouseId: 1, warehouseName: 'คลังสินค้าหลัก (WH-MAIN)', vendId: 2, vendName: 'บริษัท แอดวานซ์ ไอที จำกัด', remark: 'รอตรวจนับสินค้าจากฝ่าย QC', isActive: true, isDelete: false, createDate: '2024-01-15T09:00:00Z', createBy: by, updateDate: '2024-01-15T09:00:00Z', updateBy: by },
+  { id: 3, docNo: 'GR2024003', docDate: '2024-01-20', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 1, statusCode: 'Draft', warehouseId: 2, warehouseName: 'คลังสินค้าสาขา 1 (WH-BKK1)', vendId: 1, vendName: 'บริษัท ทีพี ซัพพลาย จำกัด', remark: 'บันทึกฉบับร่าง', isActive: true, isDelete: false, createDate: '2024-01-20T11:00:00Z', createBy: by, updateDate: '2024-01-20T11:00:00Z', updateBy: by },
+  { id: 4, docNo: 'GR2024004', docDate: '2024-02-01', menuId: 1, menuName: 'Receive', docTypeId: 2, statusId: 3, statusCode: 'Completed', warehouseId: 1, warehouseName: 'คลังสินค้าหลัก (WH-MAIN)', vendId: 3, vendName: 'บริษัท สยามโลจิสติกส์ จำกัด', remark: 'รับสินค้าคืนจากลูกค้า', isActive: true, isDelete: false, createDate: '2024-02-01T08:30:00Z', createBy: by, updateDate: '2024-02-01T10:00:00Z', updateBy: by },
+  { id: 5, docNo: 'GR2024005', docDate: '2024-02-10', menuId: 1, menuName: 'Receive', docTypeId: 1, statusId: 2, statusCode: 'Pending', warehouseId: 3, warehouseName: 'คลังสินค้าสาขา 2 (WH-CNX)', vendId: 2, vendName: 'บริษัท แอดวานซ์ ไอที จำกัด', remark: 'สินค้าส่งถึงคลัง รอขนถ่าย', isActive: true, isDelete: false, createDate: '2024-02-10T14:15:00Z', createBy: by, updateDate: '2024-02-10T14:15:00Z', updateBy: by },
+  { id: 6, docNo: 'GR2024006', docDate: '2024-02-15', menuId: 2, menuName: 'Issue', docTypeId: 1, statusId: 1, statusCode: 'Draft', warehouseId: 2, warehouseName: 'คลังสินค้าสาขา 1 (WH-BKK1)', vendId: 1, vendName: 'บริษัท ทีพี ซัพพลาย จำกัด', remark: 'เตรียมเอกสารตรวจรับ', isActive: true, isDelete: false, createDate: '2024-02-15T16:00:00Z', createBy: by, updateDate: '2024-02-15T16:00:00Z', updateBy: by },
 ];
 
 export const docReceiveDetails: DocReceiveDetail[] = [
-  { id: 1, docId: 1, itemId: 1, itemName: 'โน๊ตบุ๊ค Dell Inspiron 15', uomId: 1, itemQty: 10, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
-  { id: 2, docId: 1, itemId: 4, itemName: 'เมาส์ไร้สาย HP', uomId: 1, itemQty: 20, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
-  { id: 3, docId: 2, itemId: 2, itemName: 'iPhone 15 Pro 256GB', uomId: 1, itemQty: 5, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: '1', docId: '1', itemId: '1', itemName: 'โน๊ตบุ๊ค Dell Inspiron 15', uomId: '1', itemQty: 10, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: '2', docId: '1', itemId: '4', itemName: 'เมาส์ไร้สาย HP', uomId: '1', itemQty: 20, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: '3', docId: '2', itemId: '2', itemName: 'iPhone 15 Pro 256GB', uomId: '1', itemQty: 5, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
 ];
 
 export const docIssues: DocIssue[] = [
-  { id: 1, docNo: 'GI2024001', docTypeId: 3, statusId: 6, warehouseId: 1, customerId: 1, isActive: true, isDelete: false, createDate: '2024-01-12T10:00:00Z', createBy: by, updateDate: '2024-01-12T16:00:00Z', updateBy: by },
-  { id: 2, docNo: 'GI2024002', docTypeId: 3, statusId: 5, warehouseId: 1, customerId: 2, isActive: true, isDelete: false, createDate: '2024-01-18T09:00:00Z', createBy: by, updateDate: '2024-01-18T09:00:00Z', updateBy: by },
+  { id: 1, docNo: 'GI2024001', docTypeId: 3, statusId: 6, warehouseId: 1, custId: 1, custName: 'บริษัท สยามพารากอน รีเทล จำกัด', isActive: true, isDelete: false, createDate: '2024-01-12T10:00:00Z', createBy: by, updateDate: '2024-01-12T16:00:00Z', updateBy: by },
+  { id: 2, docNo: 'GI2024002', docTypeId: 3, statusId: 5, warehouseId: 1, custId: 2, custName: 'บริษัท เซ็นทรัลพัฒนา จำกัด (มหาชน)', isActive: true, isDelete: false, createDate: '2024-01-18T09:00:00Z', createBy: by, updateDate: '2024-01-18T09:00:00Z', updateBy: by },
 ];
 
 export const docIssueDetails: DocIssueDetail[] = [
@@ -162,8 +162,16 @@ export const inventories: Inventory[] = [
   { id: 4, itemId: 3, lotNo: '', serialNo: 'SN-SAM-001', itemQty: 3, itemPrice: 28000, locationId: 2, mfgDate: '2023-08-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
   { id: 5, itemId: 4, lotNo: '', serialNo: '', itemQty: 3, itemPrice: 350, locationId: 3, mfgDate: '2023-01-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
   { id: 6, itemId: 5, lotNo: '', serialNo: '', itemQty: 12, itemPrice: 450, locationId: 3, mfgDate: '2023-01-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
-  { id: 7, itemId: 6, lotNo: '', serialNo: 'SN-MON-001', itemQty: 6, itemPrice: 4500, locationId: 4, mfgDate: '2023-05-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
-  { id: 8, itemId: 7, lotNo: 'LOT2024001', serialNo: '', itemQty: 50, itemPrice: 1800, locationId: 5, mfgDate: '2024-01-01', expireDate: '2026-01-01', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 7, itemId: 6, lotNo: '', serialNo: 'SN-MON-001', itemQty: 6, itemPrice: 4500, locationId: 4, mfgDate: '2023-05-01', expireDate: '', warehouseId: 2, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 8, itemId: 7, lotNo: 'LOT2024001', serialNo: '', itemQty: 50, itemPrice: 1800, locationId: 5, mfgDate: '2024-01-01', expireDate: '2026-01-01', warehouseId: 2, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 9, itemId: 2, lotNo: '', serialNo: 'SN-IPH-002', itemQty: 1, itemPrice: 35000, locationId: 4, mfgDate: '2023-10-01', expireDate: '', warehouseId: 2, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 10, itemId: 3, lotNo: '', serialNo: 'SN-SAM-002', itemQty: 0, itemPrice: 28000, locationId: 5, mfgDate: '2023-09-01', expireDate: '', warehouseId: 2, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 11, itemId: 4, lotNo: 'LOT2024002', serialNo: '', itemQty: 25, itemPrice: 350, locationId: 1, mfgDate: '2024-02-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 12, itemId: 5, lotNo: 'LOT2024003', serialNo: '', itemQty: 4, itemPrice: 450, locationId: 2, mfgDate: '2024-02-15', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 13, itemId: 6, lotNo: '', serialNo: 'SN-MON-002', itemQty: 2, itemPrice: 4500, locationId: 3, mfgDate: '2023-07-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 14, itemId: 7, lotNo: 'LOT2024004', serialNo: '', itemQty: 100, itemPrice: 1800, locationId: 5, mfgDate: '2024-03-01', expireDate: '2026-03-01', warehouseId: 2, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 15, itemId: 1, lotNo: '', serialNo: 'SN-DELL-003', itemQty: 0, itemPrice: 18000, locationId: 4, mfgDate: '2023-06-01', expireDate: '', warehouseId: 2, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
+  { id: 16, itemId: 2, lotNo: '', serialNo: 'SN-IPH-003', itemQty: 4, itemPrice: 35000, locationId: 1, mfgDate: '2023-11-01', expireDate: '', warehouseId: 1, isActive: true, isDelete: false, createDate: now, createBy: by, updateDate: now, updateBy: by },
 ];
 
 export const inventoryDamages: InventoryDamage[] = [

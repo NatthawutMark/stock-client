@@ -1,29 +1,90 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/app/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { transactionService } from '@/app/_services/transaction';
-import { SystemMenuService } from '@/app/_services/systemMenu';
-import { docReceives, docReceiveDetails } from '@/lib/mock/data';
-import type { DocReceive, MastTransType } from '@/lib/types';
+import { masterService } from '@/app/_services/master';
+import { ServiceSystem } from '@/app/_services/ServiceSystem';
+import { docReceives } from '@/lib/mock/data';
+import type {
+    DocReceive, DocTrans, DocReceiveDetail,
+    MastVendor, MastEmployee, MastDocType,
+} from '@/lib/types';
 import {
-    Button, Table, TableHeader, TableHead, TableBody, TableRow, TableCell, Card, CardContent, Label, TablePagination, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DatePicker,
+    Button, Table, TableHeader, TableHead, TableBody, TableRow, TableCell,
+    Card, CardContent, Label, TablePagination,
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+    DatePicker, SearchableSelect, SearchableSelectOption,
+    renderStatusBadge,
 } from '@/components/ui';
-
 import {
-    Search, RotateCcw, Plus, Eye, Layers, Calendar, FileText, Clock, CheckCircle2, AlertCircle, Building2, Truck, Pencil,
+    Search, RotateCcw, Plus, Eye, Layers, Calendar, FileText, Building2, Truck, Pencil,
 } from 'lucide-react';
 
-// Helper เพื่อดึงค่าฟิลด์แบบ non-case-sensitive และรองรับทั้ง camelCase, PascalCase, snake_case
-function getField<T = unknown>(item: Record<string, unknown>, ...keys: string[]): T | undefined {
+// ─────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────
+const MENU_ID = '00E03A994280450ABF7E2EE62A7AD4D6';
+
+/** สถานะที่ไม่อนุญาตให้แก้ไขเอกสาร */
+const LOCKED_STATUSES = ['CANCEL', 'CONFIRM', 'COMPLETED', 'PARTIAL_PUTAWAY'];
+
+const STATUS_OPTIONS: SearchableSelectOption[] = [
+    { value: 'DRAFT', label: 'Draft (ร่าง)' },
+    { value: 'SAVE', label: 'Save (บันทึก)' },
+    { value: 'PENDING', label: 'Pending (รอดำเนินการ)' },
+    { value: 'COMPLETED', label: 'Completed (รับแล้ว)' },
+    { value: 'CANCELLED', label: 'Cancelled (ยกเลิก)' },
+];
+
+const COLUMNS = [
+    { colName: 'เลขที่เอกสาร', key: 'docno', width: 140 },
+    { colName: 'ประเภทเอกสาร', key: 'docType', width: 140 },
+    { colName: 'วันที่เอกสาร', key: 'docDate', width: 140 },
+    { colName: 'เลขที่อ้างอิง', key: 'refDoc', width: 140 },
+    { colName: 'พนักงาน', key: 'employee', width: 140 },
+    { colName: 'ผู้จัดจำหน่าย', key: 'vendor', width: 140 },
+    { colName: 'คลังสินค้า', key: 'warehouse', width: 240 },
+    { colName: 'สถานะ', key: 'status', width: 140 },
+    { colName: 'หมายเหตุ', key: 'remark', width: 240 },
+    { colName: 'Action', key: 'action', width: 140 },
+];
+
+const TOTAL_KEYS = ['total', 'totalCount', 'totalRecords', 'total_count', 'total_records', 'count', 'recordsTotal'];
+
+const INPUT_CLASS =
+    'w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 shadow-sm';
+
+interface ReceiveFilters {
+    docNo: string;
+    employeeId: string;
+    vendorId: string;
+    docDate: string;
+    docTypeId: string;
+    statusCode: string;
+}
+
+const initialFilters: ReceiveFilters = {
+    docNo: '',
+    employeeId: '',
+    vendorId: '',
+    docDate: '',
+    docTypeId: '',
+    statusCode: '',
+};
+
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+
+/** ดึงค่าฟิลด์ตามลำดับ key ที่ระบุ (fallback แบบ case-insensitive) */
+function getField<T = unknown>(item: Record<string, unknown> | undefined, ...keys: string[]): T | undefined {
+    if (!item) return undefined;
     for (const key of keys) {
-        if (item[key] !== undefined && item[key] !== null) {
-            return item[key] as T;
-        }
+        if (item[key] !== undefined && item[key] !== null) return item[key] as T;
     }
-    // ค้นหาแบบไม่สนตัวพิมพ์เล็ก-ใหญ่ (case-insensitive fallback)
     const itemKeys = Object.keys(item);
     for (const key of keys) {
         const foundKey = itemKeys.find((k) => k.toLowerCase() === key.toLowerCase());
@@ -34,213 +95,275 @@ function getField<T = unknown>(item: Record<string, unknown>, ...keys: string[])
     return undefined;
 }
 
+interface ListResponse {
+    success?: boolean;
+    results?: unknown;
+    data?: unknown;
+}
+
+/** ดึง array จาก response (รองรับ results[], data[] หรือ results.{items|data|list}) */
+function extractList<T>(res: ListResponse | null | undefined): T[] {
+    if (!res?.success) return [];
+    if (Array.isArray(res.results)) return res.results as T[];
+    if (Array.isArray(res.data)) return res.data as T[];
+    if (res.results && typeof res.results === 'object') {
+        const nested = res.results as Record<string, unknown>;
+        for (const key of ['items', 'data', 'list']) {
+            if (Array.isArray(nested[key])) return nested[key] as T[];
+        }
+    }
+    return [];
+}
+
+/** ดึงจำนวนทั้งหมดจาก response (ทั้งระดับบนและภายใน results object) */
+function extractTotal(res: ListResponse): number | undefined {
+    const nested = res.results && typeof res.results === 'object' && !Array.isArray(res.results)
+        ? (res.results as Record<string, unknown>)
+        : undefined;
+    const value =
+        getField(res as Record<string, unknown>, ...TOTAL_KEYS) ??
+        getField(nested, ...TOTAL_KEYS);
+    const num = Number(value);
+    return value !== undefined && !Number.isNaN(num) ? num : undefined;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Sub Components
+// ─────────────────────────────────────────────────────────────
+function FilterField({ id, label, subLabel, children }: {
+    id: string;
+    label: string;
+    subLabel: string;
+    children: ReactNode;
+}) {
+    return (
+        <div className="flex flex-col space-y-1.5">
+            <div className="flex items-center justify-between">
+                <Label htmlFor={id} className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                    {label}
+                </Label>
+                <span className="text-xs text-zinc-400">{subLabel}</span>
+            </div>
+            {children}
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Page
+// ─────────────────────────────────────────────────────────────
 export default function ReceivePage() {
     const router = useRouter();
     const { pageTitle } = useLayout();
 
-    // ─────────────────────────────────────────────────────────────
-    // Form Filter States (ตรงตามกล่องด้านบนของ Wireframe)
-    // ─────────────────────────────────────────────────────────────
-    const [docNoInput, setDocNoInput] = useState<string>('');
-    const [docDateInput, setDocDateInput] = useState<string>('');
-    const [menuSelect, setMenuSelect] = useState<string>('');
+    // Filter inputs (ยังไม่ apply จนกว่าจะกดค้นหา)
+    const [docNoInput, setDocNoInput] = useState('');
+    const [employeeIdInput, setEmployeeIdInput] = useState('');
+    const [vendorIdInput, setVendorIdInput] = useState('');
+    const [docDateInput, setDocDateInput] = useState('');
+    const [docTypeIdInput, setDocTypeIdInput] = useState('');
+    const [statusCodeInput, setStatusCodeInput] = useState('');
+    const [appliedFilters, setAppliedFilters] = useState<ReceiveFilters>(initialFilters);
 
-    // Menu Dropdown Options
-    const [menuOptions, setMenuOptions] = useState<{ id: string | number; name: string }[]>([]);
+    // Master dropdown data
+    const [vendorList, setVendorList] = useState<MastVendor[]>([]);
+    const [employeeList, setEmployeeList] = useState<MastEmployee[]>([]);
+    const [docTypeList, setDocTypeList] = useState<MastDocType[]>([]);
 
-    // Document Data State
+    // Document data
     const [docList, setDocList] = useState<DocReceive[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
+    const [docItemList, setDocItemList] = useState<DocReceiveDetail[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    // Pagination States
-    const [currentPage, setCurrentPage] = useState<number>(1);
-    const [pageSize, setPageSize] = useState<number>(10);
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [totalRecords, setTotalRecords] = useState(0);
 
-    // Detail Modal State
+    // Detail modal
     const [selectedDoc, setSelectedDoc] = useState<DocReceive | null>(null);
-    const [isDetailOpen, setIsDetailOpen] = useState<boolean>(false);
+    const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-    // ─────────────────────────────────────────────────────────────
-    // 1. โหลดข้อมูล Menu สำหรับ Dropdown
-    // ─────────────────────────────────────────────────────────────
+    // ─── 1. โหลด Master Dropdowns ───────────────────────────────
     useEffect(() => {
-        const fetchMenus = async () => {
+        const loadFilterMasters = async () => {
             try {
-                const res = await SystemMenuService.transactionList();
-                if (res && res.success) {
-                    const data = Array.isArray(res.results)
-                        ? res.results
-                        : Array.isArray(res.data)
-                            ? res.data
-                            : [];
-                    if (data.length > 0) {
-                        setMenuOptions(
-                            data.map((item: MastTransType) => {
-                                const id = item.id;
-                                const name =
-                                    item.menuName ??
-                                    (item.nameTh && item.nameEn
-                                        ? `${item.nameTh} (${item.nameEn})`
-                                        : item.nameTh || item.name || `Menu ${id}`);
-                                return { id: String(id), name };
-                            })
-                        );
-                        return;
-                    }
-                }
+                const [vendRes, empRes, dTypeRes] = await Promise.all([
+                    masterService.vendors.list(),
+                    masterService.employees.list(),
+                    masterService.docTypes.list({ menuId: MENU_ID }),
+                ]);
+                setVendorList(extractList<MastVendor>(vendRes));
+                setEmployeeList(extractList<MastEmployee>(empRes));
+                setDocTypeList(extractList<MastDocType>(dTypeRes));
             } catch (err) {
-                console.warn('SystemMenuService transactionList error, fallback to defaults:', err);
+                console.error('Failed to load filter masters:', err);
+                setVendorList([]);
+                setEmployeeList([]);
+                setDocTypeList([]);
             }
-
-            // Fallback options ถ้าเชื่อมต่อ service ไม่ได้
-            setMenuOptions([
-                { id: '1', name: '1 - Receive (รับสินค้าเข้า)' },
-                { id: '2', name: '2 - Issue (จ่ายสินค้า)' },
-                { id: '3', name: '3 - Transfer (โอนย้ายสินค้า)' },
-                { id: '4', name: '4 - Request (ขอเบิกสินค้า)' },
-                { id: '5', name: '5 - Disposal (ตัดจำหน่าย)' },
-            ]);
         };
-
-        fetchMenus();
+        loadFilterMasters();
     }, []);
 
+    // ─── 2. Dropdown Options ────────────────────────────────────
+    const employeeOptions = useMemo<SearchableSelectOption[]>(() =>
+        employeeList.map((e) => ({
+            value: String(e.id),
+            label: `${e.empCode ? `[${e.empCode}] ` : ''}${e.fName || ''} ${e.lName || ''}`.trim() || String(e.id),
+            subLabel: e.department || e.position
+                ? `${e.department || ''}${e.position ? ` (${e.position})` : ''}`
+                : (e.tel ? `โทร: ${e.tel}` : undefined),
+        })), [employeeList]);
 
+    const vendorOptions = useMemo<SearchableSelectOption[]>(() =>
+        vendorList.map((v) => ({
+            value: String(v.id),
+            label: `${v.vendCode ? `[${v.vendCode}] ` : ''}${v.vendName || ''}`.trim() || String(v.id),
+            subLabel: v.contactName
+                ? `ผู้ติดต่อ: ${v.contactName}${v.tel ? ` (${v.tel})` : ''}`
+                : (v.tel ? `โทร: ${v.tel}` : undefined),
+        })), [vendorList]);
 
-    // ─────────────────────────────────────────────────────────────
-    // 3. โหลดข้อมูลเอกสารรับเข้า (Fetch Documents)
-    // ─────────────────────────────────────────────────────────────
+    const docTypeOptions = useMemo<SearchableSelectOption[]>(() =>
+        docTypeList.map((dt) => ({
+            value: String(dt.id),
+            label: dt.docTypeName || dt.name || String(dt.id),
+        })), [docTypeList]);
+
+    // ─── 3. Mock Fallback (กรณี Backend ไม่พร้อม) ────────────────
+    const applyMockFallback = useCallback((filters: ReceiveFilters, page: number, size: number) => {
+        const docNo = filters.docNo.trim().toLowerCase();
+        const filtered = docReceives.filter((doc) => {
+            const rec = doc as unknown as Record<string, unknown>;
+            const str = (...keys: string[]) => String(getField(rec, ...keys) || '');
+
+            if (docNo && !str('docNo', 'doc_no').toLowerCase().includes(docNo)) return false;
+            if (filters.docDate && str('docDate', 'doc_date', 'createDate').slice(0, 10) !== filters.docDate) return false;
+            if (filters.employeeId && str('empId', 'employeeId', 'emp_id') !== filters.employeeId) return false;
+            if (filters.vendorId && str('vendId', 'vendorId', 'vend_id') !== filters.vendorId) return false;
+            if (filters.docTypeId && str('docTypeId', 'transTypeId', 'doc_type_id', 'menuId') !== filters.docTypeId) return false;
+            if (filters.statusCode && str('statusCode', 'status').toLowerCase() !== filters.statusCode.toLowerCase()) return false;
+            return true;
+        });
+
+        const start = (page - 1) * size;
+        setTotalRecords(filtered.length);
+        setDocList(filtered.slice(start, start + size));
+    }, []);
+
+    // ─── 4. โหลดเอกสาร (Server Pagination) ──────────────────────
     const fetchDocuments = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await transactionService.receive.list({
-                docNo: docNoInput || undefined,
-                docDate: docDateInput || undefined,
-                menuId: menuSelect || undefined,
-            });
+            const payload: DocTrans & { pageSize?: number; pageNumber?: number } = {
+                docNo: appliedFilters.docNo.trim() || undefined,
+                docDate: appliedFilters.docDate || undefined,
+                employeeId: appliedFilters.employeeId || undefined,
+                empId: appliedFilters.employeeId || undefined,
+                vendId: appliedFilters.vendorId || undefined,
+                vendorId: appliedFilters.vendorId || undefined,
+                docTypeId: appliedFilters.docTypeId || undefined,
+                statusCode: appliedFilters.statusCode || undefined,
+                menuId: MENU_ID,
+                page: currentPage,
+                pageNumber: currentPage,
+                size: pageSize,
+                pageSize,
+                limit: pageSize,
+            };
 
-            if (res && res.success && Array.isArray(res.results) && res.results.length > 0) {
-                setDocList(res.results);
+            const res = await transactionService.docTrans.list(payload);
+            if (!res?.success) {
+                applyMockFallback(appliedFilters, currentPage, pageSize);
+                return;
+            }
+
+            const data = extractList<DocReceive>(res);
+            console.log('load data', data);
+
+            // Backend ส่งมาทั้งหมด → ตัดหน้าเอง (Client Pagination)
+            // if (data.length > pageSize) {
+            //     const start = (currentPage - 1) * pageSize;
+            //     setTotalRecords(data.length);
+            //     setDocList(data.slice(start, start + pageSize));
+            //     return;
+            // }
+
+            // Backend ตัดหน้ามาแล้ว (Server Pagination)
+            setDocList(data);
+            const total = extractTotal(res);
+            if (total !== undefined) {
+                setTotalRecords(total);
             } else {
-                // Fallback mock data ถ้า backend ยังไม่มีข้อมูล หรือ offline
-                setDocList(docReceives);
+                // ไม่มี total: ถ้าได้เต็ม pageSize ถือว่ายังมีหน้าถัดไป
+                setTotalRecords(data.length === pageSize
+                    ? currentPage * pageSize + 1
+                    : (currentPage - 1) * pageSize + data.length);
             }
         } catch (error) {
             console.warn('Fetch receive documents failed, loading mock data:', error);
-            setDocList(docReceives);
+            applyMockFallback(appliedFilters, currentPage, pageSize);
         } finally {
             setLoading(false);
         }
-    }, [docNoInput, docDateInput, menuSelect]);
+    }, [currentPage, pageSize, appliedFilters, applyMockFallback]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchDocuments();
     }, [fetchDocuments]);
 
-    // ─────────────────────────────────────────────────────────────
-    // 4. การกรองข้อมูล (Filter Document) ตามฟิลด์ Docno, Docdate, Menu
-    // ─────────────────────────────────────────────────────────────
-    const filteredDocuments = useMemo(() => {
-        return docList.filter((doc) => {
-            const rec = doc as unknown as Record<string, unknown>;
-
-            // Non-case-sensitive field resolution
-            const rawDocNo = String(getField(rec, 'DOC_NO', 'doc_no', 'docNo', 'DocNo') || '').toLowerCase();
-            const rawDocDate = String(getField(rec, 'DOC_DATE', 'doc_date', 'docDate', 'DocDate', 'createDate') || '');
-            const rawMenuId = String(getField(rec, 'Menu_id', 'menu_id', 'menuId', 'transTypeId', 'docTypeId') || '');
-
-            // 1. ตรวจสอบเงื่อนไข Docno
-            if (docNoInput.trim()) {
-                const searchDocNo = docNoInput.trim().toLowerCase();
-                if (!rawDocNo.includes(searchDocNo)) {
-                    return false;
-                }
+    // ─── 5. โหลดรายการสินค้าเมื่อเปิด Modal ─────────────────────
+    useEffect(() => {
+        const fetchItems = async () => {
+            if (!isDetailOpen || !selectedDoc?.id) {
+                setDocItemList([]);
+                return;
             }
-
-            // 2. ตรวจสอบเงื่อนไข Docdate (รองรับการเปรียบเทียบเฉพาะ YYYY-MM-DD)
-            if (docDateInput) {
-                const datePart = rawDocDate.slice(0, 10);
-                if (datePart !== docDateInput) {
-                    return false;
-                }
+            try {
+                const res = await transactionService.receive.listItem({ docId: selectedDoc.id });
+                setDocItemList(res?.success && Array.isArray(res.results) ? res.results : []);
+            } catch (err) {
+                console.error('Failed to load receive doc items:', err);
+                setDocItemList([]);
             }
+        };
+        fetchItems();
+    }, [isDetailOpen, selectedDoc]);
 
-            // 3. ตรวจสอบเงื่อนไข Menu
-            if (menuSelect) {
-                if (rawMenuId !== menuSelect) {
-                    return false;
-                }
-            }
-
-            return true;
+    // ─── Handlers ───────────────────────────────────────────────
+    // สร้าง object ใหม่ทุกครั้ง เพื่อให้ fetchDocuments ทำงานแม้เงื่อนไขเหมือนเดิม
+    const handleSearch = () => {
+        setAppliedFilters({
+            docNo: docNoInput,
+            employeeId: employeeIdInput,
+            vendorId: vendorIdInput,
+            docDate: docDateInput,
+            docTypeId: docTypeIdInput,
+            statusCode: statusCodeInput,
         });
-    }, [docList, docNoInput, docDateInput, menuSelect]);
-
-    // Pagination calculations
-    const totalPages = Math.max(1, Math.ceil(filteredDocuments.length / pageSize));
-    const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
-
-    const paginatedDocuments = useMemo(() => {
-        const startIndex = (safeCurrentPage - 1) * pageSize;
-        return filteredDocuments.slice(startIndex, startIndex + pageSize);
-    }, [filteredDocuments, safeCurrentPage, pageSize]);
-
-    // ล้างค่าเงื่อนไขการค้นหา
-    const handleResetFilter = () => {
-        setDocNoInput('');
-        setDocDateInput('');
-        setMenuSelect('');
         setCurrentPage(1);
     };
 
-    // เปิดดูรายละเอียดเอกสาร
+    const handleResetFilter = () => {
+        setDocNoInput('');
+        setEmployeeIdInput('');
+        setVendorIdInput('');
+        setDocDateInput('');
+        setDocTypeIdInput('');
+        setStatusCodeInput('');
+        setAppliedFilters({ ...initialFilters });
+        setCurrentPage(1);
+    };
+
     const handleViewDetail = (doc: DocReceive) => {
         setSelectedDoc(doc);
         setIsDetailOpen(true);
     };
 
-
-
-    // Helper แสดง Badge สถานะ DOC_STATUS
-    const renderStatusBadge = (statusValue: unknown) => {
-        const val = String(statusValue ?? '').trim().toLowerCase();
-
-        if (val === 'completed' || val === 'approved' || val === '3' || val === 'รับแล้ว' || val === 'สำเร็จ') {
-            return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    Completed
-                </span>
-            );
-        }
-
-        if (val === 'pending' || val === 'waiting' || val === '2' || val === 'รอรับ' || val === 'รอตรวจนับ') {
-            return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800">
-                    <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                    Pending
-                </span>
-            );
-        }
-
-        if (val === 'cancelled' || val === 'rejected' || val === '4' || val === 'ยกเลิก') {
-            return (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800">
-                    <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                    Cancelled
-                </span>
-            );
-        }
-
-        // ค่าเริ่มต้น / Draft
-        return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
-                <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                Draft
-            </span>
-        );
-    };
+    const hasActiveFilters = Object.values(appliedFilters).some(Boolean);
+    const isSelectedLocked = LOCKED_STATUSES.includes(String(selectedDoc?.statusCode));
 
     return (
         <AppLayout>
@@ -256,7 +379,7 @@ export default function ReceivePage() {
                 </div>
                 <div className="flex items-center gap-2">
                     <Button
-                        onClick={() => router.push('/transaction/receive/create')}
+                        onClick={() => router.push('/transaction/receive/form')}
                         className="px-4 py-2 text-sm font-medium text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5"
                     >
                         <Plus className="w-4 h-4" />
@@ -265,12 +388,7 @@ export default function ReceivePage() {
                 </div>
             </div>
 
-            {/* ─────────────────────────────────────────────────────────────
-                1. Filter / Search Section (ตรงตามส่วนบนของ Wireframe)
-                - ฟิลด์ Docno
-                - ฟิลด์ Docdate
-                - ฟิลด์ Menu
-               ───────────────────────────────────────────────────────────── */}
+            {/* ─── 1. Filter Section ─── */}
             <Card className="mb-6 border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden">
                 <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -291,10 +409,7 @@ export default function ReceivePage() {
                         </Button>
                         <Button
                             size="sm"
-                            onClick={() => {
-                                setCurrentPage(1);
-                                fetchDocuments();
-                            }}
+                            onClick={handleSearch}
                             className="h-8 px-4 text-xs rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
                         >
                             <Search className="w-3.5 h-3.5 mr-1" />
@@ -304,27 +419,19 @@ export default function ReceivePage() {
                 </div>
 
                 <CardContent className="p-6">
-                    {/* Form Layout แบบเรียงจากบนลงล่าง หรือ Label ด้านซ้าย Input ด้านขวา ตาม Wireframe */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl">
-                        {/* 1. Docno Field */}
-                        <div className="flex flex-col space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="docno-input" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                                    Docno
-                                </Label>
-                                <span className="text-xs text-zinc-400">เลขที่เอกสาร</span>
-                            </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                        <FilterField id="filter-docno" label="เลขที่เอกสาร" subLabel="Doc No.">
                             <div className="relative">
                                 <input
-                                    id="docno-input"
+                                    id="filter-docno"
                                     type="text"
                                     value={docNoInput}
-                                    onChange={(e) => {
-                                        setDocNoInput(e.target.value);
-                                        setCurrentPage(1);
+                                    onChange={(e) => setDocNoInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleSearch();
                                     }}
                                     placeholder="เช่น GR2024001..."
-                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
+                                    className={`${INPUT_CLASS} placeholder:text-zinc-400 focus:outline-none transition-all`}
                                 />
                                 {docNoInput && (
                                     <button
@@ -336,69 +443,72 @@ export default function ReceivePage() {
                                     </button>
                                 )}
                             </div>
-                        </div>
+                        </FilterField>
 
-                        {/* 2. Docdate Field */}
-                        <div className="flex flex-col space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="docdate-input" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                                    Docdate
-                                </Label>
-                                <span className="text-xs text-zinc-400">วันที่เอกสาร</span>
-                            </div>
-                            <div>
-                                <DatePicker
-                                    id="docdate-input"
-                                    value={docDateInput}
-                                    onChange={(val) => {
-                                        setDocDateInput(val);
-                                        setCurrentPage(1);
-                                    }}
-                                    clearable={true}
-                                    placeholder="เลือกวันที่..."
-                                    formatString="dd/MM/yyyy"
-                                    className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 shadow-sm"
-                                />
-                            </div>
-                        </div>
+                        <FilterField id="filter-employee" label="พนักงาน" subLabel="Employee">
+                            <SearchableSelect
+                                id="filter-employee"
+                                value={employeeIdInput}
+                                onChange={setEmployeeIdInput}
+                                options={employeeOptions}
+                                placeholder="-- ทั้งหมด (All Employees) --"
+                                searchPlaceholder="ค้นหารหัส หรือชื่อพนักงาน..."
+                                clearable
+                            />
+                        </FilterField>
 
-                        {/* 3. Menu Field (Select Dropdown) */}
-                        <div className="flex flex-col space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="menu-select" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                                    Menu
-                                </Label>
-                                <span className="text-xs text-zinc-400">ประเภทเมนูธุรกรรม</span>
-                            </div>
-                            <select
-                                id="menu-select"
-                                value={menuSelect}
-                                onChange={(e) => {
-                                    setMenuSelect(e.target.value);
-                                    setCurrentPage(1);
-                                }}
-                                className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer transition-all"
-                            >
-                                <option value="">-- ทั้งหมด (All Menus) --</option>
-                                {menuOptions.map((opt) => (
-                                    <option key={opt.id} value={String(opt.id)}>
-                                        {opt.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                        <FilterField id="filter-vendor" label="ผู้จัดจำหน่าย" subLabel="Vendor">
+                            <SearchableSelect
+                                id="filter-vendor"
+                                value={vendorIdInput}
+                                onChange={setVendorIdInput}
+                                options={vendorOptions}
+                                placeholder="-- ทั้งหมด (All Vendors) --"
+                                searchPlaceholder="ค้นหารหัส หรือชื่อผู้จัดจำหน่าย..."
+                                clearable
+                            />
+                        </FilterField>
+
+                        <FilterField id="filter-docdate" label="วันที่เอกสาร" subLabel="Doc Date">
+                            <DatePicker
+                                id="filter-docdate"
+                                value={docDateInput}
+                                onChange={setDocDateInput}
+                                clearable
+                                placeholder="เลือกวันที่เอกสาร..."
+                                formatString="dd/MM/yyyy"
+                                className={INPUT_CLASS}
+                            />
+                        </FilterField>
+
+                        <FilterField id="filter-doctype" label="ประเภทเอกสาร" subLabel="Doc Type">
+                            <SearchableSelect
+                                id="filter-doctype"
+                                value={docTypeIdInput}
+                                onChange={setDocTypeIdInput}
+                                options={docTypeOptions}
+                                placeholder="-- ทั้งหมด (All Types) --"
+                                searchPlaceholder="ค้นหาประเภทเอกสาร..."
+                                clearable
+                            />
+                        </FilterField>
+
+                        <FilterField id="filter-status" label="สถานะเอกสาร" subLabel="Status">
+                            <SearchableSelect
+                                id="filter-status"
+                                value={statusCodeInput}
+                                onChange={setStatusCodeInput}
+                                options={STATUS_OPTIONS}
+                                placeholder="-- ทั้งหมด (All Status) --"
+                                searchPlaceholder="ค้นหาสถานะ..."
+                                clearable
+                            />
+                        </FilterField>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* ─────────────────────────────────────────────────────────────
-                2. Table Section (Table-Document)
-                คอลัมน์ตาม Wireframe:
-                - Menu_id
-                - DOC_NO
-                - DOC_DATE
-                - DOC_STATUS
-               ───────────────────────────────────────────────────────────── */}
+            {/* ─── 2. Table Section ─── */}
             <Card className="flex flex-col w-full border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl overflow-hidden bg-white dark:bg-zinc-900">
                 <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/40">
                     <div className="flex items-center gap-2">
@@ -408,56 +518,48 @@ export default function ReceivePage() {
                         </h2>
                     </div>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                        พบทั้งหมด {filteredDocuments.length} รายการ
+                        พบทั้งหมด {totalRecords} รายการ
                     </span>
                 </div>
 
                 <CardContent className="p-0 w-full overflow-x-auto">
                     <Table className="w-full">
-                        {/* Table Header: Menu_id | DOC_NO | DOC_DATE | DOC_STATUS */}
                         <TableHeader className="bg-zinc-100/80 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
                             <TableRow>
-                                <TableHead className="w-[140px] text-left font-bold text-xs uppercase tracking-wider text-zinc-800 dark:text-zinc-200 py-3.5 px-6">
-                                    Menu_id
-                                </TableHead>
-                                <TableHead className="w-[240px] text-left font-bold text-xs uppercase tracking-wider text-zinc-800 dark:text-zinc-200 py-3.5 px-6">
-                                    DOC_NO
-                                </TableHead>
-                                <TableHead className="w-[180px] text-left font-bold text-xs uppercase tracking-wider text-zinc-800 dark:text-zinc-200 py-3.5 px-6">
-                                    DOC_DATE
-                                </TableHead>
-                                <TableHead className="w-[180px] text-left font-bold text-xs uppercase tracking-wider text-zinc-800 dark:text-zinc-200 py-3.5 px-6">
-                                    DOC_STATUS
-                                </TableHead>
-                                <TableHead className="w-[140px] text-right font-bold text-xs uppercase tracking-wider text-zinc-800 dark:text-zinc-200 py-3.5 px-6">
-                                    การกระทำ
-                                </TableHead>
+                                {COLUMNS.map((col) => (
+                                    <TableHead
+                                        key={col.key}
+                                        style={{ width: `${col.width}px` }}
+                                        className={`font-bold text-xs uppercase tracking-wider text-zinc-800 dark:text-zinc-200 py-3.5 px-4 ${col.key === 'action' ? 'text-right' : 'text-left'}`}
+                                    >
+                                        {col.colName}
+                                    </TableHead>
+                                ))}
                             </TableRow>
                         </TableHeader>
 
-                        {/* Table Body (Table-Document) */}
                         <TableBody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                             {loading ? (
                                 <TableRow key="loading-row">
-                                    <TableCell colSpan={5} className="h-48 text-center text-zinc-500">
+                                    <TableCell colSpan={COLUMNS.length} className="h-48 text-center text-zinc-500">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <div className="w-7 h-7 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                                             <span className="text-sm">กำลังโหลดข้อมูลเอกสาร...</span>
                                         </div>
                                     </TableCell>
                                 </TableRow>
-                            ) : paginatedDocuments.length === 0 ? (
+                            ) : docList.length === 0 ? (
                                 <TableRow key="empty-row">
-                                    <TableCell colSpan={5} className="h-48 text-center text-zinc-500">
+                                    <TableCell colSpan={COLUMNS.length} className="h-48 text-center text-zinc-500">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <FileText className="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
                                             <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
                                                 ไม่พบข้อมูลเอกสารที่ตรงกับเงื่อนไข
                                             </p>
                                             <p className="text-xs text-zinc-400">
-                                                ลองปรับเปลี่ยนค่า Docno, Docdate หรือ Menu เพื่อค้นหาใหม่อีกครั้ง
+                                                ลองปรับเปลี่ยนเงื่อนไขการค้นหาเพื่อค้นหาใหม่อีกครั้ง
                                             </p>
-                                            {(docNoInput || docDateInput || menuSelect) && (
+                                            {hasActiveFilters && (
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
@@ -471,15 +573,15 @@ export default function ReceivePage() {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                paginatedDocuments.map((item, index) => {
+                                docList.map((item, index) => {
                                     const rec = item as unknown as Record<string, unknown>;
+                                    const str = (...keys: string[]) => String(getField(rec, ...keys) || '-');
 
-                                    // ดึงค่าตามชื่อฟิลด์แบบ non-case-sensitive
-                                    const menuIdVal = getField(rec, 'Menu_id', 'menu_id', 'menuId', 'transTypeId', 'docTypeId') ?? '-';
-                                    const docNoVal = String(getField(rec, 'DOC_NO', 'doc_no', 'docNo', 'DocNo') || '-');
-                                    const rawDate = String(getField(rec, 'DOC_DATE', 'doc_date', 'docDate', 'DocDate', 'createDate') || '-');
+                                    const rawDate = str('docDate', 'doc_date', 'createDate');
                                     const docDateVal = rawDate.length >= 10 ? rawDate.slice(0, 10) : rawDate;
-                                    const docStatusVal = getField(rec, 'DOC_STATUS', 'doc_status', 'docStatus', 'DocStatus', 'statusName', 'statusId') ?? 'Draft';
+                                    const remarkVal = str('remark');
+                                    const statusCode = str('statusCode');
+                                    const isLocked = LOCKED_STATUSES.includes(statusCode);
 
                                     return (
                                         <TableRow
@@ -487,44 +589,70 @@ export default function ReceivePage() {
                                             className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer group"
                                             onClick={() => handleViewDetail(item)}
                                         >
-                                            {/* Column 1: Menu_id */}
-                                            <TableCell className="py-4 px-6">
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
-                                                    <Layers className="w-3 h-3 text-blue-500" />
-                                                    {String(menuIdVal)}
+                                            {/* เลขที่เอกสาร */}
+                                            <TableCell className="py-3.5 px-4 font-semibold text-zinc-900 dark:text-zinc-100 font-mono text-sm">
+                                                <span className="text-blue-600 dark:text-blue-400 group-hover:underline">
+                                                    {str('docNo', 'doc_no')}
                                                 </span>
                                             </TableCell>
 
-                                            {/* Column 2: DOC_NO */}
-                                            <TableCell className="py-4 px-6 font-semibold text-zinc-900 dark:text-zinc-100 font-mono text-sm">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-blue-600 dark:text-blue-400 group-hover:underline">
-                                                        {docNoVal}
-                                                    </span>
-                                                </div>
+                                            {/* ประเภทเอกสาร */}
+                                            <TableCell className="py-3.5 px-4 text-xs">
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+                                                    <Layers className="w-3 h-3 text-blue-500" />
+                                                    {str('docTypeName', 'menuName', 'menu_name', 'menuId')}
+                                                </span>
                                             </TableCell>
 
-                                            {/* Column 3: DOC_DATE */}
-                                            <TableCell className="py-4 px-6 text-sm text-zinc-600 dark:text-zinc-400">
+                                            {/* วันที่เอกสาร */}
+                                            <TableCell className="py-3.5 px-4 text-sm text-zinc-600 dark:text-zinc-400">
                                                 <div className="flex items-center gap-1.5">
                                                     <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-                                                    <span>{docDateVal}</span>
+                                                    <span>{ServiceSystem.formatThaiDate(docDateVal)}</span>
                                                 </div>
                                             </TableCell>
 
-                                            {/* Column 4: DOC_STATUS */}
-                                            <TableCell className="py-4 px-6">
-                                                {renderStatusBadge(docStatusVal)}
+                                            {/* เลขที่อ้างอิง */}
+                                            <TableCell className="py-3.5 px-4 text-sm text-zinc-600 dark:text-zinc-400 font-mono">
+                                                {str('docNoRef', 'doc_no_ref', 'refDocNo', 'refDoc')}
+                                            </TableCell>
+
+                                            {/* พนักงาน */}
+                                            <TableCell className="py-3.5 px-4 text-sm text-zinc-700 dark:text-zinc-300">
+                                                {str('empName', 'employeeName', 'employeeId')}
+                                            </TableCell>
+
+                                            {/* ผู้จัดจำหน่าย */}
+                                            <TableCell className="py-3.5 px-4 text-sm text-zinc-700 dark:text-zinc-300">
+                                                {str('vendName', 'vendorName', 'vendor', 'vendorId')}
+                                            </TableCell>
+
+                                            {/* คลังสินค้า */}
+                                            <TableCell className="py-3.5 px-4 text-sm text-zinc-700 dark:text-zinc-300">
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+                                                    {str('warehouseName', 'warehouse', 'warehouseId')}
+                                                </span>
+                                            </TableCell>
+
+                                            {/* สถานะ */}
+                                            <TableCell className="py-3.5 px-4 text-sm text-zinc-700 dark:text-zinc-300">
+                                                {renderStatusBadge(statusCode)}
+                                            </TableCell>
+
+                                            {/* หมายเหตุ */}
+                                            <TableCell className="py-3.5 px-4 text-xs text-zinc-500 dark:text-zinc-400 max-w-[200px] truncate" title={remarkVal}>
+                                                {remarkVal}
                                             </TableCell>
 
                                             {/* Actions */}
-                                            <TableCell className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
+                                            <TableCell className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     <Button
+                                                        hidden={isLocked}
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() => router.push(`/transaction/receive/create?id=${item.id}`)}
-                                                        className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                                                        onClick={() => router.push(`/transaction/receive/form?id=${item.id}`)}
+                                                        className="px-4 py-2 text-sm rounded-xl border-amber-300 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5"
                                                         title="แก้ไขเอกสาร"
                                                     >
                                                         <Pencil className="w-3.5 h-3.5 mr-1 text-zinc-500" />
@@ -533,7 +661,7 @@ export default function ReceivePage() {
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() => handleViewDetail(item)}
+                                                        onClick={() => router.push(`/transaction/receive/${item.id}`)}
                                                         className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                                                         title="ดูรายละเอียดเอกสาร"
                                                     >
@@ -550,15 +678,13 @@ export default function ReceivePage() {
                     </Table>
                 </CardContent>
 
-                {/* ─────────────────────────────────────────────────────────────
-                    3. Bottom Pagination Bar: Page-navigate (ตาม Wireframe)
-                   ───────────────────────────────────────────────────────────── */}
+                {/* ─── 3. Pagination ─── */}
                 <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/60">
                     <TablePagination
-                        currentPage={safeCurrentPage}
+                        currentPage={currentPage}
                         pageSize={pageSize}
-                        totalItems={docList.length}
-                        filteredCount={filteredDocuments.length}
+                        totalItems={totalRecords}
+                        filteredCount={totalRecords}
                         onPageChange={setCurrentPage}
                         onPageSizeChange={(size) => {
                             setPageSize(size);
@@ -569,12 +695,10 @@ export default function ReceivePage() {
                 </div>
             </Card>
 
-            {/* ─────────────────────────────────────────────────────────────
-                Modal: ดูรายละเอียดเอกสาร (Document Detail Modal)
-               ───────────────────────────────────────────────────────────── */}
+            {/* ─── Modal: รายละเอียดเอกสาร ─── */}
             {selectedDoc && (
                 <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-                    <DialogContent className="max-w-2xl bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                    <DialogContent className="max-w-5xl bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-zinc-100">
                                 <FileText className="w-5 h-5 text-blue-600" />
@@ -583,35 +707,35 @@ export default function ReceivePage() {
                         </DialogHeader>
 
                         <div className="py-4 space-y-4">
-                            {/* Card ข้อมูลส่วนหัวเอกสาร */}
+                            {/* ข้อมูลส่วนหัวเอกสาร */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-700">
                                 <div>
-                                    <span className="block text-xs font-semibold text-zinc-400">DOC_NO</span>
+                                    <span className="block text-xs font-semibold text-zinc-400">เลขที่เอกสาร</span>
                                     <span className="text-sm font-bold font-mono text-zinc-900 dark:text-zinc-100">
-                                        {selectedDoc.docNo || selectedDoc.DOC_NO || '-'}
+                                        {selectedDoc.docNo || '-'}
                                     </span>
                                 </div>
                                 <div>
-                                    <span className="block text-xs font-semibold text-zinc-400">DOC_DATE</span>
+                                    <span className="block text-xs font-semibold text-zinc-400">วันที่เอกสาร</span>
                                     <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.docDate || selectedDoc.DOC_DATE || selectedDoc.createDate?.slice(0, 10) || '-'}
+                                        {selectedDoc.docDate?.slice(0, 10) || selectedDoc.createDate?.slice(0, 10) || '-'}
                                     </span>
                                 </div>
                                 <div>
-                                    <span className="block text-xs font-semibold text-zinc-400">Menu_id</span>
+                                    <span className="block text-xs font-semibold text-zinc-400">พนักงาน</span>
                                     <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.menuId || selectedDoc.Menu_id || '-'}
+                                        {selectedDoc.empName || '-'}
                                     </span>
                                 </div>
                                 <div>
-                                    <span className="block text-xs font-semibold text-zinc-400">DOC_STATUS</span>
+                                    <span className="block text-xs font-semibold text-zinc-400">สถานะเอกสาร</span>
                                     <div className="mt-0.5">
-                                        {renderStatusBadge(selectedDoc.docStatus || selectedDoc.DOC_STATUS || selectedDoc.statusId)}
+                                        {renderStatusBadge(selectedDoc.statusCode)}
                                     </div>
                                 </div>
                             </div>
 
-                            {/* ข้อมูลคลังสินค้า & ผู้จัดจำหน่าย */}
+                            {/* คลังสินค้า & ผู้จัดจำหน่าย */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                                 <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40">
                                     <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 mb-1">
@@ -619,7 +743,7 @@ export default function ReceivePage() {
                                         คลังสินค้ารับเข้า (Warehouse)
                                     </div>
                                     <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.warehouseName || `Warehouse ID: ${selectedDoc.warehouseId || '-'}`}
+                                        {selectedDoc.warehouseName || '-'}
                                     </p>
                                 </div>
                                 <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40">
@@ -628,7 +752,7 @@ export default function ReceivePage() {
                                         ผู้จำหน่าย (Vendor)
                                     </div>
                                     <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.vendorName || `Vendor ID: ${selectedDoc.vendorId || '-'}`}
+                                        {selectedDoc.vendName || `Vendor ID: ${selectedDoc.vendId || '-'}`}
                                     </p>
                                 </div>
                             </div>
@@ -641,7 +765,7 @@ export default function ReceivePage() {
                                 </div>
                             )}
 
-                            {/* รายการสินค้าที่รับเข้า (Details) */}
+                            {/* รายการสินค้าที่รับเข้า */}
                             <div>
                                 <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2">
                                     รายการสินค้าที่รับเข้า (Received Items)
@@ -652,29 +776,36 @@ export default function ReceivePage() {
                                             <TableRow>
                                                 <TableHead className="py-2 px-3 text-xs">ลำดับ</TableHead>
                                                 <TableHead className="py-2 px-3 text-xs">ชื่อสินค้า</TableHead>
+                                                <TableHead className="py-2 px-3 text-xs">LotNo</TableHead>
+                                                <TableHead className="py-2 px-3 text-xs">SerialNo</TableHead>
                                                 <TableHead className="py-2 px-3 text-xs text-right">จำนวน</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {docReceiveDetails
-                                                .filter((d) => String(d.docId) === String(selectedDoc.id))
-                                                .map((detail, idx) => (
+                                            {docItemList.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={5} className="py-4 text-center text-xs text-zinc-400">
+                                                        ไม่พบรายการสินค้าในเอกสารนี้
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                docItemList.map((detail, idx) => (
                                                     <TableRow key={detail.id || idx}>
                                                         <TableCell className="py-2.5 px-3 text-xs text-zinc-500">{idx + 1}</TableCell>
                                                         <TableCell className="py-2.5 px-3 text-xs font-medium text-zinc-800 dark:text-zinc-200">
                                                             {detail.itemName}
                                                         </TableCell>
+                                                        <TableCell className="py-2.5 px-3 text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                                                            {detail.lotNo || '-'}
+                                                        </TableCell>
+                                                        <TableCell className="py-2.5 px-3 text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                                                            {detail.serialNo || '-'}
+                                                        </TableCell>
                                                         <TableCell className="py-2.5 px-3 text-xs text-right font-bold text-zinc-900 dark:text-zinc-100">
-                                                            {detail.itemQty.toLocaleString()}
+                                                            {(detail.itemQty ?? 0).toLocaleString()}
                                                         </TableCell>
                                                     </TableRow>
-                                                ))}
-                                            {docReceiveDetails.filter((d) => String(d.docId) === String(selectedDoc.id)).length === 0 && (
-                                                <TableRow>
-                                                    <TableCell colSpan={3} className="py-4 text-center text-xs text-zinc-400">
-                                                        มี 1 รายการมาตรฐานในเอกสารนี้
-                                                    </TableCell>
-                                                </TableRow>
+                                                ))
                                             )}
                                         </TableBody>
                                     </Table>
@@ -682,12 +813,13 @@ export default function ReceivePage() {
                             </div>
                         </div>
 
-                        <DialogFooter className="flex items-center justify-between sm:justify-between">
+                        <DialogFooter className={`flex items-center ${isSelectedLocked ? 'justify-end sm:justify-end' : 'justify-between sm:justify-between'}`}>
                             <Button
+                                hidden={isSelectedLocked}
                                 variant="outline"
                                 onClick={() => {
                                     setIsDetailOpen(false);
-                                    router.push(`/transaction/receive/create?id=${selectedDoc.id}`);
+                                    router.push(`/transaction/receive/form?id=${selectedDoc.id}`);
                                 }}
                                 className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/40"
                             >

@@ -13,19 +13,21 @@ import {
     AlertTitle,
     AlertDescription,
 } from '@/components/ui/index';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Building2 } from 'lucide-react';
 import { masterService } from '@/app/_services/master';
-import type { MastLocation } from '@/lib/types';
+import type { MastLocation, MastWarehouse } from '@/lib/types';
 import Swal from 'sweetalert2';
 
 interface LocationFormData {
     id?: string | number;
+    warehouseId: string | number;
     code: string;
     name: string;
     isActive: boolean;
 }
 
 const defaultFormData: LocationFormData = {
+    warehouseId: '',
     code: '',
     name: '',
     isActive: true,
@@ -36,17 +38,31 @@ interface CreateLocationModalProps {
     onOpenChange: (open: boolean) => void;
     onSaved: () => void;
     dataEdit: MastLocation | null;
+    defaultWarehouseId?: string;
+    warehouseList?: MastWarehouse[];
 }
 
-export function CreateLocationModal({ open, onOpenChange, onSaved, dataEdit }: CreateLocationModalProps) {
+export function CreateLocationModal({
+    open,
+    onOpenChange,
+    onSaved,
+    dataEdit,
+    defaultWarehouseId = '',
+    warehouseList: externalWarehouses,
+}: CreateLocationModalProps) {
     const [formData, setFormData] = useState<LocationFormData>({ ...defaultFormData });
+    const [fetchedWarehouses, setFetchedWarehouses] = useState<MastWarehouse[]>([]);
+    const warehouseList = externalWarehouses && externalWarehouses.length > 0 ? externalWarehouses : fetchedWarehouses;
     const [saving, setSaving] = useState(false);
     const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     const isEditMode = Boolean(dataEdit);
 
     const resetForm = () => {
-        setFormData({ ...defaultFormData });
+        setFormData({
+            ...defaultFormData,
+            warehouseId: defaultWarehouseId || '',
+        });
     };
 
     // Auto-dismiss success alert after 4 seconds
@@ -59,13 +75,40 @@ export function CreateLocationModal({ open, onOpenChange, onSaved, dataEdit }: C
         }
     }, [alertMessage]);
 
+    // โหลดคลังสินค้าสำหรับเลือกในฟอร์ม (ถ้ายังไม่มีส่งเข้ามา)
+    useEffect(() => {
+        if (externalWarehouses && externalWarehouses.length > 0) return;
+
+        const fetchWarehouses = async () => {
+            try {
+                const res = await masterService.warehouses.list();
+                if (res && res.success) {
+                    const data = Array.isArray(res.results)
+                        ? res.results
+                        : Array.isArray(res.data)
+                            ? res.data
+                            : [];
+                    setFetchedWarehouses(data);
+                }
+            } catch (err) {
+                console.error('Failed to load warehouses in CreateLocationModal:', err);
+            }
+        };
+
+        if (open) {
+            fetchWarehouses();
+        }
+    }, [open, externalWarehouses]);
+
     useEffect(() => {
         if (open) {
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setAlertMessage(null);
             if (dataEdit) {
+                const whId = dataEdit.warehouseId ?? dataEdit.WarehouseId;
                 setFormData({
                     id: dataEdit.id,
+                    warehouseId: whId !== undefined && whId !== null ? String(whId) : '',
                     code: dataEdit.code || '',
                     name: dataEdit.name || '',
                     isActive: dataEdit.isActive !== false,
@@ -74,28 +117,45 @@ export function CreateLocationModal({ open, onOpenChange, onSaved, dataEdit }: C
                 resetForm();
             }
         }
-    }, [open, dataEdit]);
+    }, [open, dataEdit, defaultWarehouseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const validateForm = (isAddMore = false) => {
-        if (!formData.code.trim()) {
+        if (!formData.warehouseId) {
+            const msg = 'กรุณาเลือกคลังสินค้า';
             if (isAddMore) {
-                setAlertMessage({ type: 'error', message: 'กรุณากรอกรหัสตำแหน่งจัดเก็บ' });
+                setAlertMessage({ type: 'error', message: msg });
             } else {
                 Swal.fire({
                     icon: 'warning',
-                    title: 'กรุณากรอกรหัสตำแหน่งจัดเก็บ',
+                    title: msg,
                     confirmButtonColor: '#2563eb',
                 });
             }
             return false;
         }
-        if (!formData.name.trim()) {
+
+        if (!formData.code.trim()) {
+            const msg = 'กรุณากรอกรหัสตำแหน่งจัดเก็บ';
             if (isAddMore) {
-                setAlertMessage({ type: 'error', message: 'กรุณากรอกชื่อตำแหน่งจัดเก็บ' });
+                setAlertMessage({ type: 'error', message: msg });
             } else {
                 Swal.fire({
                     icon: 'warning',
-                    title: 'กรุณากรอกชื่อตำแหน่งจัดเก็บ',
+                    title: msg,
+                    confirmButtonColor: '#2563eb',
+                });
+            }
+            return false;
+        }
+
+        if (!formData.name.trim()) {
+            const msg = 'กรุณากรอกชื่อตำแหน่งจัดเก็บ';
+            if (isAddMore) {
+                setAlertMessage({ type: 'error', message: msg });
+            } else {
+                Swal.fire({
+                    icon: 'warning',
+                    title: msg,
                     confirmButtonColor: '#2563eb',
                 });
             }
@@ -110,14 +170,15 @@ export function CreateLocationModal({ open, onOpenChange, onSaved, dataEdit }: C
 
         setSaving(true);
         try {
-            if (isEditMode) {
-                const payload = {
-                    id: formData.id ? String(formData.id) : undefined,
-                    code: formData.code.trim(),
-                    name: formData.name.trim(),
-                    isActive: formData.isActive,
-                };
+            const payload: Partial<MastLocation> = {
+                id: formData.id ? String(formData.id) : undefined,
+                warehouseId: formData.warehouseId ? String(formData.warehouseId) : undefined,
+                code: formData.code.trim(),
+                name: formData.name.trim(),
+                isActive: formData.isActive,
+            };
 
+            if (isEditMode) {
                 const res = await masterService.locations.update(payload);
 
                 if (res && res.success) {
@@ -139,18 +200,17 @@ export function CreateLocationModal({ open, onOpenChange, onSaved, dataEdit }: C
                     });
                 }
             } else {
-                const payload = {
-                    code: formData.code.trim(),
-                    name: formData.name.trim(),
-                    isActive: formData.isActive,
-                };
-
                 const res = await masterService.locations.create(payload);
+                console.log('locationCreate: ', payload);
 
                 if (res && res.success) {
                     onSaved();
                     if (andAddMore) {
-                        resetForm();
+                        // คงค่า warehouseId เดิมไว้ เพื่อให้เพิ่มรายการในคลังเดิมต่อได้ทันที
+                        setFormData((prev) => ({
+                            ...defaultFormData,
+                            warehouseId: prev.warehouseId,
+                        }));
                         setAlertMessage({
                             type: 'success',
                             message: res.message || 'เพิ่มตำแหน่งจัดเก็บใหม่เรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
@@ -201,14 +261,15 @@ export function CreateLocationModal({ open, onOpenChange, onSaved, dataEdit }: C
     return (
         <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal={true}>
             <DialogContent className="max-w-lg sm:max-w-lg w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl p-6">
-               <DialogHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4">
-                    <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                <DialogHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4">
+                    <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                         {isEditMode ? 'แก้ไขข้อมูลตำแหน่งจัดเก็บ' : 'เพิ่มตำแหน่งจัดเก็บใหม่ (New Location)'}
                     </DialogTitle>
                     <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
                         {isEditMode
-                            ? 'ปรับปรุงรายละเอียดตำแหน่งจัดเก็บในคลัง'
-                            : 'กรอกรายละเอียดเพื่อสร้างตำแหน่งจัดเก็บสินค้า (Location/Bin/Rack)'}
+                            ? 'ปรับปรุงรายละเอียดตำแหน่งจัดเก็บและคลังสินค้าที่สังกัด'
+                            : 'เลือกคลังสินค้าและกำหนดรหัส/ชื่อตำแหน่งจัดเก็บ (Location/Bin/Rack)'}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -238,6 +299,28 @@ export function CreateLocationModal({ open, onOpenChange, onSaved, dataEdit }: C
                 )}
 
                 <div className="space-y-4 py-4">
+                    {/* Warehouse Selection */}
+                    <div>
+                        <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
+                            คลังสินค้า (Warehouse) <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                            value={formData.warehouseId}
+                            onChange={(e) => {
+                                setFormData((prev) => ({ ...prev, warehouseId: e.target.value }));
+                                if (alertMessage) setAlertMessage(null);
+                            }}
+                            className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        >
+                            <option value="">-- เลือกคลังสินค้า (Warehouse) --</option>
+                            {warehouseList.map((wh) => (
+                                <option key={wh.id} value={String(wh.id)}>
+                                    {wh.warehouseName} {wh.code ? `(${wh.code})` : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
                     {/* Location Code */}
                     <div>
                         <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
@@ -252,7 +335,7 @@ export function CreateLocationModal({ open, onOpenChange, onSaved, dataEdit }: C
                                 if (alertMessage) setAlertMessage(null);
                             }}
                             placeholder="เช่น A-01-01, BIN-01..."
-                            className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                     </div>
 
@@ -322,3 +405,5 @@ export function CreateLocationModal({ open, onOpenChange, onSaved, dataEdit }: C
         </Dialog>
     );
 }
+
+export default CreateLocationModal;

@@ -4,7 +4,7 @@
 
 // ─── Common base ────────────────────────────────────────────
 export interface BaseEntity {
-    id: string | number;
+    id?: string | number;
     isActive?: boolean;
     isDelete?: boolean;
     createDate?: string;
@@ -60,9 +60,16 @@ export interface MastItemGroup {
 }
 
 export interface MastLocation extends BaseEntity {
-    code: string;
-    name: string;
+    code?: string;
+    name?: string;
     warehouseId?: string | number;
+    WarehouseId?: string | number;
+}
+
+export interface MastLocationParams extends PaginationParams {
+    code?: string;
+    warehouseId?: string | number;
+    WarehouseId?: string | number;
 }
 
 export interface MastWarehouse extends BaseEntity {
@@ -160,70 +167,109 @@ export interface MastTransType extends BaseEntity {
 
 // ─── Transactions ────────────────────────────────────────────
 
-export interface DocReceive extends BaseEntity {
+export interface DocTrans extends Partial<BaseEntity>, PaginationParams {
     docNo?: string;
-    doc_no?: string;
-    DOC_NO?: string;
     docDate?: string;
-    doc_date?: string;
-    DOC_DATE?: string;
     docNoRef?: string;
-    doc_no_ref?: string;
-    DOC_NO_REF?: string;
+    employeeId?: number | string;
+    empId?: number | string;
+    menuId?: number | string;
+    statusCode?: string;
+    vendId?: number | string;
+    vendorId?: number | string;
+    docTypeId?: number | string;
+}
+
+export interface DocReceive extends BaseEntity {
+    id?: string | number;
+    docNo?: string;
+    docDate?: string;
+    refDocNo?: string;
+    empId?: string | number;
+    empName?: string;
     employee?: string;
+    employeeName?: string;
     employeeId?: number | string;
     docTypeId?: number | string;
     menuId?: number | string;
-    menu_id?: number | string;
-    Menu_id?: number | string;
     menuName?: string;
     statusId?: number;
-    statusCode?: number;
+    statusCode?: string;
     statusName?: string;
-    docStatus?: string | number;
-    doc_status?: string | number;
-    DOC_STATUS?: string | number;
     warehouseId?: number | string;
     warehouseName?: string;
-    vendorId?: number | string;
-    vendorName?: string;
+    vendId?: string | number;
+    vendName?: string;
     remark?: string;
     details?: DocReceiveDetail[];
 }
 
 export interface DocReceiveDetail extends BaseEntity {
-    docId: number;
-    itemId: number;
+    id?: string | number;
+    docId?: string | number;
+    itemId?: string | number;
     itemCode?: string;
-    itemName: string;
-    uomId: number;
+    itemName?: string;
+    uomId?: string | number;
     uomName?: string;
-    itemQty: number;
-    unitPrice?: number;
+    itemQty?: number;
+    putawayQty?: number;
+    itemPrice?: number;
     totalPrice?: number;
     lotNo?: string;
     serialNo?: string;
-    locationId?: number;
+    isLotNo?: boolean;
+    isSerialNo?: boolean;
+    locationId?: string | number;
     locationName?: string;
     remark?: string;
 }
 
 export interface DocIssue extends BaseEntity {
-    docNo: string;
-    docTypeId: number;
-    statusId: number;
-    warehouseId: number;
-    customerId: number;
+    id?: string | number;
+    docNo?: string;
+    docDate?: string;
+    refDocNo?: string;
+    bookingId?: string;
+    empId?: string | number;
+    empName?: string;
+    employee?: string;
+    employeeName?: string;
+    employeeId?: number | string;
+    docTypeId?: number | string;
+    menuId?: number | string;
+    menuName?: string;
+    statusId?: number;
+    statusCode?: string;
+    statusName?: string;
+    warehouseId?: number | string;
+    warehouseName?: string;
+    custId?: string | number;
+    custName?: string;
     remark?: string;
 }
 
 export interface DocIssueDetail extends BaseEntity {
-    docId: number;
-    itemId: number;
-    itemName: string;
-    uomId: number;
-    itemQty: number;
+    id?: string | number;
+    docId?: string | number;
+    invId?: string | number;
+    itemId?: string | number;
+    itemCode?: string;
+    itemName?: string;
     bookingQty: number;
+    uomId?: string | number;
+    uomName?: string;
+    itemQty?: number;
+    pickingQty?: number;
+    itemPrice?: number;
+    totalPrice?: number;
+    lotNo?: string;
+    serialNo?: string;
+    isLotNo?: boolean;
+    isSerialNo?: boolean;
+    locationId?: string | number;
+    locationName?: string;
+    remark?: string;
 }
 
 export interface DocRequest extends BaseEntity {
@@ -443,6 +489,7 @@ export interface ApiResponse<T> {
 
 export interface PaginationParams {
     page?: number;
+    size?: number;
     limit?: number;
     search?: string;
     isActive?: boolean;
