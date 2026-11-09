@@ -585,7 +585,7 @@ export default function ReceivePage() {
 
                                     return (
                                         <TableRow
-                                            key={item.id ?? `doc-${index}`}
+                                            key={`rc-${item.docNo || item.id || index}-${index}`}
                                             className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer group"
                                             onClick={() => handleViewDetail(item)}
                                         >
@@ -790,7 +790,7 @@ export default function ReceivePage() {
                                                 </TableRow>
                                             ) : (
                                                 docItemList.map((detail, idx) => (
-                                                    <TableRow key={detail.id || idx}>
+                                                    <TableRow key={`rc-item-${detail.id ?? 'row'}-${idx}`}>
                                                         <TableCell className="py-2.5 px-3 text-xs text-zinc-500">{idx + 1}</TableCell>
                                                         <TableCell className="py-2.5 px-3 text-xs font-medium text-zinc-800 dark:text-zinc-200">
                                                             {detail.itemName}

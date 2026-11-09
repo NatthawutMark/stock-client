@@ -6,6 +6,7 @@ import { AppLayout } from '@/app/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import { transactionService } from '@/app/_services/transaction';
+import { inventoryService } from '@/app/_services/inventory';
 import type { DocIssue, DocIssueDetail, MastCustomer, MastDocType, MastEmployee, MastWarehouse } from '@/lib/types';
 import { TransactionItem, IssueItemTable } from '@/components/transaction';
 import { Button, Card, CardContent, DatePicker, Label, SearchableSelect, renderStatusBadge } from '@/components/ui';
@@ -145,10 +146,65 @@ function IssueFormContent() {
                             // โหลดรายการสินค้าที่มีอยู่จริงจาก DB
                             const details = Array.isArray(foundDoc.details) ? foundDoc.details : [];
                             if (details.length > 0) {
+                                // ดึงข้อมูลคงคลังล่าสุดของคลังนี้ (ส่ง docId ไปด้วยเพื่อให้ได้ยอดเพดานรวมที่ถูกต้อง)
+                                const invStockMap = new Map<string, number>();
+                                if (foundDoc.warehouseId) {
+                                    try {
+                                        const invRes = await inventoryService.issueInventoryList({
+                                            warehouseId: foundDoc.warehouseId,
+                                            docId: editId,
+                                            menuId: MENU_ID,
+                                        });
+                                        const invData = invRes?.success
+                                            ? (Array.isArray(invRes.results?.data)
+                                                ? invRes.results.data
+                                                : Array.isArray(invRes.data)
+                                                    ? invRes.data
+                                                    : [])
+                                            : [];
+                                        for (const item of invData) {
+                                            const avail = Number(item.availableQty ?? (item as Record<string, unknown>).qty ?? 0);
+                                            if (item.id !== undefined && item.id !== null) {
+                                                invStockMap.set(String(item.id), avail);
+                                            }
+                                            if (item.itemId !== undefined && item.itemId !== null) {
+                                                const key = `item_${item.itemId}`;
+                                                if (!invStockMap.has(key)) {
+                                                    invStockMap.set(key, avail);
+                                                }
+                                            }
+                                        }
+                                    } catch (err) {
+                                        console.warn('Failed to load inventory stock for issue edit doc:', err);
+                                    }
+                                }
+
                                 setItems(
                                     details.map((d: DocIssueDetail, index: number) => {
                                         const raw = d as unknown as Record<string, unknown>;
                                         const invId = (d.invId ?? raw.invId ?? raw.inventoryId ?? d.id) as string | number | undefined;
+                                        const itemQty = Number(d.itemQty) || Number(d.bookingQty) || 1;
+
+                                        // ค้นหายอดเพดานคงคลังจาก Inventory API
+                                        let availableQty: number | undefined = undefined;
+                                        if (invId !== undefined && invId !== null && invStockMap.has(String(invId))) {
+                                            availableQty = invStockMap.get(String(invId));
+                                        } else if (d.itemId !== undefined && invStockMap.has(`item_${d.itemId}`)) {
+                                            availableQty = invStockMap.get(`item_${d.itemId}`);
+                                        } else {
+                                            // Fallback: ดึงจาก raw data ของ detail ใน DB
+                                            const rawVal = raw.availableQty ?? raw.available_qty ?? raw.availableStock ?? raw.qty;
+                                            if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
+                                                // หาก DB ส่งยอดคงเหลือมา ให้รวมกับ itemQty ของเอกสารนี้เพื่อให้ได้เพดานรวม
+                                                availableQty = Number(rawVal) + itemQty;
+                                            }
+                                        }
+
+                                        // หากหาไม่พบ ให้ตั้งเพดานเริ่มต้นไม่ต่ำกว่ายอดที่เคยเบิกไว้
+                                        if (availableQty === undefined || Number.isNaN(availableQty)) {
+                                            availableQty = itemQty;
+                                        }
+
                                         return {
                                             id: invId || d.id || `edit-item-${index}`,
                                             itemId: d.itemId ?? '',
@@ -156,10 +212,11 @@ function IssueFormContent() {
                                             itemName: d.itemName || '',
                                             uomId: d.uomId,
                                             uomName: d.uomName || 'ชิ้น',
-                                            itemQty: Number(d.itemQty) || Number(d.bookingQty) || 1,
-                                            availableQty: Number(raw.availableQty) || undefined,
+                                            itemQty: itemQty,
+                                            originalQty: itemQty,
+                                            availableQty: availableQty,
                                             itemPrice: Number(d.itemPrice) || 0,
-                                            totalPrice: (Number(d.itemQty) || 1) * (Number(d.itemPrice) || 0),
+                                            totalPrice: itemQty * (Number(d.itemPrice) || 0),
                                             lotNo: d.lotNo || '',
                                             serialNo: d.serialNo || '',
                                             isLotNo: Boolean(d.isLotNo),
@@ -311,7 +368,7 @@ function IssueFormContent() {
             Swal.fire({
                 icon: 'warning',
                 title: 'จำนวนเบิกเกินยอดคงคลัง',
-                text: `สินค้า "${overQty.itemName}" มีคงเหลือ ${overQty.availableQty} แต่ระบุเบิก ${overQty.itemQty} กรุณาปรับลดจำนวน`,
+                text: `สินค้า "${overQty.itemName}" สามารถเบิกได้สูงสุด ${overQty.availableQty} แต่ระบุเบิก ${overQty.itemQty} กรุณาปรับลดจำนวน`,
                 confirmButtonColor: '#2563eb',
             });
             return;
@@ -354,8 +411,8 @@ function IssueFormContent() {
                 docTypeId,
                 statusCode: targetStatus,
                 details: items.map((item) => ({
-                    id: item.invId || item.id,
-                    invId: item.invId || item.id, // รหัสคงคลัง Inventory ID สำหรับหักลบยอด
+                    id: item.id,
+                    invId: item.invId, // รหัสคงคลัง Inventory ID สำหรับหักลบยอด
                     itemId: Number(item.itemId) || item.itemId,
                     itemCode: item.itemCode,
                     itemName: item.itemName,

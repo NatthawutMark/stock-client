@@ -13,7 +13,7 @@ import {
     employees as mockEmployees,
 } from '@/lib/mock/data';
 import type { DocIssue, DocIssueDetail, MastCustomer, MastWarehouse, MastDocType } from '@/lib/types';
-import { MasterItemTable, TransactionItem } from '@/components/transaction';
+import { IssueItemTable, MasterItemTable, TransactionItem } from '@/components/transaction';
 import { Button, Card, CardContent, Label, renderStatusBadge } from '@/components/ui';
 import Swal from 'sweetalert2';
 import {
@@ -28,7 +28,6 @@ import {
     type LucideIcon,
     FileCheck,
     Bookmark,
-    ArrowLeft,
 } from 'lucide-react';
 
 type EmployeeOption = { id: string | number; name: string };
@@ -58,6 +57,7 @@ const toEmployeeOptions = (list: { id?: string | number; fName?: string; lName?:
 const toTransactionItem = (d: DocIssueDetail, index: number): TransactionItem => {
     const qty = Number(d.itemQty) || Number(d.bookingQty) || 1;
     const price = Number(d.itemPrice) || 0;
+    const pickingQty = Number(d.pickingQty) || 0;
     return {
         id: d.id || `view-item-${index}`,
         itemId: d.itemId ?? '',
@@ -66,6 +66,7 @@ const toTransactionItem = (d: DocIssueDetail, index: number): TransactionItem =>
         uomId: d.uomId,
         uomName: d.uomName || 'ชิ้น',
         itemQty: qty,
+        pickingQty: pickingQty,
         itemPrice: price,
         totalPrice: qty * price,
         lotNo: d.lotNo || '',
@@ -282,6 +283,52 @@ function IssueDetailContent() {
         }
     };
 
+    const handlePicking = async () => {
+        const result = await Swal.fire({
+            title: 'ยืนยันการจ่ายสินค้าออกคลัง?',
+            text: `ต้องการยืนยันการจ่ายสินค้าตามเอกสารเลขที่ ${docNo || docId} ใช่หรือไม่`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'ยืนยัน',
+            cancelButtonText: 'ยกเลิก',
+            confirmButtonColor: '#16a34a',
+        });
+
+        if (!result.isConfirmed) return;
+        setSaving(true);
+        try {
+            Swal.fire({
+                title: 'กำลังบันทึกข้อมูล',
+                html: 'โปรดรอสักครู่...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                },
+            });
+
+            await transactionService.issue.picking(docId);
+            setDoc((prev) => (prev ? { ...prev, statusCode: 'COMPLETED' } : null));
+
+            await Swal.fire({
+                icon: 'success',
+                title: 'จ่ายสินค้าออกคลังสำเร็จ',
+                text: 'บันทึกจ่ายสินค้าออกจากคลังเรียบร้อยแล้ว',
+                timer: 1800,
+                showConfirmButton: false,
+            });
+        } catch (error) {
+            console.error('Picking error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: 'ไม่สามารถบันทึกจ่ายสินค้าออกคลังได้',
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
+
     if (loading) {
         return (
             <AppLayout>
@@ -384,7 +431,7 @@ function IssueDetailContent() {
                 2. Table Section: รายการสินค้าที่เบิกจ่าย (Read Only)
                ───────────────────────────────────────────────────────────── */}
             <div className="mb-6">
-                <MasterItemTable
+                <IssueItemTable
                     items={items}
                     onChange={setItems}
                     warehouseId={warehouseId}
@@ -435,6 +482,18 @@ function IssueDetailContent() {
                             {saving ? 'กำลังบันทึก...' : 'ยืนยันการเบิกสินค้า'}
                         </Button>
                     )}
+
+                    {/* ปุ่มบันทึกรับสินค้า / จ่ายสินค้าออกคลัง */}
+                    <Button
+                        type="button"
+                        disabled={saving}
+                        hidden={['DRAFT', 'SAVE', 'CANCEL', 'COMPLETED'].includes(statusCode.toUpperCase())}
+                        onClick={handlePicking}
+                        className="px-5 py-2 text-sm font-semibold rounded-xl text-white bg-green-600 hover:bg-green-700 shadow-sm flex items-center gap-1.5"
+                    >
+                        <FileCheck className="w-4 h-4" />
+                        {saving ? 'กำลังยืนยัน...' : 'จ่ายสินค้าออกคลัง'}
+                    </Button>
                 </div>
             </div>
         </AppLayout>

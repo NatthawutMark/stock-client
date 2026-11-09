@@ -53,6 +53,7 @@ import {
     Sparkles,
     RefreshCw,
 } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 // ─────────────────────────────────────────────────────────────
 // Types & Constants
@@ -669,6 +670,14 @@ export default function InventoryPage() {
         appliedFilters.serialNo ||
         appliedFilters.stockStatus !== 'ALL'
     );
+
+    const handleAlert = async () => {
+        Swal.fire({
+            icon: 'info',
+            title: 'แจ้งเตือน',
+            html: 'ระบบนี้ยังไม่พร้อมใช้งาน'
+        })
+    }
 
     // Helper แสดงป้ายสถานะจำนวนสต็อก
     const renderStockBadge = (qty: number, minAlert = 5) => {
@@ -1296,7 +1305,7 @@ export default function InventoryPage() {
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
-                                                    onClick={() => router.push(`/transaction/receive/form?itemId=${item.itemId}`)}
+                                                    onClick={handleAlert}
                                                     className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                                                     title="ย้ายสถานที่จัดเก็บ"
                                                 >

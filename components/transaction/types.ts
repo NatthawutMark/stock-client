@@ -6,7 +6,9 @@ export interface TransactionItem {
     uomId?: number | string;
     uomName?: string;
     itemQty: number;
+    originalQty?: number; // จำนวนเดิมที่เคยบันทึกไว้ในเอกสาร (สำหรับคำนวณ dynamic ceiling ในโหมดแก้ไข)
     putawayQty?: number; // จำนวนที่รับเข้า (แสดงเมื่อเอกสารเป็นสถานะ confirm)
+    pickingQty?: number; // จำนวนที่จ่ายออก (แสดงเมื่อเอกสารเป็นสถานะ confirm)
     availableQty?: number; // จำนวนคงเหลือในสต็อก (สำหรับกรณีดึงจาก Inventory)
     lotNo?: string;
     serialNo?: string;

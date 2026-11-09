@@ -48,6 +48,8 @@ export const transactionService = {
             apiClient.put<DocIssue>(`/api/docissue/${id}`, data),
         confirm: (id: string | number) =>
             apiClient.post<DocIssue>(`/api/docissue/${id}/confirm`),
+        picking: (id: string | number) =>
+            apiClient.post<DocIssue>(`/api/docissue/${id}/picking`),
     },
     transfer: {
         list: (p?: PaginationParams) => {

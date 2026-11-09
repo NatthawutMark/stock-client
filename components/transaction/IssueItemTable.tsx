@@ -283,7 +283,7 @@ export function IssueItemTable({
         } finally {
             setLoadingMaster(false);
         }
-    }, [warehouseId, items, getItemRowId]);
+    }, [warehouseId, docId, items, getItemRowId]);
 
     // เมื่อกดปุ่ม "เพิ่มรายการสินค้า" -> เคลียร์ค่าค้นหา และดึงรายการล่าสุดตามคลัง
     const handleOpenAddModal = () => {
@@ -357,7 +357,11 @@ export function IssueItemTable({
 
             if (existing) {
                 const currentQty = Number(existing.itemQty) || 0;
-                if (currentQty < totalAvail) {
+                const maxQty =
+                    existing.availableQty !== undefined && existing.availableQty > 0
+                        ? existing.availableQty
+                        : totalAvail;
+                if (currentQty < maxQty) {
                     existing.itemQty = currentQty + 1;
                     existing.totalPrice = existing.itemQty * (existing.itemPrice || 0);
                 }
@@ -411,7 +415,11 @@ export function IssueItemTable({
 
         if (existing) {
             const currentQty = Number(existing.itemQty) || 0;
-            if (currentQty < totalAvail) {
+            const maxQty =
+                existing.availableQty !== undefined && existing.availableQty > 0
+                    ? existing.availableQty
+                    : totalAvail;
+            if (currentQty < maxQty) {
                 handleUpdateRow(existing.id, 'itemQty', currentQty + 1);
             }
             return;
@@ -736,10 +744,10 @@ export function IssueItemTable({
                                                 {row.availableQty !== undefined && (
                                                     <span
                                                         className={`text-[10px] font-mono leading-none ${row.availableQty - (Number(row.itemQty) || 0) <= 0
-                                                                ? 'text-rose-500 font-semibold'
-                                                                : 'text-zinc-400'
+                                                            ? 'text-rose-500 font-semibold'
+                                                            : 'text-zinc-400'
                                                             }`}
-                                                        title={`คงคลังทั้งหมด: ${row.availableQty.toLocaleString()}`}
+                                                        title={`เพดานสูงสุด: ${row.availableQty.toLocaleString()}`}
                                                     >
                                                         คงคลัง: {Math.max(0, row.availableQty - (Number(row.itemQty) || 0)).toLocaleString()}
                                                     </span>
@@ -748,11 +756,11 @@ export function IssueItemTable({
                                         )}
                                     </TableCell>
 
-                                    {/* จำนวนที่รับเข้า (Putaway Qty) */}
+                                    {/* จำนวนที่จ่ายออก (Picking Qty) */}
                                     {isShowPutawayQty && (
                                         <TableCell className="text-right py-2.5">
                                             <span className="font-bold font-mono text-xs text-emerald-600 dark:text-emerald-400">
-                                                {(row.putawayQty ?? 0).toLocaleString()}
+                                                {(row.pickingQty ?? 0).toLocaleString()}
                                             </span>
                                         </TableCell>
                                     )}
