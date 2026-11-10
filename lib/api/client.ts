@@ -5,7 +5,8 @@ import type { ApiResponse } from '@/lib/types';
 const API_IP = process.env.NEXT_PUBLIC_API_IP;
 const API_PORT = process.env.NEXT_PUBLIC_API_PORT;
 
-const BASE_URL = API_IP && API_PORT ? `${API_IP}:${API_PORT}` : '';
+// const BASE_URL = API_IP && API_PORT ? `${API_IP}:${API_PORT}` : '';
+const BASE_URL = API_IP  ? `${API_IP}` : '';
 
 // ==========================================
 // Types & Interfaces
