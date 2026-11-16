@@ -1,9 +1,9 @@
 export interface TransactionItem {
-    id: string | number;
-    itemId: number | string;
+    id: string;
+    itemId: string;
     itemCode: string;
     itemName: string;
-    uomId?: number | string;
+    uomId?: string;
     uomName?: string;
     itemQty: number;
     originalQty?: number; // จำนวนเดิมที่เคยบันทึกไว้ในเอกสาร (สำหรับคำนวณ dynamic ceiling ในโหมดแก้ไข)
@@ -12,7 +12,7 @@ export interface TransactionItem {
     availableQty?: number; // จำนวนคงเหลือในสต็อก (สำหรับกรณีดึงจาก Inventory)
     lotNo?: string;
     serialNo?: string;
-    locationId?: number | string;
+    locationId?: string;
     locationName?: string;
     unitPrice?: number;
     itemPrice?: number;
@@ -20,13 +20,13 @@ export interface TransactionItem {
     remark?: string;
     isLotNo?: boolean;
     isSerialNo?: boolean;
-    invId?: number | string; // รหัสอ้างอิงตาราง Inventory ใน DB
+    invId?: string; // รหัสอ้างอิงตาราง Inventory ใน DB
 }
 
 export interface MasterItemTableProps {
     items: TransactionItem[];
     onChange: (items: TransactionItem[]) => void;
-    warehouseId?: number | string;
+    warehouseId?: string;
     readOnly?: boolean;
     showPrice?: boolean;
     showLotSerial?: boolean;
@@ -40,7 +40,7 @@ export interface MasterItemTableProps {
 export interface IssueItemTableProps {
     items: TransactionItem[];
     onChange: (items: TransactionItem[]) => void;
-    warehouseId?: number | string;
+    warehouseId?: string;
     readOnly?: boolean;
     showPrice?: boolean;
     showLotSerial?: boolean;
@@ -49,13 +49,13 @@ export interface IssueItemTableProps {
     statusCode?: string;
     title?: string;
     subtitle?: string;
-    docId?: string | number | null;
+    docId?: string | null;
 }
 
 export interface InventoryItemTableProps {
     items: TransactionItem[];
     onChange: (items: TransactionItem[]) => void;
-    warehouseId?: number | string;
+    warehouseId?: string;
     readOnly?: boolean;
     showPrice?: boolean;
     showLotSerial?: boolean;
@@ -68,7 +68,7 @@ export interface TransactionItemTableProps extends Partial<MasterItemTableProps>
     items: TransactionItem[];
     onChange: (items: TransactionItem[]) => void;
     source: 'master' | 'inventory';
-    warehouseId?: number | string;
+    warehouseId?: string;
     readOnly?: boolean;
     showPrice?: boolean;
     showLotSerial?: boolean;

@@ -25,7 +25,7 @@ export const masterService = {
             apiClient.post<MasterResult<unknown>>('/api/MastItem/create', data),
         update: (data: Partial<MastItem>) =>
             apiClient.post<MasterResult<unknown>>('/api/MastItem/update', data),
-        remove: (id: string | number) =>
+        remove: (id: string) =>
             apiClient.post<MasterResult<unknown>>('/api/MastItem/delete', { id }),
     },
 
@@ -42,7 +42,7 @@ export const masterService = {
             apiClient.post<MasterResult<unknown>>('/api/MastBrand/create', data),
         update: (data: Partial<MastBrand>) =>
             apiClient.post<MasterResult<unknown>>('/api/MastBrand/update', data),
-        remove: (id: string | number) =>
+        remove: (id: string) =>
             apiClient.post<MasterResult<unknown>>('/api/MastBrand/delete', { id }),
     },
 
@@ -59,7 +59,7 @@ export const masterService = {
             apiClient.post<MasterResult<unknown>>('/api/MastWarehouse/create', data),
         update: (data: Partial<MastWarehouse>) =>
             apiClient.post<MasterResult<unknown>>('/api/MastWarehouse/update', data),
-        remove: (id: string | number) =>
+        remove: (id: string) =>
             apiClient.post<MasterResult<unknown>>('/api/MastWarehouse/delete', { id }),
     },
 
@@ -69,7 +69,6 @@ export const masterService = {
             return apiClient.post<MasterResult<MastLocation[]>>('/api/MastLocation/list', {
                 code: p?.code || p?.search || '',
                 warehouseId: p?.warehouseId || '',
-                WarehouseId: p?.warehouseId || '',
             });
         },
         getByName: (name: string) =>
@@ -78,7 +77,7 @@ export const masterService = {
             apiClient.post<MasterResult<unknown>>('/api/MastLocation/create', data),
         update: (data: Partial<MastLocation>) =>
             apiClient.post<MasterResult<unknown>>('/api/MastLocation/update', data),
-        remove: (id: string | number) =>
+        remove: (id: string) =>
             apiClient.post<MasterResult<unknown>>('/api/MastLocation/delete', { id }),
     },
 
@@ -95,7 +94,7 @@ export const masterService = {
             apiClient.post<MasterResult<unknown>>('/api/MastUom/create', data),
         update: (data: Partial<MastUom>) =>
             apiClient.post<MasterResult<unknown>>('/api/MastUom/update', data),
-        remove: (id: string | number) =>
+        remove: (id: string) =>
             apiClient.post<MasterResult<unknown>>('/api/MastUom/delete', { id }),
     },
 
@@ -113,7 +112,7 @@ export const masterService = {
             apiClient.post<MasterResult<unknown>>('/api/MastVendor/create', data),
         update: (data: Partial<MastVendor>) =>
             apiClient.post<MasterResult<unknown>>('/api/MastVendor/update', data),
-        remove: (id: string | number) =>
+        remove: (id: string) =>
             apiClient.post<MasterResult<unknown>>('/api/MastVendor/delete', { id }),
     },
 
@@ -131,7 +130,7 @@ export const masterService = {
             apiClient.post<MasterResult<unknown>>('/api/MastCustomer/create', data),
         update: (data: Partial<MastCustomer>) =>
             apiClient.post<MasterResult<unknown>>('/api/MastCustomer/update', data),
-        remove: (id: string | number) =>
+        remove: (id: string) =>
             apiClient.post<MasterResult<unknown>>('/api/MastCustomer/delete', { id }),
     },
 
@@ -146,19 +145,19 @@ export const masterService = {
         },
         getByCode: (code: string) =>
             apiClient.get<MasterResult<MastEmployee>>(`/api/MastEmployee/getByCode?code=${encodeURIComponent(code)}`),
-        getById: (id: string | number) =>
+        getById: (id: string) =>
             apiClient.get<MasterResult<MastEmployee>>(`/api/MastEmployee/getById?id=${id}`),
         create: (data: Partial<MastEmployee>) =>
             apiClient.post<MasterResult<unknown>>('/api/MastEmployee/create', data),
         update: (data: Partial<MastEmployee>) =>
             apiClient.post<MasterResult<unknown>>('/api/MastEmployee/update', data),
-        remove: (id: string | number) =>
+        remove: (id: string) =>
             apiClient.post<MasterResult<unknown>>('/api/MastEmployee/delete', { id }),
     },
 
     // ─── DocTypes ────────────────────────────────────────────────
     docTypes: {
-        list: (p?: PaginationParams & { transTypeId?: number | string; menuId?: number | string; isActive?: boolean }) => {
+        list: (p?: PaginationParams & { transTypeId?: string; menuId?: string; isActive?: boolean }) => {
             const transId = p?.menuId ?? p?.transTypeId;
             return apiClient.post<MasterResult<MastDocType[]>>('/api/MastDocType/list', {
                 name: p?.search || '',
@@ -166,13 +165,13 @@ export const masterService = {
                 isActive: p?.isActive !== undefined ? p.isActive : undefined,
             });
         },
-        getById: (id: string | number) =>
+        getById: (id: string) =>
             apiClient.get<MasterResult<MastDocType>>(`/api/MastDocType/getById?id=${id}`),
         create: (data: Partial<MastDocType>) =>
             apiClient.post<MasterResult<unknown>>('/api/MastDocType/create', data),
         update: (data: Partial<MastDocType>) =>
             apiClient.post<MasterResult<unknown>>('/api/MastDocType/update', data),
-        remove: (id: string | number) =>
+        remove: (id: string) =>
             apiClient.post<MasterResult<unknown>>('/api/MastDocType/delete', { id }),
     },
 

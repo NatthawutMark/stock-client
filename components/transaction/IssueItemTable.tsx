@@ -19,27 +19,26 @@ import { inventoryService } from '@/app/_services/inventory';
 
 // โครงสร้างข้อมูลสินค้าสำหรับ Dialog เลือกสินค้าเบิกจ่าย
 export type IssueDialogItem = {
-    id?: string | number;
-    itemId?: string | number;
+    id?: string;
+    itemId?: string;
     itemCode?: string;
     itemName?: string;
     brandName?: string;
     availableQty?: number;
     categoryName?: string;
     locationName?: string;
-    locationId?: string | number;
+    locationId?: string;
     uomName?: string;
-    uomId?: string | number;
+    uomId?: string;
     itemPrice?: number;
     sellPrice?: number;
     buyPrice?: number;
     lotNo?: string;
     serialNo?: string;
     isLotNo?: boolean;
-    isLotno?: boolean;
     isSerialNo?: boolean;
     warehouseName?: string;
-    warehouseId?: string | number;
+    warehouseId?: string;
     mfgDate?: string;
     expireDate?: string;
 };
@@ -369,11 +368,11 @@ export function IssueItemTable({
                 const remaining = Math.max(0, totalAvail - getDeductedQtyInTable(m));
                 const initQty = remaining > 0 ? 1 : 0;
                 newItems.push({
-                    id: m.id,
-                    itemId: String(m.itemId),
+                    id: String(m.id ?? ''),
+                    itemId: String(m.itemId ?? ''),
                     itemCode: m.itemCode || (m.itemId ? String(m.itemId) : ''),
                     itemName: m.itemName || '',
-                    uomId: m.uomId,
+                    uomId: m.uomId ? String(m.uomId) : undefined,
                     uomName: m.uomName || uom,
                     itemQty: initQty,
                     availableQty: totalAvail,
@@ -382,12 +381,12 @@ export function IssueItemTable({
                     totalPrice: price * initQty,
                     lotNo: m.lotNo || '',
                     serialNo: m.serialNo || '',
-                    isLotNo: Boolean(m.lotNo || m.isLotNo || m.isLotno),
+                    isLotNo: Boolean(m.lotNo || m.isLotNo),
                     isSerialNo: Boolean(m.serialNo || m.isSerialNo),
-                    locationId: matchedLoc?.id ?? m.locationId ?? '',
+                    locationId: matchedLoc?.id ? String(matchedLoc.id) : (m.locationId ? String(m.locationId) : undefined),
                     locationName: m.locationName || matchedLoc?.name || matchedLoc?.code || '',
                     remark: '',
-                    invId: m.id,
+                    invId: m.id ? String(m.id) : undefined,
                 });
             }
         });
@@ -429,11 +428,11 @@ export function IssueItemTable({
         const initQty = remaining > 0 ? 1 : 0;
 
         const newRow: TransactionItem = {
-            id: String(m.id),
-            itemId: String(m.itemId),
+            id: String(m.id ?? ''),
+            itemId: String(m.itemId ?? ''),
             itemCode: m.itemCode || (m.itemId ? String(m.itemId) : ''),
             itemName: m.itemName || '',
-            uomId: m.uomId,
+            uomId: m.uomId ? String(m.uomId) : undefined,
             uomName: m.uomName || uom,
             itemQty: initQty,
             availableQty: totalAvail,
@@ -442,12 +441,12 @@ export function IssueItemTable({
             totalPrice: price * initQty,
             lotNo: m.lotNo || '',
             serialNo: m.serialNo || '',
-            isLotNo: Boolean(m.lotNo || m.isLotNo || m.isLotno),
+            isLotNo: Boolean(m.lotNo || m.isLotNo),
             isSerialNo: Boolean(m.serialNo || m.isSerialNo),
-            locationId: matchedLoc?.id ?? m.locationId ?? '',
+            locationId: matchedLoc?.id ? String(matchedLoc.id) : (m.locationId ? String(m.locationId) : undefined),
             locationName: m.locationName || matchedLoc?.name || matchedLoc?.code || '',
             remark: '',
-            invId: m.id,
+            invId: m.id ? String(m.id) : undefined,
         };
 
         onChange([...items, newRow]);

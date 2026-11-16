@@ -1,6 +1,6 @@
 'use client';
 
-interface SearchInputProps {
+export interface SearchInputProps {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;

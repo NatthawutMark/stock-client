@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AppLayout } from '@/app/components/layout/AppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import { transactionService } from '@/app/_services/transaction';
@@ -295,17 +295,17 @@ function ReceiveFormContent() {
                 docTypeId,
                 statusCode: targetStatus,
                 details: items.map((item) => ({
-                    itemId: Number(item.itemId) || item.itemId,
+                    itemId: String(item.itemId),
                     itemCode: item.itemCode,
                     itemName: item.itemName,
-                    uomId: item.uomId ? (Number(item.uomId) || item.uomId) : undefined,
+                    uomId: item.uomId ? String(item.uomId) : undefined,
                     uomName: item.uomName,
                     itemQty: Number(item.itemQty) || 1,
                     itemPrice: Number(item.itemPrice) || 0,
                     totalPrice: Number(item.totalPrice) || ((Number(item.itemQty) || 1) * (Number(item.itemPrice) || 0)),
                     lotNo: item.lotNo || '',
                     serialNo: item.serialNo || '',
-                    locationId: item.locationId ? (Number(item.locationId) || item.locationId) : undefined,
+                    locationId: item.locationId ? String(item.locationId) : undefined,
                     locationName: item.locationName || '',
                     remark: item.remark || '',
                 })),

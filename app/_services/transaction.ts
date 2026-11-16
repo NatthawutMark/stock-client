@@ -10,16 +10,16 @@ export const transactionService = {
         list: (data?: DocTrans) => apiClient.post<DocTrans[]>('/api/doctrans/list', data),
     },
     receive: {
-        list: (p?: PaginationParams & { docNo?: string; docDate?: string; menuId?: number | string }) => {
+        list: (p?: PaginationParams & { docNo?: string; docDate?: string; menuId?: string }) => {
             const q = new URLSearchParams();
             if (p?.search) q.set('search', p.search);
             if (p?.docNo) q.set('docNo', p.docNo);
             if (p?.docDate) q.set('docDate', p.docDate);
-            if (p?.menuId) q.set('menuId', String(p.menuId));
+            if (p?.menuId) q.set('menuId', p.menuId);
             return apiClient.get<DocReceive[]>(`/api/transactions/receive?${q}`);
         },
         listItem: (data?: DocReceiveDetail) => apiClient.post('api/docreceive/list', data),
-        get: (id: string | number) =>
+        get: (id: string) =>
             apiClient.get<DocReceive & { details: DocReceiveDetail[] }>(`/api/docreceive/${id}`),
         create: (data: unknown) =>
             apiClient.post<unknown>('/api/doctrans/create', data),
@@ -31,24 +31,24 @@ export const transactionService = {
             apiClient.post<DocReceive>(`/api/docreceive/${id}/putaway`),
     },
     issue: {
-        list: (p?: PaginationParams & { docNo?: string; docDate?: string; menuId?: number | string }) => {
+        list: (p?: PaginationParams & { docNo?: string; docDate?: string; menuId?: string }) => {
             const q = new URLSearchParams();
             if (p?.search) q.set('search', p.search);
             if (p?.docNo) q.set('docNo', p.docNo);
             if (p?.docDate) q.set('docDate', p.docDate);
-            if (p?.menuId) q.set('menuId', String(p.menuId));
+            if (p?.menuId) q.set('menuId', p.menuId);
             return apiClient.get<DocIssue[]>(`/api/transactions/issue?${q}`);
         },
         listItem: (data?: Partial<DocIssueDetail>) => apiClient.post('/api/docissue/list', data),
-        get: (id: string | number) =>
+        get: (id: string) =>
             apiClient.get<DocIssue & { details: DocIssueDetail[] }>(`/api/docissue/${id}`),
         create: (data: unknown) =>
             apiClient.post<unknown>('/api/doctrans/create', data),
-        update: (id: string | number, data: unknown) =>
+        update: (id: string, data: unknown) =>
             apiClient.put<DocIssue>(`/api/docissue/${id}`, data),
-        confirm: (id: string | number) =>
+        confirm: (id: string) =>
             apiClient.post<DocIssue>(`/api/docissue/${id}/confirm`),
-        picking: (id: string | number) =>
+        picking: (id: string) =>
             apiClient.post<DocIssue>(`/api/docissue/${id}/picking`),
     },
     transfer: {
@@ -59,7 +59,7 @@ export const transactionService = {
         },
         create: (data: Omit<DocTransfer, 'id' | 'createDate' | 'updateDate'>) =>
             apiClient.post<DocTransfer>('/api/transactions/transfer', data),
-        update: (id: number, data: Partial<DocTransfer>) =>
+        update: (id: string, data: Partial<DocTransfer>) =>
             apiClient.put<DocTransfer>(`/api/transactions/transfer/${id}`, data),
     },
     request: {
@@ -70,7 +70,7 @@ export const transactionService = {
         },
         create: (data: Omit<DocRequest, 'id' | 'createDate' | 'updateDate'>) =>
             apiClient.post<DocRequest>('/api/transactions/request', data),
-        update: (id: number, data: Partial<DocRequest>) =>
+        update: (id: string, data: Partial<DocRequest>) =>
             apiClient.put<DocRequest>(`/api/transactions/request/${id}`, data),
     },
     disposal: {
@@ -81,7 +81,7 @@ export const transactionService = {
         },
         create: (data: Omit<DocDisposal, 'id' | 'createDate' | 'updateDate'>) =>
             apiClient.post<DocDisposal>('/api/transactions/disposal', data),
-        update: (id: number, data: Partial<DocDisposal>) =>
+        update: (id: string, data: Partial<DocDisposal>) =>
             apiClient.put<DocDisposal>(`/api/transactions/disposal/${id}`, data),
     },
 };

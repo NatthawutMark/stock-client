@@ -19,7 +19,7 @@ import type { MastItem, MastBrand, MastLocation, MastUom } from '@/lib/types';
 import Swal from 'sweetalert2';
 
 interface ItemFormData {
-    id?: string | number;
+    id?: string;
     originalItemCode?: string;
     itemCode: string;
     itemName: string;
@@ -30,7 +30,7 @@ interface ItemFormData {
     sellPrice: number | string;
     minAlert: number | string;
     maxAlert: number | string;
-    isLotno: boolean;
+    isLotNo: boolean;
     isSerialNo: boolean;
     isActive: boolean;
 }
@@ -45,7 +45,7 @@ const defaultFormData: ItemFormData = {
     sellPrice: 0,
     minAlert: 0,
     maxAlert: 0,
-    isLotno: false,
+    isLotNo: false,
     isSerialNo: false,
     isActive: true,
 };
@@ -121,9 +121,9 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                     uomId: dataEdit.uomId ? String(dataEdit.uomId) : '',
                     buyPrice: dataEdit.buyPrice ?? 0,
                     sellPrice: dataEdit.sellPrice ?? 0,
-                    minAlert: dataEdit.minAlert ?? (dataEdit.minAlter ?? 0),
-                    maxAlert: dataEdit.maxAlert ?? (dataEdit.maxAlter ?? 0),
-                    isLotno: Boolean(dataEdit.isLotno ?? dataEdit.isLotNo),
+                    minAlert: dataEdit.minAlert ?? 0,
+                    maxAlert: dataEdit.maxAlert ?? 0,
+                    isLotNo: Boolean(dataEdit.isLotNo),
                     isSerialNo: Boolean(dataEdit.isSerialNo),
                     isActive: dataEdit.isActive !== false,
                 });
@@ -177,7 +177,7 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                 sellPrice: Number(formData.sellPrice) || 0,
                 minAlert: Number(formData.minAlert) || 0,
                 maxAlert: Number(formData.maxAlert) || 0,
-                isLotno: formData.isLotno,
+                isLotNo: formData.isLotNo,
                 isSerialNo: formData.isSerialNo,
                 isActive: formData.isActive,
             };
@@ -450,8 +450,8 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                         <label className="flex items-center gap-2.5 cursor-pointer">
                             <input
                                 type="checkbox"
-                                checked={formData.isLotno}
-                                onChange={(e) => setFormData((prev) => ({ ...prev, isLotno: e.target.checked }))}
+                                checked={formData.isLotNo}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, isLotNo: e.target.checked }))}
                                 className="w-4 h-4 text-blue-600 rounded border-zinc-300 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-700"
                             />
                             <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">

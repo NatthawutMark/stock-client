@@ -1,12 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { AppLayout } from '@/app/components/layout/AppLayout';
-import { SearchInput } from '@/app/components/ui/SearchInput';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useI18n, useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import type { MastEmployee } from '@/lib/types';
-import { employees as mockEmployees } from '@/lib/mock/data';
 import {
     Button,
     Table,
@@ -19,8 +17,9 @@ import {
     CardContent,
     Label,
     TablePagination,
+    SearchInput,
 } from '@/components/ui';
-import { CreateEmployeeModal } from '@/app/components/modal/CreateEmployeeModal';
+import { CreateEmployeeModal } from '@/components/modal/CreateEmployeeModal';
 import Swal from 'sweetalert2';
 
 export default function EmployeesPage() {
@@ -45,7 +44,7 @@ export default function EmployeesPage() {
         setPageTitle('จัดการข้อมูลพนักงาน');
     }, [setPageTitle]);
 
-    // Fetch employees from C# API (stock-api: /api/MastEmployee/list) or mock fallback
+    // Fetch employees from C# API (stock-api: /api/MastEmployee/list)
     const fetchEmployees = useCallback(async () => {
         setLoading(true);
         try {
@@ -56,17 +55,13 @@ export default function EmployeesPage() {
                     : Array.isArray(res.data)
                     ? res.data
                     : [];
-                if (data.length > 0) {
-                    setEmployeeList(data);
-                } else {
-                    setEmployeeList(mockEmployees);
-                }
+                setEmployeeList(data);
             } else {
-                setEmployeeList(mockEmployees);
+                setEmployeeList([]);
             }
         } catch (error) {
             console.error('Failed to fetch employees:', error);
-            setEmployeeList(mockEmployees);
+            setEmployeeList([]);
         } finally {
             setLoading(false);
         }
@@ -82,11 +77,11 @@ export default function EmployeesPage() {
         if (!search.trim()) return employeeList;
         const q = search.toLowerCase();
         return employeeList.filter((e) => {
-            const code = (e.empCode || e.emp_code || e.EMP_CODE || '').toLowerCase();
-            const fName = (e.fName || e.f_name || e.F_NAME || '').toLowerCase();
-            const lName = (e.lName || e.l_name || e.L_NAME || '').toLowerCase();
+            const code = (e.empCode || '').toLowerCase();
+            const fName = (e.fName || '').toLowerCase();
+            const lName = (e.lName || '').toLowerCase();
             const fullName = `${fName} ${lName}`.trim();
-            const tel = (e.tel || e.TEL || '').toLowerCase();
+            const tel = (e.tel || '').toLowerCase();
             const pos = (e.position || '').toLowerCase();
             const dept = (e.department || '').toLowerCase();
 
@@ -127,8 +122,8 @@ export default function EmployeesPage() {
     };
 
     const handleDelete = async (emp: MastEmployee) => {
-        const code = emp.empCode || emp.emp_code || emp.EMP_CODE || '';
-        const name = `${emp.fName || emp.f_name || emp.F_NAME || ''} ${emp.lName || emp.l_name || emp.L_NAME || ''}`.trim();
+        const code = emp.empCode || '';
+        const name = `${emp.fName || ''} ${emp.lName || ''}`.trim();
 
         const confirmResult = await Swal.fire({
             title: 'ยืนยันการลบข้อมูล',
@@ -144,26 +139,9 @@ export default function EmployeesPage() {
         if (confirmResult.isConfirmed) {
             try {
                 const targetId = emp.id || code;
-                let isDeleted = false;
+                const res = await masterService.employees.remove(targetId);
 
-                try {
-                    const res = await masterService.employees.remove(targetId);
-                    if (res && res.success) {
-                        isDeleted = true;
-                    }
-                } catch {
-                    // Fallback to local deletion
-                    isDeleted = true;
-                }
-
-                // Remove from mock list
-                const idx = mockEmployees.findIndex((e) => String(e.id) === String(emp.id) || e.empCode === code);
-                if (idx !== -1) {
-                    mockEmployees.splice(idx, 1);
-                    isDeleted = true;
-                }
-
-                if (isDeleted) {
+                if (res && res.success) {
                     await Swal.fire({
                         icon: 'success',
                         title: 'ลบข้อมูลสำเร็จ',
@@ -175,7 +153,7 @@ export default function EmployeesPage() {
                     Swal.fire({
                         icon: 'error',
                         title: 'ลบข้อมูลไม่สำเร็จ',
-                        text: 'เกิดข้อผิดพลาดในการลบข้อมูลพนักงาน',
+                        text: res?.error || res?.message || 'เกิดข้อผิดพลาดในการลบข้อมูลพนักงาน',
                     });
                 }
             } catch (error: unknown) {
@@ -251,10 +229,10 @@ export default function EmployeesPage() {
                         <TableBody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                             {!loading && paginatedEmployees && paginatedEmployees.length > 0 ? (
                                 paginatedEmployees.map((emp, indexKey) => {
-                                    const code = emp.empCode || emp.emp_code || emp.EMP_CODE || '-';
-                                    const fName = emp.fName || emp.f_name || emp.F_NAME || '-';
-                                    const lName = emp.lName || emp.l_name || emp.L_NAME || '-';
-                                    const tel = emp.tel || emp.TEL || '-';
+                                    const code = emp.empCode || '-';
+                                    const fName = emp.fName || '-';
+                                    const lName = emp.lName || '-';
+                                    const tel = emp.tel || '-';
                                     const pos = emp.position || '';
                                     const dept = emp.department || '';
                                     const posDept = [pos, dept].filter(Boolean).join(' - ') || '-';

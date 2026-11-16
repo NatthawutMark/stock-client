@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AppLayout } from '@/app/components/layout/AppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import { transactionService } from '@/app/_services/transaction';
@@ -134,7 +134,7 @@ function IssueFormContent() {
                             setDocTypeId(foundDoc.docTypeId ? String(foundDoc.docTypeId) : '');
                             setRefDocNo(foundDoc.refDocNo || '');
                             setBookingId(foundDoc.bookingId || '');
-                            setEmployeeId(foundDoc.empId ? String(foundDoc.empId) : foundDoc.employeeId ? String(foundDoc.employeeId) : '');
+                            setEmployeeId(foundDoc.empId ? String(foundDoc.empId) : '');
                             setRemark(foundDoc.remark || '');
                             if (foundDoc.warehouseId) {
                                 setWarehouseId(String(foundDoc.warehouseId));
@@ -206,8 +206,8 @@ function IssueFormContent() {
                                         }
 
                                         return {
-                                            id: invId || d.id || `edit-item-${index}`,
-                                            itemId: d.itemId ?? '',
+                                            id: String(invId || d.id || `edit-item-${index}`),
+                                            itemId: String(d.itemId ?? ''),
                                             itemCode: d.itemCode || `ITM${d.itemId}`,
                                             itemName: d.itemName || '',
                                             uomId: d.uomId,
@@ -224,7 +224,7 @@ function IssueFormContent() {
                                             locationId: d.locationId,
                                             locationName: d.locationName || '',
                                             remark: d.remark || '',
-                                            invId: invId,
+                                            invId: invId !== undefined ? String(invId) : undefined,
                                         };
                                     })
                                 );
@@ -403,7 +403,6 @@ function IssueFormContent() {
                 refDocNo: refDocNo.trim(),
                 bookingId: bookingId.trim() || undefined,
                 empId: employeeId.trim() || undefined,
-                employeeId: employeeId.trim() || undefined,
                 custId: customerId || undefined,
                 warehouseId: warehouseId || undefined,
                 remark: remark.trim(),
@@ -413,11 +412,11 @@ function IssueFormContent() {
                 details: items.map((item) => ({
                     id: item.id,
                     invId: item.invId, // รหัสคงคลัง Inventory ID สำหรับหักลบยอด
-                    itemId: Number(item.itemId) || item.itemId,
+                    itemId: String(item.itemId),
                     itemCode: item.itemCode,
                     itemName: item.itemName,
                     bookingQty: Number(item.itemQty) || 1,
-                    uomId: item.uomId ? (Number(item.uomId) || item.uomId) : undefined,
+                    uomId: item.uomId ? String(item.uomId) : undefined,
                     uomName: item.uomName,
                     itemQty: Number(item.itemQty) || 1,
                     pickingQty: 0,
@@ -427,7 +426,7 @@ function IssueFormContent() {
                     serialNo: item.serialNo || '',
                     isLotNo: Boolean(item.isLotNo),
                     isSerialNo: Boolean(item.isSerialNo),
-                    locationId: item.locationId ? (Number(item.locationId) || item.locationId) : undefined,
+                    locationId: item.locationId ? String(item.locationId) : undefined,
                     locationName: item.locationName || '',
                     remark: item.remark || '',
                 })),

@@ -2,21 +2,12 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { AppLayout } from '@/app/components/layout/AppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { transactionService } from '@/app/_services/transaction';
 import { SystemMenuService } from '@/app/_services/systemMenu';
 import { masterService } from '@/app/_services/master';
 import { ServiceSystem } from '@/app/_services/ServiceSystem';
-import {
-    docReceives,
-    docReceiveDetails,
-    docIssues,
-    docIssueDetails,
-    docTransfers,
-    docRequests,
-    docDisposals,
-} from '@/lib/mock/data';
 import type {
     DocTrans,
     MastWarehouse,
@@ -75,24 +66,22 @@ function getField<T = unknown>(item: Record<string, unknown> | undefined, ...key
 }
 
 export interface TransactionDocView extends Record<string, unknown> {
-    id?: string | number;
+    id?: string;
     docNo?: string;
     docDate?: string;
-    menuId?: string | number;
+    menuId?: string;
     menuName?: string;
-    docTypeId?: string | number;
+    docTypeId?: string;
     docTypeName?: string;
-    empId?: string | number;
-    employeeId?: string | number;
-    employeeName?: string;
+    empId?: string;
     empName?: string;
-    vendorId?: string | number;
-    vendorName?: string;
-    warehouseId?: string | number;
+    vendId?: string;
+    vendName?: string;
+    warehouseId?: string;
     warehouseName?: string;
     statusCode?: string;
     statusName?: string;
-    statusId?: number | string;
+    statusId?: string;
     remark?: string;
     createDate?: string;
 }
@@ -128,18 +117,13 @@ export default function TransactionPage() {
     const [docNoInput, setDocNoInput] = useState<string>('');
     const [docDateInput, setDocDateInput] = useState<string>('');
     const [menuSelect, setMenuSelect] = useState<string>('');
+    const [empSelect, setEmpSelect] = useState<string>('');
 
     // Master Dropdown Options
-    const [menuOptions, setMenuOptions] = useState<{ id: string | number; name: string }[]>([
-        { id: '1', name: 'Receive (รับสินค้าเข้า)' },
-        { id: '2', name: 'Issue (จ่ายสินค้า)' },
-        { id: '3', name: 'Transfer (โอนย้ายสินค้า)' },
-        { id: '4', name: 'Request (ขอเบิกสินค้า)' },
-        { id: '5', name: 'Disposal (ตัดจำหน่าย)' },
-    ]);
-    const [warehouses, setWarehouses] = useState<MastWarehouse[]>([]);
-    const [employees, setEmployees] = useState<MastEmployee[]>([]);
-    const [docTypes, setDocTypes] = useState<MastDocType[]>([]);
+    const [menuList, setMenuList] = useState<{ id: string | number; name: string }[]>([]);
+    const [warehouseList, setWarehouseList] = useState<MastWarehouse[]>([]);
+    const [employeeList, setEmployeeList] = useState<MastEmployee[]>([]);
+    const [docTypeList, setDocTypeList] = useState<MastDocType[]>([]);
 
     // Document Data State
     const [docList, setDocList] = useState<TransactionDocView[]>([]);
@@ -162,34 +146,31 @@ export default function TransactionPage() {
     }, [setPageTitle]);
 
     // ─────────────────────────────────────────────────────────────
-    // 1. โหลดข้อมูล Master Helpers (Menu, Warehouses, Employees, DocTypes)
+    // 1. โหลดข้อมูล Master Helpers (Menu, warehouseList, employeeList, docTypeList)
     // ─────────────────────────────────────────────────────────────
     useEffect(() => {
         const loadMasterHelpers = async () => {
             try {
                 const [menuRes, whRes, empRes, docTypeRes] = await Promise.all([
-                    SystemMenuService.transactionList().catch(() => null),
+                    SystemMenuService.menuTransactionList().catch(() => null),
                     masterService.warehouses.list().catch(() => null),
                     masterService.employees.list().catch(() => null),
                     masterService.docTypes.list().catch(() => null),
+                    transactionService.docTrans.list().catch(() => null)
                 ]);
 
                 // 1.1 เมนูประเภทรายการ
                 if (menuRes && menuRes.success) {
-                    const data = Array.isArray(menuRes.results)
-                        ? menuRes.results
-                        : Array.isArray(menuRes.data)
-                            ? menuRes.data
-                            : [];
+                    const data = Array.isArray(menuRes.results) ? menuRes.results
+                        : Array.isArray(menuRes.data) ? menuRes.data : [];
                     if (data.length > 0) {
-                        setMenuOptions(
+                        setMenuList(
                             data.map((item: SysMenu) => {
                                 const id = item.id;
                                 const raw = item as unknown as Record<string, unknown>;
-                                const name =
-                                    item.nameTh && item.nameEn
-                                        ? `${item.nameTh} (${item.nameEn})`
-                                        : item.nameTh || item.nameEn || String(raw.menuName || raw.name || `Menu ${id}`);
+                                const name = item.nameTh && item.nameEn
+                                    ? `${item.nameTh} (${item.nameEn})`
+                                    : item.nameTh || item.nameEn || String(raw.menuName || raw.name || `Menu ${id}`);
                                 return { id: String(id), name };
                             })
                         );
@@ -198,15 +179,15 @@ export default function TransactionPage() {
 
                 // 1.2 คลังสินค้า
                 if (whRes && whRes.success && Array.isArray(whRes.results)) {
-                    setWarehouses(whRes.results);
+                    setWarehouseList(whRes.results);
                 }
 
                 // 1.3 พนักงาน
-                const empData = empRes?.success
-                    ? (Array.isArray(empRes.results) ? empRes.results : Array.isArray(empRes.data) ? empRes.data : [])
-                    : [];
-                if (empData.length > 0) {
-                    setEmployees(empData);
+                if (empRes && empRes.success) {
+                    const empData = Array.isArray(empRes.results) ? empRes.results : Array.isArray(empRes.data) ? empRes.data : [];
+                    if (empData.length > 0) {
+                        setEmployeeList(empData);
+                    }
                 }
 
                 // 1.4 ประเภทเอกสาร
@@ -214,7 +195,7 @@ export default function TransactionPage() {
                     ? (Array.isArray(docTypeRes.results) ? docTypeRes.results : Array.isArray(docTypeRes.data) ? docTypeRes.data : [])
                     : [];
                 if (dTypeData.length > 0) {
-                    setDocTypes(dTypeData);
+                    setDocTypeList(dTypeData);
                 }
             } catch (err) {
                 console.warn('Failed to load master helpers for transaction page:', err);
@@ -225,66 +206,26 @@ export default function TransactionPage() {
     }, []);
 
     // ─────────────────────────────────────────────────────────────
-    // 2. ข้อมูล Mock Fallback ทุกประเภทธุรกรรม (ครอบคลุมครบตาม COLUMNS)
-    // ─────────────────────────────────────────────────────────────
-    const getFallbackTransactions = useCallback((): TransactionDocView[] => [
-        ...docReceives.map((d) => ({
-            ...d,
-            menuId: d.menuId ?? 1,
-            menuName: d.menuName || 'Receive (รับสินค้าเข้า)',
-            docTypeName: d.docTypeId === 2 ? 'ใบรับคืน' : 'ใบรับสินค้าปกติ',
-            employeeName: d.employeeName || d.empName || 'สมชาย ใจดี',
-            warehouseName: d.warehouseName || 'คลังสินค้าหลัก (WH-MAIN)',
-            statusCode: d.statusCode || 'Completed',
-        })),
-        ...docIssues.map((d) => ({
-            ...d,
-            menuId: 2,
-            menuName: 'Issue (จ่ายสินค้าออก)',
-            docTypeName: d.docTypeId === 4 ? 'ใบจ่ายสินค้าเสีย' : 'ใบจ่ายสินค้าปกติ',
-            employeeName: 'สมหญิง รักงาน',
-            warehouseName: 'คลังสินค้าหลัก (WH-MAIN)',
-            statusCode: d.statusId === 6 ? 'Completed' : 'Draft',
-        })),
-        ...docTransfers.map((d) => ({
-            ...d,
-            menuId: 3,
-            menuName: 'Transfer (โอนย้ายสินค้า)',
-            docTypeName: 'ใบโอนย้ายสินค้า',
-            employeeName: 'ประสิทธิ์ มุ่งมั่น',
-            warehouseName: 'คลังสินค้าหลัก -> คลังสาขา 1',
-            statusCode: d.statusId === 8 ? 'Completed' : 'Draft',
-        })),
-        ...docRequests.map((d) => ({
-            ...d,
-            menuId: 4,
-            menuName: 'Request (ขอเบิกสินค้า)',
-            docTypeName: 'ใบขอเบิกสินค้า',
-            employeeName: 'สมชาย ใจดี',
-            warehouseName: 'คลังสินค้าหลัก (WH-MAIN)',
-            statusCode: d.statusId === 3 ? 'Completed' : 'Pending',
-        })),
-        ...docDisposals.map((d) => ({
-            ...d,
-            menuId: 5,
-            menuName: 'Disposal (ตัดจำหน่าย)',
-            docTypeName: 'ใบตัดจำหน่าย',
-            employeeName: 'วิชัย การค้า',
-            warehouseName: 'คลังสินค้าหลัก (WH-MAIN)',
-            statusCode: d.statusId === 3 ? 'Completed' : 'Draft',
-        })),
-    ], []);
-
-    // ─────────────────────────────────────────────────────────────
-    // 3. โหลดข้อมูลรายการธุรกรรม (Fetch Transactions Data)
+    // 2. โหลดข้อมูลรายการธุรกรรม (Fetch Transactions Data)
     // ─────────────────────────────────────────────────────────────
     const fetchDocuments = useCallback(async () => {
         setLoading(true);
         try {
-            const payload: Record<string, unknown> = {};
-            if (docNoInput.trim()) payload.docNo = docNoInput.trim();
-            if (docDateInput.trim()) payload.docDate = docDateInput.trim();
+            const payload: DocTrans & { pageSize?: number; pageNumber?: number } = {
+                docNo: docNoInput.trim() || undefined,
+                docDate: docDateInput.trim() || undefined,
+                empId: empSelect || undefined,
+                menuId: menuSelect || undefined,
+                page: currentPage,
+                pageNumber: currentPage,
+                size: pageSize,
+                pageSize,
+                limit: pageSize,
+            };
             if (menuSelect) payload.menuId = menuSelect;
+
+            console.log(payload);
+
 
             const res = await transactionService.docTrans.list(payload as unknown as DocTrans);
             const listData = res?.success
@@ -293,18 +234,14 @@ export default function TransactionPage() {
                     ? res
                     : [];
 
-            if (listData && listData.length > 0) {
-                setDocList(listData as TransactionDocView[]);
-            } else {
-                setDocList(getFallbackTransactions());
-            }
+            setDocList((listData || []) as TransactionDocView[]);
         } catch (error) {
-            console.warn('Fetch transaction list failed, loading fallback mock data:', error);
-            setDocList(getFallbackTransactions());
+            console.error('Fetch transaction list failed:', error);
+            setDocList([]);
         } finally {
             setLoading(false);
         }
-    }, [docNoInput, docDateInput, menuSelect, getFallbackTransactions]);
+    }, [docNoInput, docDateInput, menuSelect]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -385,35 +322,7 @@ export default function TransactionPage() {
             return;
         }
 
-        // 2. ตรวจสอบใน mock data ตาม docId (รองรับทั้ง receive และ issue)
-        const matchReceives = docReceiveDetails.filter((d) => String(d.docId) === String(doc.id));
-        if (matchReceives.length > 0) {
-            setSelectedDocItems(
-                matchReceives.map((d, idx) => ({
-                    id: d.id || idx,
-                    itemName: d.itemName || 'สินค้าทั่วไป',
-                    itemQty: Number(d.itemQty || 1),
-                }))
-            );
-            return;
-        }
-
-        const matchIssues = docIssueDetails.filter((d) => String(d.docId) === String(doc.id));
-        if (matchIssues.length > 0) {
-            setSelectedDocItems(
-                matchIssues.map((d, idx) => ({
-                    id: d.id || idx,
-                    itemName: d.itemName || 'สินค้าทั่วไป',
-                    itemQty: Number(d.itemQty || d.bookingQty || 1),
-                }))
-            );
-            return;
-        }
-
-        // 3. Fallback สำหรับเอกสารอื่นๆ
-        setSelectedDocItems([
-            { id: 1, itemName: 'สินค้ามาตรฐานตามใบแจ้ง', itemQty: 1 },
-        ]);
+        setSelectedDocItems([]);
     };
 
     return (
@@ -483,8 +392,35 @@ export default function TransactionPage() {
                 </div>
 
                 <CardContent className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl">
-                        {/* 1. Docno Field */}
+                    <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 ">
+
+                        {/* 1. Menu Field (Select Dropdown) */}
+                        <div className="flex flex-col space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="menu-select" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                                    Menu
+                                </Label>
+                                <span className="text-xs text-zinc-400">ประเภทเมนูธุรกรรม</span>
+                            </div>
+                            <select
+                                id="menu-select"
+                                value={menuSelect}
+                                onChange={(e) => {
+                                    setMenuSelect(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer transition-all"
+                            >
+                                <option value="">-- ทั้งหมด (All Menus) --</option>
+                                {menuList.map((opt) => (
+                                    <option key={opt.id} value={String(opt.id)}>
+                                        {opt.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* 2. Docno Field */}
                         <div className="flex flex-col space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="docno-input" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
@@ -516,7 +452,7 @@ export default function TransactionPage() {
                             </div>
                         </div>
 
-                        {/* 2. Docdate Field */}
+                        {/* 3. Docdate Field */}
                         <div className="flex flex-col space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="docdate-input" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
@@ -547,31 +483,33 @@ export default function TransactionPage() {
                             </div>
                         </div>
 
-                        {/* 3. Menu Field (Select Dropdown) */}
+                        {/* 4. Employee */}
                         <div className="flex flex-col space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="menu-select" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                                    Menu
+                                    Employee
                                 </Label>
                                 <span className="text-xs text-zinc-400">ประเภทเมนูธุรกรรม</span>
                             </div>
                             <select
                                 id="menu-select"
-                                value={menuSelect}
+                                value={empSelect}
                                 onChange={(e) => {
-                                    setMenuSelect(e.target.value);
+                                    setEmpSelect(e.target.value);
                                     setCurrentPage(1);
                                 }}
                                 className="w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer transition-all"
                             >
-                                <option value="">-- ทั้งหมด (All Menus) --</option>
-                                {menuOptions.map((opt) => (
+                                <option value="">-- ทั้งหมด (All employeeList) --</option>
+                                {employeeList.map((opt) => (
                                     <option key={opt.id} value={String(opt.id)}>
-                                        {opt.name}
+                                        {opt.fName} {opt.lName}
                                     </option>
                                 ))}
                             </select>
+
                         </div>
+
                     </div>
                 </CardContent>
             </Card>
@@ -652,7 +590,7 @@ export default function TransactionPage() {
                                     // 1. Menu (ประเภทรายการ)
                                     const rawMenuId = getField(rec, 'menuId', 'menu_id', 'transTypeId', 'Menu_id');
                                     const menuNameVal = getField<string>(rec, 'menuName', 'menu_name', 'transTypeName');
-                                    const matchedMenu = menuOptions.find((m) => String(m.id) === String(rawMenuId));
+                                    const matchedMenu = menuList.find((m) => String(m.id) === String(rawMenuId));
                                     const menuLabel = menuNameVal || matchedMenu?.name || (rawMenuId ? `Menu #${rawMenuId}` : '-');
 
                                     // 2. DocNo (เลขที่เอกสาร)
@@ -661,7 +599,7 @@ export default function TransactionPage() {
                                     // 3. DocType (ประเภทเอกสาร)
                                     const rawDocTypeId = getField(rec, 'docTypeId', 'doc_type_id');
                                     const docTypeNameVal = getField<string>(rec, 'docTypeName', 'doc_type_name', 'docType');
-                                    const matchedDocType = docTypes.find((d) => String(d.id) === String(rawDocTypeId));
+                                    const matchedDocType = docTypeList.find((d) => String(d.id) === String(rawDocTypeId));
                                     const docTypeLabel = docTypeNameVal || matchedDocType?.name || (rawDocTypeId ? `Type #${rawDocTypeId}` : '-');
 
                                     // 4. DocDate (วันที่เอกสาร)
@@ -672,7 +610,7 @@ export default function TransactionPage() {
                                     // 5. Employee (พนักงาน)
                                     const rawEmpId = getField(rec, 'empId', 'emp_id', 'employeeId', 'employee_id');
                                     const empNameVal = getField<string>(rec, 'employeeName', 'employee_name', 'empName', 'employee');
-                                    const matchedEmp = employees.find((e) => String(e.id) === String(rawEmpId));
+                                    const matchedEmp = employeeList.find((e) => String(e.id) === String(rawEmpId));
                                     const employeeLabel =
                                         empNameVal ||
                                         (matchedEmp ? `${matchedEmp.fName || ''} ${matchedEmp.lName || ''}`.trim() : '') ||
@@ -681,7 +619,7 @@ export default function TransactionPage() {
                                     // 6. Warehouse (คลังสินค้า)
                                     const rawWhId = getField(rec, 'warehouseId', 'warehouse_id', 'fromWarehouseId');
                                     const whNameVal = getField<string>(rec, 'warehouseName', 'warehouse_name', 'warehouse');
-                                    const matchedWh = warehouses.find((w) => String(w.id) === String(rawWhId));
+                                    const matchedWh = warehouseList.find((w) => String(w.id) === String(rawWhId));
                                     const warehouseLabel = whNameVal || matchedWh?.warehouseName || (rawWhId ? `คลัง #${rawWhId}` : '-');
 
                                     // 7. Status (สถานะ)
@@ -874,7 +812,7 @@ export default function TransactionPage() {
                                         ผู้จำหน่าย / พนักงาน
                                     </div>
                                     <p className="font-medium text-zinc-800 dark:text-zinc-200 truncate">
-                                        {selectedDoc.employeeName || selectedDoc.empName || selectedDoc.vendorName || (selectedDoc.employeeId ? `Emp #${selectedDoc.employeeId}` : '-')}
+                                        {selectedDoc.empName || selectedDoc.vendName || (selectedDoc.empId ? `Emp #${selectedDoc.empId}` : '-')}
                                     </p>
                                 </div>
                             </div>

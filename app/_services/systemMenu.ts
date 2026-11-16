@@ -10,6 +10,6 @@ export const SystemMenuService = {
         if (p?.warehouseId) q.set('warehouseId', String(p.warehouseId));
         return apiClient.get<SysMenu[]>(`/api/systemmenu?${q}`);
     },
-    transactionList: () => apiClient.get<SysMenu[]>(`/api/systemmenu/getTransactionMenu`),
+    menuTransactionList: () => apiClient.get<SysMenu[]>(`/api/systemmenu/getTransactionMenu`),
 };
 

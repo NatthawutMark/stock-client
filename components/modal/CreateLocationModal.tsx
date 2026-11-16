@@ -13,42 +13,56 @@ import {
     AlertTitle,
     AlertDescription,
 } from '@/components/ui/index';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Building2 } from 'lucide-react';
 import { masterService } from '@/app/_services/master';
-import type { MastDocType, MastTransType } from '@/lib/types';
+import type { MastLocation, MastWarehouse } from '@/lib/types';
 import Swal from 'sweetalert2';
-import { SystemMenuService } from '@/app/_services/systemMenu';
 
-interface DocTypeFormData {
-    id?: string | number;
-    transTypeId: string | number;
+interface LocationFormData {
+    id?: string;
+    warehouseId: string;
+    code: string;
     name: string;
     isActive: boolean;
 }
 
-const defaultFormData: DocTypeFormData = {
-    transTypeId: '',
+const defaultFormData: LocationFormData = {
+    warehouseId: '',
+    code: '',
     name: '',
     isActive: true,
 };
 
-interface CreateDocTypeModalProps {
+interface CreateLocationModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSaved: () => void;
-    dataEdit: MastDocType | null;
+    dataEdit: MastLocation | null;
+    defaultWarehouseId?: string;
+    warehouseList?: MastWarehouse[];
 }
 
-export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: CreateDocTypeModalProps) {
-    const [formData, setFormData] = useState<DocTypeFormData>({ ...defaultFormData });
-    const [transTypeList, setTransTypeList] = useState<{ id: number | string; name: string }[]>([]);
+export function CreateLocationModal({
+    open,
+    onOpenChange,
+    onSaved,
+    dataEdit,
+    defaultWarehouseId = '',
+    warehouseList: externalWarehouses,
+}: CreateLocationModalProps) {
+    const [formData, setFormData] = useState<LocationFormData>({ ...defaultFormData });
+    const [fetchedWarehouses, setFetchedWarehouses] = useState<MastWarehouse[]>([]);
+    const warehouseList = externalWarehouses && externalWarehouses.length > 0 ? externalWarehouses : fetchedWarehouses;
     const [saving, setSaving] = useState(false);
     const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     const isEditMode = Boolean(dataEdit);
 
     const resetForm = () => {
-        setFormData({ ...defaultFormData });
+        setFormData({
+            ...defaultFormData,
+            warehouseId: defaultWarehouseId || '',
+        });
     };
 
     // Auto-dismiss success alert after 4 seconds
@@ -61,65 +75,67 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
         }
     }, [alertMessage]);
 
-    // Load transaction types from API
+    // โหลดคลังสินค้าสำหรับเลือกในฟอร์ม (ถ้ายังไม่มีส่งเข้ามา)
     useEffect(() => {
-        const fetchTransTypes = async () => {
+        if (externalWarehouses && externalWarehouses.length > 0) return;
+
+        const fetchWarehouses = async () => {
             try {
-                const res = await SystemMenuService.transactionList();
+                const res = await masterService.warehouses.list();
                 if (res && res.success) {
                     const data = Array.isArray(res.results)
                         ? res.results
                         : Array.isArray(res.data)
                             ? res.data
                             : [];
-
-                    console.log('Fetched transaction types:', data); // Debug log
-                    if (data.length > 0) {
-                        setTransTypeList(
-                            data.map((item: MastTransType) => {
-                                const id = item.menuId ?? item.transTypeId ?? item.id ?? '';
-                                const name =
-                                    item.menuName ??
-                                    (item.nameTh && item.nameEn
-                                        ? `${item.nameTh} (${item.nameEn})`
-                                        : item.nameTh || item.name || item.transTypeName || `Type ${id}`);
-                                return { id, name };
-                            })
-                        );
-                    }
+                    setFetchedWarehouses(data);
                 }
             } catch (err) {
-                console.error('Failed to load transaction types:', err);
-                // Keep DEFAULT_TRANS_TYPES
+                console.error('Failed to load warehouses in CreateLocationModal:', err);
             }
         };
 
         if (open) {
-            fetchTransTypes();
+            fetchWarehouses();
         }
-    }, [open]);
+    }, [open, externalWarehouses]);
 
     useEffect(() => {
         if (open) {
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setAlertMessage(null);
             if (dataEdit) {
-                const transId = dataEdit.menuId ?? dataEdit.transTypeId;
+                const whId = dataEdit.warehouseId;
                 setFormData({
                     id: dataEdit.id,
-                    transTypeId: transId !== undefined && transId !== null ? String(transId) : '',
-                    name: dataEdit.docTypeName || dataEdit.name || '',
+                    warehouseId: whId !== undefined && whId !== null ? String(whId) : '',
+                    code: dataEdit.code || '',
+                    name: dataEdit.name || '',
                     isActive: dataEdit.isActive !== false,
                 });
             } else {
                 resetForm();
             }
         }
-    }, [open, dataEdit]);
+    }, [open, dataEdit, defaultWarehouseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const validateForm = (isAddMore = false) => {
-        if (!formData.transTypeId) {
-            const msg = 'กรุณาเลือกประเภทธุรกรรม';
+        if (!formData.warehouseId) {
+            const msg = 'กรุณาเลือกคลังสินค้า';
+            if (isAddMore) {
+                setAlertMessage({ type: 'error', message: msg });
+            } else {
+                Swal.fire({
+                    icon: 'warning',
+                    title: msg,
+                    confirmButtonColor: '#2563eb',
+                });
+            }
+            return false;
+        }
+
+        if (!formData.code.trim()) {
+            const msg = 'กรุณากรอกรหัสตำแหน่งจัดเก็บ';
             if (isAddMore) {
                 setAlertMessage({ type: 'error', message: msg });
             } else {
@@ -133,7 +149,7 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
         }
 
         if (!formData.name.trim()) {
-            const msg = 'กรุณากรอกชื่อประเภทเอกสาร';
+            const msg = 'กรุณากรอกชื่อตำแหน่งจัดเก็บ';
             if (isAddMore) {
                 setAlertMessage({ type: 'error', message: msg });
             } else {
@@ -154,23 +170,22 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
 
         setSaving(true);
         try {
-            if (isEditMode) {
-                const payload = {
-                    id: formData.id ? String(formData.id) : undefined,
-                    transTypeId: String(formData.transTypeId),
-                    menuId: String(formData.transTypeId),
-                    name: formData.name.trim(),
-                    docTypeName: formData.name.trim(),
-                    isActive: formData.isActive,
-                };
+            const payload: Partial<MastLocation> = {
+                id: formData.id ? String(formData.id) : undefined,
+                warehouseId: formData.warehouseId ? String(formData.warehouseId) : undefined,
+                code: formData.code.trim(),
+                name: formData.name.trim(),
+                isActive: formData.isActive,
+            };
 
-                const res = await masterService.docTypes.update(payload);
+            if (isEditMode) {
+                const res = await masterService.locations.update(payload);
 
                 if (res && res.success) {
                     await Swal.fire({
                         icon: 'success',
                         title: 'สำเร็จ',
-                        text: res.message || 'แก้ไขข้อมูลประเภทเอกสารเรียบร้อยแล้ว',
+                        text: res.message || 'แก้ไขตำแหน่งจัดเก็บเรียบร้อยแล้ว',
                         timer: 1500,
                         showConfirmButton: false,
                     });
@@ -180,41 +195,38 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
                     Swal.fire({
                         icon: 'error',
                         title: 'แก้ไขไม่สำเร็จ',
-                        text: res?.error || res?.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลประเภทเอกสาร',
+                        text: res?.error || res?.message || 'เกิดข้อผิดพลาดในการแก้ไขตำแหน่งจัดเก็บ',
                         confirmButtonColor: '#dc2626',
                     });
                 }
             } else {
-                const payload = {
-                    transTypeId: String(formData.transTypeId),
-                    menuId: String(formData.transTypeId),
-                    name: formData.name.trim(),
-                    docTypeName: formData.name.trim(),
-                    isActive: formData.isActive,
-                };
-
-                const res = await masterService.docTypes.create(payload);
+                const res = await masterService.locations.create(payload);
+                console.log('locationCreate: ', payload);
 
                 if (res && res.success) {
                     onSaved();
                     if (andAddMore) {
-                        resetForm();
+                        // คงค่า warehouseId เดิมไว้ เพื่อให้เพิ่มรายการในคลังเดิมต่อได้ทันที
+                        setFormData((prev) => ({
+                            ...defaultFormData,
+                            warehouseId: prev.warehouseId,
+                        }));
                         setAlertMessage({
                             type: 'success',
-                            message: res.message || 'เพิ่มประเภทเอกสารใหม่เรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
+                            message: res.message || 'เพิ่มตำแหน่งจัดเก็บใหม่เรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
                         });
                     } else {
                         await Swal.fire({
                             icon: 'success',
                             title: 'สำเร็จ',
-                            text: res.message || 'เพิ่มประเภทเอกสารใหม่เรียบร้อยแล้ว',
+                            text: res.message || 'เพิ่มตำแหน่งจัดเก็บใหม่เรียบร้อยแล้ว',
                             timer: 1500,
                             showConfirmButton: false,
                         });
                         onOpenChange(false);
                     }
                 } else {
-                    const errMsg = res?.error || res?.message || 'เกิดข้อผิดพลาดในการเพิ่มประเภทเอกสาร';
+                    const errMsg = res?.error || res?.message || 'เกิดข้อผิดพลาดในการเพิ่มตำแหน่งจัดเก็บ';
                     if (andAddMore) {
                         setAlertMessage({ type: 'error', message: errMsg });
                     } else {
@@ -228,7 +240,7 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
                 }
             }
         } catch (error: unknown) {
-            console.error('Save docType failed:', error);
+            console.error('Save location failed:', error);
             const err = error as { message?: string };
             const errMsg = err.message || 'ไม่สามารถบันทึกข้อมูลได้';
             if (andAddMore) {
@@ -250,13 +262,14 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
         <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal={true}>
             <DialogContent className="max-w-lg sm:max-w-lg w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl p-6">
                 <DialogHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4">
-                    <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-                        {isEditMode ? 'แก้ไขประเภทเอกสาร' : 'เพิ่มประเภทเอกสารใหม่ (New Document Type)'}
+                    <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        {isEditMode ? 'แก้ไขข้อมูลตำแหน่งจัดเก็บ' : 'เพิ่มตำแหน่งจัดเก็บใหม่ (New Location)'}
                     </DialogTitle>
                     <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
                         {isEditMode
-                            ? 'ปรับปรุงรายละเอียดข้อมูลประเภทเอกสารและประเภทธุรกรรม'
-                            : 'กรอกรายละเอียดเพื่อสร้างประเภทเอกสารใหม่ลงในระบบ'}
+                            ? 'ปรับปรุงรายละเอียดตำแหน่งจัดเก็บและคลังสินค้าที่สังกัด'
+                            : 'เลือกคลังสินค้าและกำหนดรหัส/ชื่อตำแหน่งจัดเก็บ (Location/Bin/Rack)'}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -286,32 +299,50 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
                 )}
 
                 <div className="space-y-4 py-4">
-                    {/* Transaction Type */}
+                    {/* Warehouse Selection */}
                     <div>
                         <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
-                            ประเภทธุรกรรม (Transaction Type) <span className="text-red-500">*</span>
+                            คลังสินค้า (Warehouse) <span className="text-red-500">*</span>
                         </label>
-                        <select disabled={isEditMode}
-                            value={formData.transTypeId}
+                        <select
+                            value={formData.warehouseId}
                             onChange={(e) => {
-                                setFormData((prev) => ({ ...prev, transTypeId: e.target.value }));
+                                setFormData((prev) => ({ ...prev, warehouseId: e.target.value }));
                                 if (alertMessage) setAlertMessage(null);
                             }}
                             className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         >
-                            <option value="">-- เลือกประเภทธุรกรรม --</option>
-                            {transTypeList.map((tt) => (
-                                <option key={tt.id} value={String(tt.id)}>
-                                    {tt.name}
+                            <option value="">-- เลือกคลังสินค้า (Warehouse) --</option>
+                            {warehouseList.map((wh) => (
+                                <option key={wh.id} value={String(wh.id)}>
+                                    {wh.warehouseName} {wh.code ? `(${wh.code})` : ''}
                                 </option>
                             ))}
                         </select>
                     </div>
 
-                    {/* Document Type Name */}
+                    {/* Location Code */}
                     <div>
                         <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
-                            ชื่อประเภทเอกสาร (Document Type Name) <span className="text-red-500">*</span>
+                            รหัสตำแหน่ง (Location Code) <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            disabled={isEditMode}
+                            type="text"
+                            value={formData.code}
+                            onChange={(e) => {
+                                setFormData((prev) => ({ ...prev, code: e.target.value }));
+                                if (alertMessage) setAlertMessage(null);
+                            }}
+                            placeholder="เช่น A-01-01, BIN-01..."
+                            className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                    </div>
+
+                    {/* Location Name */}
+                    <div>
+                        <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
+                            ชื่อตำแหน่งจัดเก็บ (Location Name) <span className="text-red-500">*</span>
                         </label>
                         <input
                             type="text"
@@ -320,7 +351,7 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
                                 setFormData((prev) => ({ ...prev, name: e.target.value }));
                                 if (alertMessage) setAlertMessage(null);
                             }}
-                            placeholder="เช่น ใบรับสินค้าปกติ, ใบรับคืน, ใบจ่ายสินค้า..."
+                            placeholder="เช่น โซน A ชั้น 1 ล็อค 1..."
                             className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
@@ -335,7 +366,7 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
                                 className="w-4 h-4 text-blue-600 rounded border-zinc-300 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-700"
                             />
                             <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                                เปิดใช้งานประเภทเอกสารนี้ (Active)
+                                เปิดใช้งานตำแหน่งนี้ (Active)
                             </span>
                         </label>
                     </div>
@@ -375,3 +406,4 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
     );
 }
 
+export default CreateLocationModal;

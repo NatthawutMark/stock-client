@@ -85,7 +85,7 @@ export function MasterItemTable({
     // State สำหรับ Modal เลือกสินค้า
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [modalSearch, setModalSearch] = useState('');
-    const [selectedItemIds, setSelectedItemIds] = useState<(string | number)[]>([]);
+    const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 
     // รายการสินค้าจาก Master DB
     const [masterItemList, setMasterItemList] = useState<MastItem[]>([]);
@@ -228,7 +228,7 @@ export function MasterItemTable({
                 totalPrice: price * 1,
                 lotNo: '',
                 serialNo: '',
-                isLotNo: m.isLotno || false,
+                isLotNo: m.isLotNo || false,
                 isSerialNo: m.isSerialNo || false,
                 locationId: matchedLoc?.id ?? '',
                 locationName: matchedLoc?.name || matchedLoc?.code || '',
@@ -258,7 +258,7 @@ export function MasterItemTable({
             totalPrice: price * 1,
             lotNo: '',
             serialNo: '',
-            isLotNo: m.isLotno || false,
+            isLotNo: m.isLotNo || false,
             isSerialNo: m.isSerialNo || false,
             locationId: matchedLoc?.id ?? '',
             locationName: matchedLoc?.name || matchedLoc?.code || '',
@@ -765,7 +765,7 @@ export function MasterItemTable({
                                                         setSelectedItemIds(
                                                             filteredMasterItems
                                                                 .map((i) => i.id)
-                                                                .filter((id): id is string | number => id !== undefined)
+                                                                .filter((id): id is string => id !== undefined)
                                                         );
                                                     } else {
                                                         setSelectedItemIds([]);

@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { AppLayout } from '@/app/components/layout/AppLayout';
-import { SearchInput } from '@/app/components/ui/SearchInput';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useI18n, useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import type { MastItem } from '@/lib/types';
@@ -18,8 +17,9 @@ import {
     CardContent,
     Label,
     TablePagination,
+    SearchInput,
 } from '@/components/ui';
-import { CreateItemModal } from '@/app/components/modal/CreateItemModal';
+import { CreateItemModal } from '@/components/modal/CreateItemModal';
 import Swal from 'sweetalert2';
 
 export default function MasterItemPage() {
@@ -234,7 +234,7 @@ export default function MasterItemPage() {
                                         </TableCell>
                                         <TableCell className="px-4 py-3 text-xs">
                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                {item.isLotno || item.isLotNo ? (
+                                                {item.isLotNo ? (
                                                     <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-medium">
                                                         LOT
                                                     </span>
@@ -244,7 +244,7 @@ export default function MasterItemPage() {
                                                         SN
                                                     </span>
                                                 ) : null}
-                                                {!item.isLotno && !item.isLotNo && !item.isSerialNo ? (
+                                                {!item.isLotNo && !item.isSerialNo ? (
                                                     <span className="text-zinc-400">-</span>
                                                 ) : null}
                                             </div>

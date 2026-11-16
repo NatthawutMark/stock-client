@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { AppLayout } from '@/app/components/layout/AppLayout';
-import { SearchInput } from '@/app/components/ui/SearchInput';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useI18n, useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import type { MastDocType, MastTransType } from '@/lib/types';
@@ -18,8 +17,9 @@ import {
     CardContent,
     Label,
     TablePagination,
+    SearchInput,
 } from '@/components/ui';
-import { CreateDocTypeModal } from '@/app/components/modal/CreateDocTypeModal';
+import { CreateDocTypeModal } from '@/components/modal/CreateDocTypeModal';
 import Swal from 'sweetalert2';
 import { Layers, Pencil, Trash2 } from 'lucide-react';
 import { SystemMenuService } from '@/app/_services/systemMenu';
@@ -55,7 +55,7 @@ export default function MasterDocTypePage() {
     useEffect(() => {
         const fetchTransTypes = async () => {
             try {
-                const res = await SystemMenuService.transactionList();
+                const res = await SystemMenuService.menuTransactionList();
                 if (res && res.success) {
                     const data = Array.isArray(res.results)
                         ? res.results
@@ -114,9 +114,9 @@ export default function MasterDocTypePage() {
     const filteredDocTypes = useMemo(() => {
         return docTypeList.filter((dt) => {
             const q = search.trim().toLowerCase();
-            const docName = dt.docTypeName || dt.DocTypeName || dt.name || '';
+            const docName = dt.docTypeName || dt.name || '';
             const transName = dt.menuName || dt.transName || dt.transTypeName || '';
-            const dtMenuId = dt.menuId ?? dt.menuID ?? dt.transTypeId;
+            const dtMenuId = dt.menuId ?? dt.transTypeId;
             const matchedTrans = transTypeList.find((tt) => String(tt.id) === String(dtMenuId))?.name || '';
 
             const matchesSearch =

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { AppLayout } from '@/app/components/layout/AppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { transactionService } from '@/app/_services/transaction';
 import { masterService } from '@/app/_services/master';
@@ -23,7 +23,6 @@ import {
 import {
     Search, RotateCcw, Plus, Eye, Layers, Calendar, FileText, Building2, User, Pencil,
 } from 'lucide-react';
-import { docIssues, docIssueDetails } from '@/lib/mock/data';
 
 // ─────────────────────────────────────────────────────────────
 // Constants
@@ -233,35 +232,13 @@ export default function IssuePage() {
             label: dt.docTypeName || dt.name || String(dt.id),
         })), [docTypeList]);
 
-    // ─── 3. Mock Fallback (กรณี Backend ไม่พร้อม) ────────────────
-    const applyMockFallback = useCallback((filters: IssueFilters, page: number, size: number) => {
-        const docNo = filters.docNo.trim().toLowerCase();
-        const filtered = docIssues.filter((doc) => {
-            const rec = doc as unknown as Record<string, unknown>;
-            const str = (...keys: string[]) => String(getField(rec, ...keys) || '');
-
-            if (docNo && !str('docNo', 'doc_no').toLowerCase().includes(docNo)) return false;
-            if (filters.docDate && str('docDate', 'doc_date', 'createDate').slice(0, 10) !== filters.docDate) return false;
-            if (filters.employeeId && str('empId', 'employeeId', 'emp_id') !== filters.employeeId) return false;
-            if (filters.customerId && str('custId', 'customerId', 'cust_id').toLowerCase() !== filters.customerId.toLowerCase()) return false;
-            if (filters.docTypeId && str('docTypeId', 'transTypeId', 'doc_type_id', 'menuId') !== filters.docTypeId) return false;
-            if (filters.statusCode && str('statusCode', 'status').toLowerCase() !== filters.statusCode.toLowerCase()) return false;
-            return true;
-        });
-
-        const start = (page - 1) * size;
-        setTotalRecords(filtered.length);
-        setDocList(filtered.slice(start, start + size));
-    }, []);
-
-    // ─── 4. โหลดเอกสาร (Server Pagination) ──────────────────────
+    // ─── 3. โหลดเอกสาร (Server Pagination) ──────────────────────
     const fetchDocuments = useCallback(async () => {
         setLoading(true);
         try {
             const payload: DocTrans & { pageSize?: number; pageNumber?: number; custId?: string } = {
                 docNo: appliedFilters.docNo.trim() || undefined,
                 docDate: appliedFilters.docDate || undefined,
-                employeeId: appliedFilters.employeeId || undefined,
                 empId: appliedFilters.employeeId || undefined,
                 custId: appliedFilters.customerId || undefined,
                 docTypeId: appliedFilters.docTypeId || undefined,
@@ -276,7 +253,8 @@ export default function IssuePage() {
 
             const res = await transactionService.docTrans.list(payload);
             if (!res?.success) {
-                applyMockFallback(appliedFilters, currentPage, pageSize);
+                setDocList([]);
+                setTotalRecords(0);
                 return;
             }
 
@@ -293,19 +271,20 @@ export default function IssuePage() {
                     : (currentPage - 1) * pageSize + data.length);
             }
         } catch (error) {
-            console.warn('Fetch issue documents failed, loading mock data:', error);
-            applyMockFallback(appliedFilters, currentPage, pageSize);
+            console.error('Fetch issue documents failed:', error);
+            setDocList([]);
+            setTotalRecords(0);
         } finally {
             setLoading(false);
         }
-    }, [currentPage, pageSize, appliedFilters, applyMockFallback]);
+    }, [currentPage, pageSize, appliedFilters]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchDocuments();
     }, [fetchDocuments]);
 
-    // ─── 5. โหลดรายการสินค้าเมื่อเปิด Modal ─────────────────────
+    // ─── 4. โหลดรายการสินค้าเมื่อเปิด Modal ─────────────────────
     useEffect(() => {
         const fetchItems = async () => {
             if (!isDetailOpen || !selectedDoc?.id) {
@@ -317,12 +296,11 @@ export default function IssuePage() {
                 if (res?.success && Array.isArray(res.results)) {
                     setDocItemList(res.results);
                 } else {
-                    const fallback = docIssueDetails.filter((d) => String(d.docId) === String(selectedDoc.id));
-                    setDocItemList(fallback);
+                    setDocItemList([]);
                 }
-            } catch {
-                const fallback = docIssueDetails.filter((d) => String(d.docId) === String(selectedDoc.id));
-                setDocItemList(fallback);
+            } catch (err) {
+                console.error('Failed to load issue doc items:', err);
+                setDocItemList([]);
             }
         };
         fetchItems();
@@ -745,7 +723,7 @@ export default function IssuePage() {
                                         พนักงานผู้ทำรายการ
                                     </div>
                                     <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.empName || selectedDoc.employee || `Employee ID: ${selectedDoc.employeeId || selectedDoc.empId || '-'}`}
+                                        {selectedDoc.empName || (selectedDoc.empId ? `Employee ID: ${selectedDoc.empId}` : '-')}
                                     </p>
                                 </div>
                                 <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40">

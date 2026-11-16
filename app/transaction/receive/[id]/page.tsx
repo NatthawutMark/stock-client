@@ -2,16 +2,10 @@
 
 import React, { useState, useEffect, Suspense, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { AppLayout } from '@/app/components/layout/AppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import { transactionService } from '@/app/_services/transaction';
-import {
-    docReceives,
-    vendors as mockVendors,
-    warehouses as mockWarehouses,
-    employees as mockEmployees,
-} from '@/lib/mock/data';
 import type { DocReceive, DocReceiveDetail, MastVendor, MastWarehouse } from '@/lib/types';
 import { MasterItemTable, TransactionItem } from '@/components/transaction';
 import { Button, Card, CardContent, Label, renderStatusBadge } from '@/components/ui';
@@ -38,9 +32,12 @@ type EmployeeOption = { id: string | number; name: string };
 const toDateOnly = (raw?: string) =>
     raw && raw.length >= 10 ? raw.slice(0, 10) : new Date().toISOString().split('T')[0];
 
-// ใช้ผลลัพธ์จาก API ถ้าเป็น array ที่มีข้อมูล ไม่เช่นนั้นใช้ fallback (mock)
-function pickList<T>(res: { success?: boolean; results?: unknown } | undefined, fallback: T[]): T[] {
-    return res?.success && Array.isArray(res.results) && res.results.length > 0 ? (res.results as T[]) : fallback;
+function pickList<T>(res: { success?: boolean; results?: unknown; data?: unknown } | undefined): T[] {
+    if (res?.success) {
+        if (Array.isArray(res.results)) return res.results as T[];
+        if (Array.isArray(res.data)) return res.data as T[];
+    }
+    return [];
 }
 
 const toEmployeeOptions = (list: { id?: string | number; fName?: string; lName?: string }[]): EmployeeOption[] =>
@@ -130,18 +127,18 @@ function ReceiveDetailContent() {
                     masterService.vendors.list(),
                     masterService.warehouses.list(),
                 ]);
-                setVendorList(pickList(vendRes, mockVendors));
-                setWarehouseList(pickList(whRes, mockWarehouses));
+                setVendorList(pickList(vendRes));
+                setWarehouseList(pickList(whRes));
             } catch {
-                setVendorList(mockVendors);
-                setWarehouseList(mockWarehouses);
+                setVendorList([]);
+                setWarehouseList([]);
             }
 
             try {
                 const empRes = await masterService.employees.list();
-                setEmployeeList(toEmployeeOptions(pickList(empRes, mockEmployees)));
+                setEmployeeList(toEmployeeOptions(pickList(empRes)));
             } catch {
-                setEmployeeList(toEmployeeOptions(mockEmployees));
+                setEmployeeList([]);
             }
         };
 
@@ -162,11 +159,9 @@ function ReceiveDetailContent() {
                 try {
                     const res = await transactionService.receive.get(docId);
                     if (res?.success && res.results) foundDoc = res.results;
-                } catch {
-                    // API error → fallback to mock
+                } catch (err) {
+                    console.error('Fetch receive document failed:', err);
                 }
-
-                foundDoc ??= docReceives.find((d) => String(d.id) === String(docId));
 
                 if (!foundDoc) {
                     await Swal.fire({
@@ -196,7 +191,7 @@ function ReceiveDetailContent() {
     const docNoRef = doc?.refDocNo || '';
     const remark = doc?.remark || '';
     const vendorId = String(doc?.vendId || '');
-    const employeeId = String(doc?.empId || doc?.employeeId || '');
+    const employeeId = String(doc?.empId || '');
     const warehouseId = String(doc?.warehouseId || '');
     const statusCode = String(doc?.statusCode || doc?.statusName || 'Draft');
 

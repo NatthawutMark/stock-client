@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AppLayout } from '../components/layout/AppLayout';
-import { StatCard } from '../components/ui/StatCard';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { StatCard } from '@/components/ui';
 import { useI18n } from '../providers';
 import { apiClient } from '@/lib/api/client';
 

@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { AppLayout } from '@/app/components/layout/AppLayout';
-import { SearchInput } from '@/app/components/ui/SearchInput';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useI18n, useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import type { MastWarehouse } from '@/lib/types';
@@ -18,8 +17,9 @@ import {
     CardContent,
     Label,
     TablePagination,
+    SearchInput,
 } from '@/components/ui';
-import { CreateWarehouseModal } from '@/app/components/modal/CreateWarehouseModal';
+import { CreateWarehouseModal } from '@/components/modal/CreateWarehouseModal';
 import Swal from 'sweetalert2';
 
 export default function WarehousesPage() {

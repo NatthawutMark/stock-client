@@ -2,16 +2,10 @@
 
 import React, { useState, useEffect, Suspense, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { AppLayout } from '@/app/components/layout/AppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import { transactionService } from '@/app/_services/transaction';
-import {
-    docIssues,
-    customers as mockCustomers,
-    warehouses as mockWarehouses,
-    employees as mockEmployees,
-} from '@/lib/mock/data';
 import type { DocIssue, DocIssueDetail, MastCustomer, MastWarehouse, MastDocType } from '@/lib/types';
 import { IssueItemTable, MasterItemTable, TransactionItem } from '@/components/transaction';
 import { Button, Card, CardContent, Label, renderStatusBadge } from '@/components/ui';
@@ -40,12 +34,12 @@ const MENU_ID = '85D356B7877647C49B61B71FB047E0B6';
 const toDateOnly = (raw?: string) =>
     raw && raw.length >= 10 ? raw.slice(0, 10) : new Date().toISOString().split('T')[0];
 
-function pickList<T>(res: { success?: boolean; results?: unknown; data?: unknown } | undefined, fallback: T[]): T[] {
+function pickList<T>(res: { success?: boolean; results?: unknown; data?: unknown } | undefined): T[] {
     if (res?.success) {
-        if (Array.isArray(res.results) && res.results.length > 0) return res.results as T[];
-        if (Array.isArray(res.data) && res.data.length > 0) return res.data as T[];
+        if (Array.isArray(res.results)) return res.results as T[];
+        if (Array.isArray(res.data)) return res.data as T[];
     }
-    return fallback;
+    return [];
 }
 
 const toEmployeeOptions = (list: { id?: string | number; fName?: string; lName?: string }[]): EmployeeOption[] =>
@@ -139,20 +133,20 @@ function IssueDetailContent() {
                     masterService.warehouses.list(),
                     masterService.docTypes.list({ menuId: MENU_ID }),
                 ]);
-                setCustomerList(pickList(custRes, mockCustomers));
-                setWarehouseList(pickList(whRes, mockWarehouses));
-                setDocTypeList(pickList(dTypeRes, []));
+                setCustomerList(pickList(custRes));
+                setWarehouseList(pickList(whRes));
+                setDocTypeList(pickList(dTypeRes));
             } catch {
-                setCustomerList(mockCustomers);
-                setWarehouseList(mockWarehouses);
+                setCustomerList([]);
+                setWarehouseList([]);
                 setDocTypeList([]);
             }
 
             try {
                 const empRes = await masterService.employees.list();
-                setEmployeeList(toEmployeeOptions(pickList(empRes, mockEmployees)));
+                setEmployeeList(toEmployeeOptions(pickList(empRes)));
             } catch {
-                setEmployeeList(toEmployeeOptions(mockEmployees));
+                setEmployeeList([]);
             }
         };
 
@@ -175,11 +169,9 @@ function IssueDetailContent() {
                     if (res?.success && (res.results || res.data)) {
                         foundDoc = (res.results || res.data) as (DocIssue & { details?: DocIssueDetail[] });
                     }
-                } catch {
-                    // API error → fallback to mock
+                } catch (err) {
+                    console.error('Fetch issue document failed:', err);
                 }
-
-                foundDoc ??= docIssues.find((d) => String(d.id) === String(docId));
 
                 if (!foundDoc) {
                     await Swal.fire({
@@ -210,7 +202,7 @@ function IssueDetailContent() {
     const bookingId = doc?.bookingId || '';
     const remark = doc?.remark || '';
     const customerId = String(doc?.custId || '');
-    const employeeId = String(doc?.empId || doc?.employeeId || '');
+    const employeeId = String(doc?.empId || '');
     const warehouseId = String(doc?.warehouseId || '');
     const docTypeId = String(doc?.docTypeId || '');
     const statusCode = String(doc?.statusCode || doc?.statusName || 'Draft');
@@ -228,8 +220,8 @@ function IssueDetailContent() {
 
     const employeeDisplayName = useMemo(() => {
         const emp = employeeList.find((e) => String(e.id) === employeeId || e.name === employeeId);
-        return emp?.name || doc?.empName || doc?.employeeName || employeeId || '-';
-    }, [employeeList, employeeId, doc?.empName, doc?.employeeName]);
+        return emp?.name || doc?.empName || employeeId || '-';
+    }, [employeeList, employeeId, doc?.empName]);
 
     const docTypeDisplayName = useMemo(() => {
         const dt = docTypeList.find((d) => String(d.id) === docTypeId);

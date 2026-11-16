@@ -1,10 +1,11 @@
 // ============================================================
 // WMS Type Definitions — aligned with Design_DB_V1.xlsx
+// All IDs are String GUIDs
 // ============================================================
 
 // ─── Common base ────────────────────────────────────────────
 export interface BaseEntity {
-    id?: string | number;
+    id?: string;
     isActive?: boolean;
     isDelete?: boolean;
     createDate?: string;
@@ -18,23 +19,20 @@ export interface BaseEntity {
 export interface MastItem extends BaseEntity {
     itemCode?: string;
     itemName?: string;
-    brandId?: string | number;
+    brandId?: string;
     brandName?: string;
     minAlert?: number;
     maxAlert?: number;
-    minAlter?: number;
-    maxAlter?: number;
-    uomId?: string | number;
+    uomId?: string;
     uomName?: string;
-    locationId?: string | number;
+    locationId?: string;
     locationName?: string;
     buyPrice?: number;
     sellPrice?: number;
     isLotNo?: boolean;
-    isLotno?: boolean;
     isSerialNo?: boolean;
-    groupId?: string | number;
-    warehouseId?: string | number;
+    groupId?: string;
+    warehouseId?: string;
 }
 
 export interface MastBrand extends BaseEntity {
@@ -48,9 +46,9 @@ export interface MastGroup extends BaseEntity {
 }
 
 export interface MastItemGroup {
-    id: string | number;
-    itemId: string | number;
-    groupId: string | number;
+    id?: string;
+    itemId?: string;
+    groupId?: string;
     isActive?: boolean;
     isDelete?: boolean;
     createDate?: string;
@@ -62,14 +60,12 @@ export interface MastItemGroup {
 export interface MastLocation extends BaseEntity {
     code?: string;
     name?: string;
-    warehouseId?: string | number;
-    WarehouseId?: string | number;
+    warehouseId?: string;
 }
 
 export interface MastLocationParams extends PaginationParams {
     code?: string;
-    warehouseId?: string | number;
-    WarehouseId?: string | number;
+    warehouseId?: string;
 }
 
 export interface MastWarehouse extends BaseEntity {
@@ -79,9 +75,9 @@ export interface MastWarehouse extends BaseEntity {
 }
 
 export interface MastItemWarehouse {
-    id: string | number;
-    itemId: string | number;
-    warehouseId: string | number;
+    id?: string;
+    itemId?: string;
+    warehouseId?: string;
     isActive?: boolean;
     isDelete?: boolean;
     createDate?: string;
@@ -121,34 +117,24 @@ export interface MastEmployee extends BaseEntity {
     position?: string;
     department?: string;
     remark?: string;
-    emp_code?: string;
-    EMP_CODE?: string;
-    f_name?: string;
-    F_NAME?: string;
-    l_name?: string;
-    L_NAME?: string;
-    TEL?: string;
-    EMAIL?: string;
 }
 
 export interface MastStatus extends BaseEntity {
-    transTypeId: number | string;
+    transTypeId: string;
     nameTh: string;
     nameEn: string;
     orderNo: number;
 }
 
 export interface MastDocType extends BaseEntity {
-    docTypeId?: number | string;
-    transTypeId?: number | string;
-    menuId?: number | string;
-    menuID?: number | string;
+    docTypeId?: string;
+    transTypeId?: string;
+    menuId?: string;
     menuName?: string;
     transTypeName?: string;
     transName?: string;
     name?: string;
     docTypeName?: string;
-    DocTypeName?: string;
 }
 
 export interface MastReason extends BaseEntity {
@@ -156,9 +142,9 @@ export interface MastReason extends BaseEntity {
 }
 
 export interface MastTransType extends BaseEntity {
-    menuId?: number | string;
+    menuId?: string;
     menuName?: string;
-    transTypeId?: number | string;
+    transTypeId?: string;
     transTypeName?: string;
     name?: string;
     nameTh?: string;
@@ -171,46 +157,41 @@ export interface DocTrans extends Partial<BaseEntity>, PaginationParams {
     docNo?: string;
     docDate?: string;
     docNoRef?: string;
-    employeeId?: number | string;
-    empId?: number | string;
-    menuId?: number | string;
+    empId?: string;
+    menuId?: string;
     statusCode?: string;
-    vendId?: number | string;
-    vendorId?: number | string;
-    docTypeId?: number | string;
+    vendId?: string;
+    docTypeId?: string;
 }
 
 export interface DocReceive extends BaseEntity {
-    id?: string | number;
+    id?: string;
     docNo?: string;
     docDate?: string;
     refDocNo?: string;
-    empId?: string | number;
+    empId?: string;
     empName?: string;
-    employee?: string;
-    employeeName?: string;
-    employeeId?: number | string;
-    docTypeId?: number | string;
-    menuId?: number | string;
+    docTypeId?: string;
+    menuId?: string;
     menuName?: string;
-    statusId?: number;
+    statusId?: string;
     statusCode?: string;
     statusName?: string;
-    warehouseId?: number | string;
+    warehouseId?: string;
     warehouseName?: string;
-    vendId?: string | number;
+    vendId?: string;
     vendName?: string;
     remark?: string;
     details?: DocReceiveDetail[];
 }
 
 export interface DocReceiveDetail extends BaseEntity {
-    id?: string | number;
-    docId?: string | number;
-    itemId?: string | number;
+    id?: string;
+    docId?: string;
+    itemId?: string;
     itemCode?: string;
     itemName?: string;
-    uomId?: string | number;
+    uomId?: string;
     uomName?: string;
     itemQty?: number;
     putawayQty?: number;
@@ -220,44 +201,42 @@ export interface DocReceiveDetail extends BaseEntity {
     serialNo?: string;
     isLotNo?: boolean;
     isSerialNo?: boolean;
-    locationId?: string | number;
+    locationId?: string;
     locationName?: string;
     remark?: string;
 }
 
 export interface DocIssue extends BaseEntity {
-    id?: string | number;
+    id?: string;
     docNo?: string;
     docDate?: string;
     refDocNo?: string;
     bookingId?: string;
-    empId?: string | number;
+    empId?: string;
     empName?: string;
-    employee?: string;
-    employeeName?: string;
-    employeeId?: number | string;
-    docTypeId?: number | string;
-    menuId?: number | string;
+    docTypeId?: string;
+    menuId?: string;
     menuName?: string;
-    statusId?: number;
+    statusId?: string;
     statusCode?: string;
     statusName?: string;
-    warehouseId?: number | string;
+    warehouseId?: string;
     warehouseName?: string;
-    custId?: string | number;
+    custId?: string;
     custName?: string;
     remark?: string;
+    details?: DocIssueDetail[];
 }
 
 export interface DocIssueDetail extends BaseEntity {
-    id?: string | number;
-    docId?: string | number;
-    invId?: string | number;
-    itemId?: string | number;
+    id?: string;
+    docId?: string;
+    invId?: string;
+    itemId?: string;
     itemCode?: string;
     itemName?: string;
     bookingQty: number;
-    uomId?: string | number;
+    uomId?: string;
     uomName?: string;
     itemQty?: number;
     pickingQty?: number;
@@ -267,120 +246,120 @@ export interface DocIssueDetail extends BaseEntity {
     serialNo?: string;
     isLotNo?: boolean;
     isSerialNo?: boolean;
-    locationId?: string | number;
+    locationId?: string;
     locationName?: string;
     remark?: string;
 }
 
 export interface DocRequest extends BaseEntity {
     docNo: string;
-    statusId: number;
-    fromLocationId: number;
-    toWarehouseId: number;
-    employeeId: number;
+    statusId: string;
+    fromLocationId: string;
+    toWarehouseId: string;
+    empId: string;
     remark?: string;
 }
 
 export interface DocRequestDetail extends BaseEntity {
-    docId: number;
-    invId: number;
+    docId: string;
+    invId: string;
     itemQty: number;
     pickingQty: number;
     returnQty: number;
 }
 
 export interface DocRequestPicking extends BaseEntity {
-    docId: number;
-    itemDetailId: number;
+    docId: string;
+    itemDetailId: string;
     pickingQty: number;
 }
 
 export interface ReqTransLog extends BaseEntity {
-    docId: number;
-    fromStatusId: number;
-    toStatusId: number;
-    fromUserId: number;
-    toUserId: number;
+    docId: string;
+    fromStatusId: string;
+    toStatusId: string;
+    fromUserId: string;
+    toUserId: string;
     remark?: string;
 }
 
 export interface DocReturn extends BaseEntity {
-    docId: number;
-    invId: number;
+    docId: string;
+    invId: string;
     itemQty: number;
-    reasonId: number;
+    reasonId: string;
 }
 
 export interface DocTransfer extends BaseEntity {
     docNo: string;
-    fromWarehouseId: number;
-    toWarehouseId: number;
-    statusId: number;
+    fromWarehouseId: string;
+    toWarehouseId: string;
+    statusId: string;
     remark?: string;
 }
 
 export interface DocTransferFromDetail extends BaseEntity {
-    docId: number;
-    invId: number;
+    docId: string;
+    invId: string;
     itemQty: number;
     pickingQty: number;
 }
 
 export interface DocTransferToDetail extends BaseEntity {
-    docId: number;
-    invId: number;
+    docId: string;
+    invId: string;
     itemQty: number;
     putawayQty: number;
-    locationId: number;
-    newInvId: number;
+    locationId: string;
+    newInvId: string;
 }
 
 export interface DocDisposal extends BaseEntity {
     docNo: string;
-    statusId: number;
-    warehouseId: number;
+    statusId: string;
+    warehouseId: string;
     remark?: string;
 }
 
 export interface DocDisposalDetail extends BaseEntity {
-    docId: number;
-    invDmgId: number;
+    docId: string;
+    invDmgId: string;
     itemQty: number;
 }
 
 // ─── Inventory ───────────────────────────────────────────────
 
 export interface Inventory extends BaseEntity {
-    itemId: number;
+    itemId: string;
     lotNo: string;
     serialNo: string;
     itemQty: number;
     itemPrice: number;
-    locationId: number;
+    locationId: string;
     mfgDate: string;
     expireDate: string;
-    warehouseId: number;
+    warehouseId: string;
 }
 
 export interface InventoryDamage extends BaseEntity {
-    docId: number;
-    invId: number;
+    docId: string;
+    invId: string;
     itemQty: number;
-    locationId: number;
-    reasonId: number;
-    warehouseId: number;
+    locationId: string;
+    reasonId: string;
+    warehouseId: string;
 }
 
 export interface InventoryDamageLog extends BaseEntity {
-    invDmgId: number;
+    invDmgId: string;
     itemQty: number;
-    moveLocationId: number;
+    moveLocationId: string;
 }
 
 export interface InvMoveLog extends BaseEntity {
-    invId: number;
-    oldLocationId: number;
-    newLocationId: number;
+    invId: string;
+    oldLocationId: string;
+    newLocationId: string;
     itemQty: number;
 }
 
@@ -395,29 +374,29 @@ export interface UserProfile extends BaseEntity {
 }
 
 export interface UserAuthen extends BaseEntity {
-    userId: number;
+    userId: string;
     username: string;
     password: string;
     plaintext: string;
 }
 
 export interface SysRole extends BaseEntity {
-    menuId: number;
+    menuId: string;
     nameTh: string;
     nameEn: string;
     isAdmin: boolean;
 }
 
 export interface SysRoleMenu extends BaseEntity {
-    userId: number;
-    roleId: number;
+    userId: string;
+    roleId: string;
     canView: boolean;
     canCreate: boolean;
     canApprove: boolean;
 }
 
 export interface SysMenu extends BaseEntity {
-    parentId: number | null;
+    parentId: string | null;
     nameTh: string;
     nameEn: string;
     menuType: string;
@@ -541,4 +520,3 @@ export interface Token {
     accessToken: string;
     refreshToken: string;
 }
-

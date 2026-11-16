@@ -2,9 +2,9 @@ import type { InventoryView, PaginationParams } from '@/lib/types';
 import { apiClient } from '@/lib/api/client';
 
 export interface InventoryListParams extends PaginationParams {
-    warehouseId?: number | string;
-    locationId?: number | string;
-    itemId?: number | string;
+    warehouseId?: string;
+    locationId?: string;
+    itemId?: string;
     itemCode?: string;
     lotNo?: string;
     serialNo?: string;
@@ -51,7 +51,7 @@ export const inventoryService = {
     listAll: (p?: InventoryListParams) => {
         return apiClient.post<InventoryView[]>(`/api/inventory/listAll`, p);
     },
-    get: (id: number | string) => apiClient.get<InventoryView>(`/api/inventory/${id}`),
+    get: (id: string) => apiClient.get<InventoryView>(`/api/inventory/${id}`),
     issueInventoryList: (data?: Record<string, unknown>) => {
         return apiClient.post<IssueInventoryResult>(`/api/inventory/listForIssue`, data);
     }

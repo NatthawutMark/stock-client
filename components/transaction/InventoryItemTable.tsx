@@ -21,7 +21,6 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { inventoryService } from '@/app/_services/inventory';
-import { items as mockItems, inventories as mockInventories, locations as mockLocations, uoms as mockUoms } from '@/lib/mock/data';
 import type { InventoryView } from '@/lib/types';
 import type { TransactionItem, InventoryItemTableProps } from './types';
 import {
@@ -72,7 +71,7 @@ export function InventoryItemTable({
     // State สำหรับ Modal เลือกสินค้าในสต็อก
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [modalSearch, setModalSearch] = useState('');
-    const [selectedInvIds, setSelectedInvIds] = useState<(string | number)[]>([]);
+    const [selectedInvIds, setSelectedInvIds] = useState<string[]>([]);
 
     // รายการสินค้าในสต็อกคงคลัง (Inventory)
     const [inventoryList, setInventoryList] = useState<InventoryView[]>([]);
@@ -85,33 +84,17 @@ export function InventoryItemTable({
         setLoadingInventory(true);
         try {
             const res = await inventoryService.list({
-                warehouseId: warehouseId ? Number(warehouseId) : undefined,
+                warehouseId: warehouseId ? String(warehouseId) : undefined,
             });
 
-            if (res?.success && Array.isArray(res.results) && res.results.length > 0) {
+            if (res?.success && Array.isArray(res.results)) {
                 setInventoryList(res.results);
             } else {
-                // Fallback Mock: กรองตามคลังสินค้าและประกอบชื่อสินค้า, UOM, Location
-                const invs = warehouseId
-                    ? mockInventories.filter((i) => String(i.warehouseId) === String(warehouseId))
-                    : mockInventories;
-
-                const enriched: InventoryView[] = invs.map((inv) => {
-                    const m = mockItems.find((it) => it.id === inv.itemId);
-                    const loc = mockLocations.find((l) => l.id === inv.locationId);
-                    const u = mockUoms.find((uom) => uom.id === m?.uomId);
-                    return {
-                        ...inv,
-                        itemCode: m?.itemCode || `ITM${inv.itemId}`,
-                        itemName: m?.itemName || `สินค้า #${inv.itemId}`,
-                        locationName: loc?.name || `Location ${inv.locationId}`,
-                        uomName: u?.name || 'ชิ้น',
-                    };
-                });
-                setInventoryList(enriched);
+                setInventoryList([]);
             }
-        } catch {
-            setInventoryList(mockInventories as unknown as InventoryView[]);
+        } catch (err) {
+            console.error('Fetch inventory items failed:', err);
+            setInventoryList([]);
         } finally {
             setLoadingInventory(false);
         }
@@ -639,7 +622,7 @@ export function InventoryItemTable({
                                                         setSelectedInvIds(
                                                             filteredInventoryItems
                                                                 .map((i) => i.id)
-                                                                .filter((id): id is string | number => id !== undefined)
+                                                                .filter((id): id is string => id !== undefined)
                                                         );
                                                     } else {
                                                         setSelectedInvIds([]);

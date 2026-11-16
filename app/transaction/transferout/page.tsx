@@ -1,6 +1,6 @@
 'use client';
 
-import { AppLayout } from '@/app/components/layout/AppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 
 export default function TransferPage() {

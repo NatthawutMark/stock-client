@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react';
+import React from 'react';
 
-interface StatCardProps {
+export interface StatCardProps {
   title: string;
   value: string | number;
-  icon: string;
+  icon: React.ReactNode;
   sub?: string;
   accent?: 'blue' | 'green' | 'yellow' | 'red' | 'purple';
   trend?: 'up' | 'down' | 'neutral';

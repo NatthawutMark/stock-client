@@ -16,11 +16,10 @@ import {
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { masterService } from '@/app/_services/master';
 import type { MastEmployee } from '@/lib/types';
-import { employees as mockEmployees } from '@/lib/mock/data';
 import Swal from 'sweetalert2';
 
 interface EmployeeFormData {
-    id?: string | number;
+    id?: string;
     originalEmpCode?: string;
     empCode: string;
     fName: string;
@@ -80,14 +79,11 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
             if (dataEdit) {
                 setFormData({
                     id: dataEdit.id,
-                    originalEmpCode: dataEdit.empCode || dataEdit.emp_code || dataEdit.EMP_CODE || '',
-                    empCode: dataEdit.empCode || dataEdit.emp_code || dataEdit.EMP_CODE || '',
-                    fName: dataEdit.fName || dataEdit.f_name || dataEdit.F_NAME || '',
-                    lName: dataEdit.lName || dataEdit.l_name || dataEdit.L_NAME || '',
-                    tel: dataEdit.tel || dataEdit.TEL || '',
-                    // email: dataEdit.email || dataEdit.EMAIL || '',
-                    // position: dataEdit.position || '',
-                    // department: dataEdit.department || '',
+                    originalEmpCode: dataEdit.empCode || '',
+                    empCode: dataEdit.empCode || '',
+                    fName: dataEdit.fName || '',
+                    lName: dataEdit.lName || '',
+                    tel: dataEdit.tel || '',
                     remark: dataEdit.remark || '',
                     isActive: dataEdit.isActive !== false,
                 });
@@ -165,42 +161,22 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
                     if (res && res.success) {
                         isSuccess = true;
                         responseMsg = res.message || 'แก้ไขข้อมูลพนักงานเรียบร้อยแล้ว';
-                    } else if (res && !res.success) {
-                        responseMsg = res.error || res.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลพนักงาน';
+                    } else {
+                        responseMsg = res?.error || res?.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลพนักงาน';
                     }
                 } else {
                     const res = await masterService.employees.create(payload);
                     if (res && res.success) {
                         isSuccess = true;
                         responseMsg = res.message || 'เพิ่มข้อมูลพนักงานเรียบร้อยแล้ว';
-                    } else if (res && !res.success) {
-                        responseMsg = res.error || res.message || 'เกิดข้อผิดพลาดในการสร้างข้อมูลพนักงาน';
+                    } else {
+                        responseMsg = res?.error || res?.message || 'เกิดข้อผิดพลาดในการสร้างข้อมูลพนักงาน';
                     }
                 }
-            } catch {
-                // Fallback to local mock data if backend API is not yet running
-                isSuccess = true;
-                responseMsg = isEditMode ? 'บันทึกการแก้ไขพนักงานเรียบร้อยแล้ว' : 'เพิ่มข้อมูลพนักงานเรียบร้อยแล้ว';
-            }
-
-            // Sync with mock data fallback
-            if (isEditMode && formData.id) {
-                const idx = mockEmployees.findIndex((e) => String(e.id) === String(formData.id));
-                if (idx !== -1) {
-                    mockEmployees[idx] = {
-                        ...mockEmployees[idx],
-                        ...payload,
-                        updateDate: new Date().toISOString(),
-                    } as MastEmployee;
-                }
-            } else if (!isEditMode && isSuccess) {
-                const newId = Date.now();
-                mockEmployees.unshift({
-                    id: newId,
-                    ...payload,
-                    createDate: new Date().toISOString(),
-                    updateDate: new Date().toISOString(),
-                } as MastEmployee);
+            } catch (err) {
+                console.error('Save employee error:', err);
+                isSuccess = false;
+                responseMsg = 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์';
             }
 
             if (isSuccess) {

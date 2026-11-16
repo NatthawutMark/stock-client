@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { AppLayout } from '@/app/components/layout/AppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { transactionService } from '@/app/_services/transaction';
 import { masterService } from '@/app/_services/master';
 import { ServiceSystem } from '@/app/_services/ServiceSystem';
-import { docReceives } from '@/lib/mock/data';
 import type {
     DocReceive, DocTrans, DocReceiveDetail,
     MastVendor, MastEmployee, MastDocType,
@@ -231,38 +230,15 @@ export default function ReceivePage() {
             label: dt.docTypeName || dt.name || String(dt.id),
         })), [docTypeList]);
 
-    // ─── 3. Mock Fallback (กรณี Backend ไม่พร้อม) ────────────────
-    const applyMockFallback = useCallback((filters: ReceiveFilters, page: number, size: number) => {
-        const docNo = filters.docNo.trim().toLowerCase();
-        const filtered = docReceives.filter((doc) => {
-            const rec = doc as unknown as Record<string, unknown>;
-            const str = (...keys: string[]) => String(getField(rec, ...keys) || '');
-
-            if (docNo && !str('docNo', 'doc_no').toLowerCase().includes(docNo)) return false;
-            if (filters.docDate && str('docDate', 'doc_date', 'createDate').slice(0, 10) !== filters.docDate) return false;
-            if (filters.employeeId && str('empId', 'employeeId', 'emp_id') !== filters.employeeId) return false;
-            if (filters.vendorId && str('vendId', 'vendorId', 'vend_id') !== filters.vendorId) return false;
-            if (filters.docTypeId && str('docTypeId', 'transTypeId', 'doc_type_id', 'menuId') !== filters.docTypeId) return false;
-            if (filters.statusCode && str('statusCode', 'status').toLowerCase() !== filters.statusCode.toLowerCase()) return false;
-            return true;
-        });
-
-        const start = (page - 1) * size;
-        setTotalRecords(filtered.length);
-        setDocList(filtered.slice(start, start + size));
-    }, []);
-
-    // ─── 4. โหลดเอกสาร (Server Pagination) ──────────────────────
+    // ─── 3. โหลดเอกสาร (Server Pagination) ──────────────────────
     const fetchDocuments = useCallback(async () => {
         setLoading(true);
         try {
             const payload: DocTrans & { pageSize?: number; pageNumber?: number } = {
                 docNo: appliedFilters.docNo.trim() || undefined,
                 docDate: appliedFilters.docDate || undefined,
-                employeeId: appliedFilters.employeeId || undefined,
                 empId: appliedFilters.employeeId || undefined,
                 vendId: appliedFilters.vendorId || undefined,
-                vendorId: appliedFilters.vendorId || undefined,
                 docTypeId: appliedFilters.docTypeId || undefined,
                 statusCode: appliedFilters.statusCode || undefined,
                 menuId: MENU_ID,
@@ -275,20 +251,13 @@ export default function ReceivePage() {
 
             const res = await transactionService.docTrans.list(payload);
             if (!res?.success) {
-                applyMockFallback(appliedFilters, currentPage, pageSize);
+                setDocList([]);
+                setTotalRecords(0);
                 return;
             }
 
             const data = extractList<DocReceive>(res);
             console.log('load data', data);
-
-            // Backend ส่งมาทั้งหมด → ตัดหน้าเอง (Client Pagination)
-            // if (data.length > pageSize) {
-            //     const start = (currentPage - 1) * pageSize;
-            //     setTotalRecords(data.length);
-            //     setDocList(data.slice(start, start + pageSize));
-            //     return;
-            // }
 
             // Backend ตัดหน้ามาแล้ว (Server Pagination)
             setDocList(data);
@@ -302,12 +271,13 @@ export default function ReceivePage() {
                     : (currentPage - 1) * pageSize + data.length);
             }
         } catch (error) {
-            console.warn('Fetch receive documents failed, loading mock data:', error);
-            applyMockFallback(appliedFilters, currentPage, pageSize);
+            console.error('Fetch receive documents failed:', error);
+            setDocList([]);
+            setTotalRecords(0);
         } finally {
             setLoading(false);
         }
-    }, [currentPage, pageSize, appliedFilters, applyMockFallback]);
+    }, [currentPage, pageSize, appliedFilters]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect

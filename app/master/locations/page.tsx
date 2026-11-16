@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { AppLayout } from '@/app/components/layout/AppLayout';
-import { SearchInput } from '@/app/components/ui/SearchInput';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useI18n, useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import type { MastLocation, MastWarehouse } from '@/lib/types';
@@ -18,8 +17,9 @@ import {
     CardContent,
     Label,
     TablePagination,
+    SearchInput,
 } from '@/components/ui';
-import { CreateLocationModal } from '@/app/components/modal/CreateLocationModal';
+import { CreateLocationModal } from '@/components/modal/CreateLocationModal';
 import Swal from 'sweetalert2';
 import { Building2, Pencil, Trash2 } from 'lucide-react';
 
@@ -107,7 +107,7 @@ export default function LocationsPage() {
             const q = search.trim().toLowerCase();
             const code = loc.code || '';
             const name = loc.name || '';
-            const whId = loc.warehouseId ?? loc.WarehouseId;
+            const whId = loc.warehouseId;
             const matchedWh = warehouseList.find((w) => String(w.id) === String(whId))?.warehouseName || '';
 
             const matchesSearch =
@@ -312,7 +312,7 @@ export default function LocationsPage() {
                                 </TableRow>
                             ) : (
                                 paginatedLocations.map((loc) => {
-                                    const whId = loc.warehouseId ?? loc.WarehouseId;
+                                    const whId = loc.warehouseId;
                                     return (
                                         <TableRow
                                             key={loc.id}

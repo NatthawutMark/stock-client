@@ -45,12 +45,6 @@ export default function LoginPage() {
         }
     };
 
-    // Quick helper for mock credentials
-    const fillMock = (role: 'admin' | 'staff') => {
-        setUsername(role);
-        setPassword(role + '1234');
-    };
-
     return (
         <div className="min-h-screen flex items-center justify-center p-4 transition-colors" style={{ background: 'var(--bg)' }}>
             {/* Settings toggles */}
@@ -125,13 +119,6 @@ export default function LoginPage() {
                             {loading ? t.common.loading : t.auth.loginButton}
                         </Button>
                     </form>
-                </div>
-
-                {/* Helper for demo */}
-                <div className="p-4 border-t flex justify-center gap-4 text-sm" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Demo:</span>
-                    <button onClick={() => fillMock('admin')} className="text-blue-500 hover:underline">Admin</button>
-                    <button onClick={() => fillMock('staff')} className="text-blue-500 hover:underline">Staff</button>
                 </div>
             </div>
         </div>

@@ -2,17 +2,10 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { AppLayout } from '@/app/components/layout/AppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { inventoryService, type InventoryListParams } from '@/app/_services/inventory';
 import { masterService } from '@/app/_services/master';
-import {
-    inventories as mockInventories,
-    items as mockItems,
-    warehouses as mockWarehouses,
-    locations as mockLocations,
-    uoms as mockUoms,
-} from '@/lib/mock/data';
 import type {
     InventoryView,
     MastWarehouse,
@@ -225,7 +218,7 @@ export default function InventoryPage() {
     const [itemList, setItemList] = useState<MastItem[]>([]);
     const [uomList, setUomList] = useState<MastUom[]>([]);
 
-    // Document / Inventory Data (Raw from API or Mock)
+    // Document / Inventory Data (Raw from API)
     const [inventoryList, setInventoryList] = useState<InventoryView[]>([]);
     const [allInventoryList, setAllInventoryList] = useState<InventoryView[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -253,23 +246,16 @@ export default function InventoryPage() {
                     masterService.uoms.list(),
                 ]);
 
-                const whs = extractList<MastWarehouse>(whRes);
-                setWarehouseList(whs.length > 0 ? whs : mockWarehouses);
-
-                const locs = extractList<MastLocation>(locRes);
-                setLocationList(locs.length > 0 ? locs : mockLocations);
-
-                const itms = extractList<MastItem>(itemRes);
-                setItemList(itms.length > 0 ? itms : mockItems);
-
-                const uomsData = extractList<MastUom>(uomRes);
-                setUomList(uomsData.length > 0 ? uomsData : mockUoms);
+                setWarehouseList(extractList<MastWarehouse>(whRes));
+                setLocationList(extractList<MastLocation>(locRes));
+                setItemList(extractList<MastItem>(itemRes));
+                setUomList(extractList<MastUom>(uomRes));
             } catch (err) {
-                console.warn('Failed to load masters, using mock data:', err);
-                setWarehouseList(mockWarehouses);
-                setLocationList(mockLocations);
-                setItemList(mockItems);
-                setUomList(mockUoms);
+                console.error('Failed to load masters:', err);
+                setWarehouseList([]);
+                setLocationList([]);
+                setItemList([]);
+                setUomList([]);
             }
         };
 
@@ -331,63 +317,7 @@ export default function InventoryPage() {
     }, [itemList]);
 
     // ─────────────────────────────────────────────────────────────
-    // 4. Mock Fallback (เมื่อ Backend ยังไม่พร้อม)
-    // ─────────────────────────────────────────────────────────────
-    const applyMockFallback = useCallback((filters: InventoryFilters, page: number, size: number) => {
-        const filtered = mockInventories.filter((inv) => {
-            if (filters.warehouseId && String(inv.warehouseId) !== String(filters.warehouseId)) {
-                return false;
-            }
-            if (filters.locationId && String(inv.locationId) !== String(filters.locationId)) {
-                return false;
-            }
-            if (filters.itemId && String(inv.itemId) !== String(filters.itemId)) {
-                return false;
-            }
-            if (filters.keyword.trim()) {
-                const q = filters.keyword.trim().toLowerCase();
-                const m = mockItems.find((it) => it.id === inv.itemId);
-                const match =
-                    m?.itemCode?.toLowerCase().includes(q) ||
-                    m?.itemName?.toLowerCase().includes(q) ||
-                    inv.lotNo?.toLowerCase().includes(q) ||
-                    inv.serialNo?.toLowerCase().includes(q);
-                if (!match) return false;
-            }
-            if (filters.lotNo.trim() && !inv.lotNo?.toLowerCase().includes(filters.lotNo.trim().toLowerCase())) {
-                return false;
-            }
-            if (filters.serialNo.trim() && !inv.serialNo?.toLowerCase().includes(filters.serialNo.trim().toLowerCase())) {
-                return false;
-            }
-            if (filters.stockStatus === 'IN_STOCK' && (inv.itemQty ?? 0) <= 0) {
-                return false;
-            }
-            if (filters.stockStatus === 'LOW_STOCK') {
-                const min = 5;
-                if ((inv.itemQty ?? 0) <= 0 || (inv.itemQty ?? 0) > min) return false;
-            }
-            if (filters.stockStatus === 'OUT_OF_STOCK' && (inv.itemQty ?? 0) > 0) {
-                return false;
-            }
-            if (filters.stockStatus === 'HAS_LOT' && !inv.lotNo) {
-                return false;
-            }
-            if (filters.stockStatus === 'HAS_SERIAL' && !inv.serialNo) {
-                return false;
-            }
-            return true;
-        });
-
-        setTotalRecords(filtered.length);
-        const start = (page - 1) * size;
-        setInventoryList(filtered.slice(start, start + size));
-    }, []);
-
-    // ─────────────────────────────────────────────────────────────
-    // 5. โหลดข้อมูลสินค้าคงคลัง (Fetch Inventory Data)
-    //    Dependencies มีเพียง [currentPage, pageSize, appliedFilters, applyMockFallback]
-    //    ทำให้ไม่ถูก trigger ซ้ำตอน Master Lists โหลดเสร็จ
+    // 4. โหลดข้อมูลสินค้าคงคลัง (Fetch Inventory Data)
     // ─────────────────────────────────────────────────────────────
     const fetchInventory = useCallback(async () => {
         if (isFetchingRef.current) return;
@@ -412,7 +342,8 @@ export default function InventoryPage() {
             const res = await inventoryService.list(payload);
 
             if (!res?.success) {
-                applyMockFallback(appliedFilters, currentPage, pageSize);
+                setInventoryList([]);
+                setTotalRecords(0);
                 return;
             }
 
@@ -439,17 +370,17 @@ export default function InventoryPage() {
                 );
             }
         } catch (error) {
-            console.warn('Fetch inventory list failed, using mock data:', error);
-            applyMockFallback(appliedFilters, currentPage, pageSize);
+            console.error('Fetch inventory list failed:', error);
+            setInventoryList([]);
+            setTotalRecords(0);
         } finally {
             isFetchingRef.current = false;
             setLoading(false);
         }
-    }, [currentPage, pageSize, appliedFilters, applyMockFallback]);
+    }, [currentPage, pageSize, appliedFilters]);
 
     // ─────────────────────────────────────────────────────────────
-    // 5.2 โหลดข้อมูลสินค้าคงคลังทั้งหมด (Fetch All Inventory for Stats)
-    //     ยิง API เส้น ListAll สำหรับดึงข้อมูลทั้งหมดมาใช้คำนวณ KPI Dashboard
+    // 5. โหลดข้อมูลสินค้าคงคลังทั้งหมด (Fetch All Inventory for Stats)
     // ─────────────────────────────────────────────────────────────
     const fetchInventoryAll = useCallback(async () => {
         if (isFetchingAllRef.current) return;
@@ -462,43 +393,16 @@ export default function InventoryPage() {
                 const data = extractList<InventoryView>(res);
                 setAllInventoryList(data);
             } else {
-                // Fallback กรณี backend ยังไม่พร้อม หรือกรณี mock
-                const filteredMock = mockInventories.filter((inv) => {
-                    if (appliedFilters.warehouseId && String(inv.warehouseId) !== String(appliedFilters.warehouseId)) return false;
-                    if (appliedFilters.locationId && String(inv.locationId) !== String(appliedFilters.locationId)) return false;
-                    if (appliedFilters.itemId && String(inv.itemId) !== String(appliedFilters.itemId)) return false;
-                    if (appliedFilters.keyword.trim()) {
-                        const q = appliedFilters.keyword.trim().toLowerCase();
-                        const m = mockItems.find((it) => it.id === inv.itemId);
-                        const match =
-                            m?.itemCode?.toLowerCase().includes(q) ||
-                            m?.itemName?.toLowerCase().includes(q) ||
-                            inv.lotNo?.toLowerCase().includes(q) ||
-                            inv.serialNo?.toLowerCase().includes(q);
-                        if (!match) return false;
-                    }
-                    if (appliedFilters.lotNo.trim() && !inv.lotNo?.toLowerCase().includes(appliedFilters.lotNo.trim().toLowerCase())) return false;
-                    if (appliedFilters.serialNo.trim() && !inv.serialNo?.toLowerCase().includes(appliedFilters.serialNo.trim().toLowerCase())) return false;
-                    if (appliedFilters.stockStatus === 'IN_STOCK' && (inv.itemQty ?? 0) <= 0) return false;
-                    if (appliedFilters.stockStatus === 'LOW_STOCK') {
-                        const min = 5;
-                        if ((inv.itemQty ?? 0) <= 0 || (inv.itemQty ?? 0) > min) return false;
-                    }
-                    if (appliedFilters.stockStatus === 'OUT_OF_STOCK' && (inv.itemQty ?? 0) > 0) return false;
-                    if (appliedFilters.stockStatus === 'HAS_LOT' && !inv.lotNo) return false;
-                    if (appliedFilters.stockStatus === 'HAS_SERIAL' && !inv.serialNo) return false;
-                    return true;
-                });
-                setAllInventoryList(filteredMock);
+                setAllInventoryList([]);
             }
         } catch (error) {
-            console.warn('Fetch all inventory for stats failed, using fallback:', error);
-            setAllInventoryList(mockInventories);
+            console.error('Fetch all inventory for stats failed:', error);
+            setAllInventoryList([]);
         } finally {
             isFetchingAllRef.current = false;
             setLoadingStats(false);
         }
-    }, [appliedFilters]);
+    }, []);
 
     // ─────────────────────────────────────────────────────────────
     // UseEffect 1: สำหรับดึงข้อมูลแสดงผลในตาราง (Table Pagination & Filtering)
@@ -526,32 +430,29 @@ export default function InventoryPage() {
             const itemId = getField<number | string>(raw, 'itemId', 'item_id', 'itemCode');
             const matchedItem = itemList.find(
                 (it) => String(it.id) === String(itemId) || String(it.itemCode) === String(itemId)
-            ) || mockItems.find((it) => String(it.id) === String(itemId));
+            );
 
             const whId = getField<number | string>(raw, 'warehouseId', 'warehouse_id');
-            const matchedWh = warehouseList.find((w) => String(w.id) === String(whId)) ||
-                mockWarehouses.find((w) => String(w.id) === String(whId));
+            const matchedWh = warehouseList.find((w) => String(w.id) === String(whId));
 
             const locId = getField<number | string>(raw, 'locationId', 'location_id');
-            const matchedLoc = locationList.find((l) => String(l.id) === String(locId)) ||
-                mockLocations.find((l) => String(l.id) === String(locId));
+            const matchedLoc = locationList.find((l) => String(l.id) === String(locId));
 
             const uomId = matchedItem?.uomId || getField<number | string>(raw, 'uomId', 'uom_id');
-            const matchedUom = uomList.find((u) => String(u.id) === String(uomId)) ||
-                mockUoms.find((u) => String(u.id) === String(uomId));
+            const matchedUom = uomList.find((u) => String(u.id) === String(uomId));
 
             const itemQty = Number(getField<number>(raw, 'itemQty', 'item_qty', 'qty', 'quantity') ?? 0);
             const itemPrice = Number(getField<number>(raw, 'itemPrice', 'item_price', 'price', 'buyPrice') ?? matchedItem?.buyPrice ?? 0);
 
             return {
                 ...inv,
-                id: getField<number | string>(raw, 'id') ?? 0,
-                itemId: Number(itemId) || 0,
+                id: String(getField<string>(raw, 'id') ?? ''),
+                itemId: String(itemId || ''),
                 itemCode: String(getField<string>(raw, 'itemCode', 'item_code') || matchedItem?.itemCode || `ITM-${itemId || '-'}`),
                 itemName: String(getField<string>(raw, 'itemName', 'item_name') || matchedItem?.itemName || `สินค้า #${itemId || '-'}`),
-                warehouseId: Number(whId) || 0,
+                warehouseId: String(whId || ''),
                 warehouseName: String(getField<string>(raw, 'warehouseName', 'warehouse_name') || matchedWh?.warehouseName || `คลัง #${whId || '-'}`),
-                locationId: Number(locId) || 0,
+                locationId: String(locId || ''),
                 locationName: String(getField<string>(raw, 'locationName', 'location_name') || matchedLoc?.name || matchedLoc?.code || `ตำแหน่ง #${locId || '-'}`),
                 uomName: String(getField<string>(raw, 'uomName', 'uom_name') || matchedUom?.name || 'ชิ้น'),
                 lotNo: String(getField<string>(raw, 'lotNo', 'lot_no', 'lot') || ''),
@@ -560,8 +461,8 @@ export default function InventoryPage() {
                 itemPrice,
                 mfgDate: String(getField<string>(raw, 'mfgDate', 'mfg_date') || ''),
                 expireDate: String(getField<string>(raw, 'expireDate', 'expire_date', 'expDate') || ''),
-                minAlert: matchedItem?.minAlter ?? matchedItem?.minAlert ?? 5,
-                maxAlert: matchedItem?.maxAlter ?? matchedItem?.maxAlert ?? 50,
+                minAlert: matchedItem?.minAlert ?? 5,
+                maxAlert: matchedItem?.maxAlert ?? 50,
                 buyPrice: matchedItem?.buyPrice ?? itemPrice,
                 sellPrice: matchedItem?.sellPrice ?? 0,
                 brandName: (matchedItem as Record<string, unknown>)?.brandName as string | undefined,
@@ -637,11 +538,11 @@ export default function InventoryPage() {
             const itemId = getField<number | string>(raw, 'itemId', 'item_id', 'itemCode');
             const matchedItem = itemList.find(
                 (it) => String(it.id) === String(itemId) || String(it.itemCode) === String(itemId)
-            ) || mockItems.find((it) => String(it.id) === String(itemId));
+            );
 
             const itemQty = Number(getField<number>(raw, 'itemQty', 'item_qty', 'qty', 'quantity') ?? 0);
             const itemPrice = Number(getField<number>(raw, 'itemPrice', 'item_price', 'price', 'buyPrice') ?? matchedItem?.buyPrice ?? 0);
-            const minAlert = matchedItem?.minAlter ?? matchedItem?.minAlert ?? 5;
+            const minAlert = matchedItem?.minAlert ?? 5;
 
             totalStockQty += itemQty;
             if (itemQty <= 0) {
