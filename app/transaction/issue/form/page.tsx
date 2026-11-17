@@ -123,7 +123,7 @@ function IssueFormContent() {
                     const res = await transactionService.issue.get(editId);
                     if (res && res.success) {
                         const foundDoc: (DocIssue & { details?: DocIssueDetail[] }) | null = res?.success
-                            ? (res.results || res.data)
+                            ? (res.results || res.data || null)
                             : null;
 
                         if (foundDoc) {

@@ -10,6 +10,7 @@ import { masterService } from '@/app/_services/master';
 import { ServiceSystem } from '@/app/_services/ServiceSystem';
 import type {
     DocTrans,
+    PaginatedResult,
     MastWarehouse,
     MastEmployee,
     MastDocType,
@@ -69,20 +70,27 @@ export interface TransactionDocView extends Record<string, unknown> {
     id?: string;
     docNo?: string;
     docDate?: string;
+    refDocNo?: string;
     menuId?: string;
     menuName?: string;
     docTypeId?: string;
     docTypeName?: string;
     empId?: string;
     empName?: string;
-    vendId?: string;
-    vendName?: string;
+    vendId?: string | null;
+    vendName?: string | null;
+    custId?: string | null;
+    custName?: string | null;
     warehouseId?: string;
     warehouseName?: string;
     statusCode?: string;
     statusName?: string;
+    statusNameTh?: string;
+    statusNameEn?: string;
     statusId?: string;
     remark?: string;
+    isActive?: boolean;
+    isQualityControl?: boolean;
     createDate?: string;
 }
 
@@ -132,6 +140,7 @@ export default function TransactionPage() {
     // Pagination States
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [pageSize, setPageSize] = useState<number>(10);
+    const [totalRecords, setTotalRecords] = useState<number>(0);
 
     // Detail Modal State
     const [selectedDoc, setSelectedDoc] = useState<TransactionDocView | null>(null);
@@ -155,8 +164,7 @@ export default function TransactionPage() {
                     SystemMenuService.menuTransactionList().catch(() => null),
                     masterService.warehouses.list().catch(() => null),
                     masterService.employees.list().catch(() => null),
-                    masterService.docTypes.list().catch(() => null),
-                    transactionService.docTrans.list().catch(() => null)
+                    masterService.docTypes.list().catch(() => null)
                 ]);
 
                 // 1.1 เมนูประเภทรายการ
@@ -211,10 +219,13 @@ export default function TransactionPage() {
     const fetchDocuments = useCallback(async () => {
         setLoading(true);
         try {
-            const payload: DocTrans & { pageSize?: number; pageNumber?: number } = {
+            const payload: DocTrans & { pageSize?: number; pageNumber?: number; custId?: string } = {
                 docNo: docNoInput.trim() || undefined,
-                docDate: docDateInput.trim() || undefined,
+                docDate: docDateInput || undefined,
                 empId: empSelect || undefined,
+                custId: undefined,
+                docTypeId: undefined,
+                statusCode: undefined,
                 menuId: menuSelect || undefined,
                 page: currentPage,
                 pageNumber: currentPage,
@@ -222,85 +233,45 @@ export default function TransactionPage() {
                 pageSize,
                 limit: pageSize,
             };
-            if (menuSelect) payload.menuId = menuSelect;
 
-            console.log(payload);
+            const res = await transactionService.docTrans.list(payload);
 
+            if (res?.success && res.results) {
+                const paginated = res.results as PaginatedResult<DocTrans>;
+                const items = Array.isArray(paginated.data) ? paginated.data : [];
+                setDocList(items as TransactionDocView[]);
+                setTotalRecords(paginated.total ?? items.length);
+                // if (typeof res.results === 'object' && !Array.isArray(res.results)) {
+                //     // โครงสร้างมาตรฐานตาม Backend: { results: { data: [...], total: 19 } }
+                // } else if (Array.isArray(res.results)) {
+                //     // Fallback กรณีที่ results ส่งกลับมาเป็น array ตรงๆ
+                //     setDocList(res.results as TransactionDocView[]);
+                //     setTotalRecords(res.results.length);
+                // }
 
-            const res = await transactionService.docTrans.list(payload as unknown as DocTrans);
-            const listData = res?.success
-                ? (Array.isArray(res.results) ? res.results : Array.isArray(res.data) ? res.data : [])
-                : Array.isArray(res)
-                    ? res
-                    : [];
-
-            setDocList((listData || []) as TransactionDocView[]);
+            } else {
+                setDocList([]);
+                setTotalRecords(0);
+            }
         } catch (error) {
             console.error('Fetch transaction list failed:', error);
             setDocList([]);
+            setTotalRecords(0);
         } finally {
             setLoading(false);
         }
-    }, [docNoInput, docDateInput, menuSelect]);
+    }, [docNoInput, docDateInput, menuSelect, empSelect, currentPage, pageSize]);
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchDocuments();
     }, [fetchDocuments]);
-
-    // ─────────────────────────────────────────────────────────────
-    // 4. การกรองข้อมูลฝั่ง Client ตาม Docno, Docdate, Menu
-    // ─────────────────────────────────────────────────────────────
-    const filteredDocuments = useMemo(() => {
-        return docList.filter((doc) => {
-            const rec = doc as Record<string, unknown>;
-
-            // Non-case-sensitive field resolution
-            const rawDocNo = String(getField(rec, 'DOC_NO', 'doc_no', 'docNo', 'DocNo') || '').toLowerCase();
-            const rawDocDate = String(getField(rec, 'DOC_DATE', 'doc_date', 'docDate', 'DocDate', 'createDate') || '');
-            const rawMenuId = String(getField(rec, 'Menu_id', 'menu_id', 'menuId', 'transTypeId', 'docTypeId') || '');
-
-            // 1. เงื่อนไข Docno
-            if (docNoInput.trim()) {
-                const searchDocNo = docNoInput.trim().toLowerCase();
-                if (!rawDocNo.includes(searchDocNo)) {
-                    return false;
-                }
-            }
-
-            // 2. เงื่อนไข Docdate (YYYY-MM-DD)
-            if (docDateInput) {
-                const datePart = rawDocDate.slice(0, 10);
-                if (datePart !== docDateInput) {
-                    return false;
-                }
-            }
-
-            // 3. เงื่อนไข Menu
-            if (menuSelect) {
-                if (rawMenuId !== menuSelect) {
-                    return false;
-                }
-            }
-
-            return true;
-        });
-    }, [docList, docNoInput, docDateInput, menuSelect]);
-
-    // Pagination calculations
-    const totalPages = Math.max(1, Math.ceil(filteredDocuments.length / pageSize));
-    const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
-
-    const paginatedDocuments = useMemo(() => {
-        const startIndex = (safeCurrentPage - 1) * pageSize;
-        return filteredDocuments.slice(startIndex, startIndex + pageSize);
-    }, [filteredDocuments, safeCurrentPage, pageSize]);
 
     // ล้างค่าเงื่อนไขการค้นหา
     const handleResetFilter = () => {
         setDocNoInput('');
         setDocDateInput('');
         setMenuSelect('');
+        setEmpSelect('');
         setCurrentPage(1);
     };
 
@@ -526,7 +497,7 @@ export default function TransactionPage() {
                         </h2>
                     </div>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                        พบทั้งหมด {filteredDocuments.length} รายการ
+                        พบทั้งหมด {totalRecords} รายการ
                     </span>
                 </div>
 
@@ -559,7 +530,7 @@ export default function TransactionPage() {
                                         </div>
                                     </TableCell>
                                 </TableRow>
-                            ) : paginatedDocuments.length === 0 ? (
+                            ) : docList.length === 0 ? (
                                 <TableRow key="empty-row">
                                     <TableCell colSpan={COLUMNS.length} className="h-48 text-center text-zinc-500">
                                         <div className="flex flex-col items-center justify-center gap-2">
@@ -570,7 +541,7 @@ export default function TransactionPage() {
                                             <p className="text-xs text-zinc-400">
                                                 ลองปรับเปลี่ยนค่า Docno, Docdate หรือ Menu เพื่อค้นหาใหม่อีกครั้ง
                                             </p>
-                                            {(docNoInput || docDateInput || menuSelect) && (
+                                            {(docNoInput || docDateInput || menuSelect || empSelect) && (
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
@@ -584,7 +555,7 @@ export default function TransactionPage() {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                paginatedDocuments.map((item, index) => {
+                                docList.map((item, index) => {
                                     const rec = item as Record<string, unknown>;
 
                                     // 1. Menu (ประเภทรายการ)
@@ -641,8 +612,9 @@ export default function TransactionPage() {
                                         >
                                             {/* Column 1: ประเภทรายการ */}
                                             <TableCell className="py-3.5 px-4 whitespace-nowrap">
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
-                                                    <Layers className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium 
+                                                        bg-zinc-100 text-zinc-700 border border-zinc-200 
+                                                        dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
                                                     {menuLabel}
                                                 </span>
                                             </TableCell>
@@ -731,10 +703,10 @@ export default function TransactionPage() {
                    ───────────────────────────────────────────────────────────── */}
                 <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/60">
                     <TablePagination
-                        currentPage={safeCurrentPage}
+                        currentPage={currentPage}
                         pageSize={pageSize}
-                        totalItems={docList.length}
-                        filteredCount={filteredDocuments.length}
+                        totalItems={totalRecords}
+                        filteredCount={totalRecords}
                         onPageChange={setCurrentPage}
                         onPageSizeChange={(size) => {
                             setPageSize(size);

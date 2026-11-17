@@ -157,11 +157,35 @@ export interface DocTrans extends Partial<BaseEntity>, PaginationParams {
     docNo?: string;
     docDate?: string;
     docNoRef?: string;
+    refDocNo?: string;
     empId?: string;
-    menuId?: string;
-    statusCode?: string;
+    empName?: string;
     vendId?: string;
+    vendName?: string;
+    custId?: string;
+    custName?: string;
+    menuId?: string;
+    menuName?: string;
+    statusId?: string;
+    statusCode?: string;
+    statusNameTh?: string;
+    statusNameEn?: string;
+    statusName?: string;
     docTypeId?: string;
+    docTypeName?: string;
+    warehouseId?: string;
+    warehouseName?: string;
+    bookingId?: string | null;
+    docIssueReturnId?: string | null;
+    transferFromWarehouseId?: string | null;
+    transferFromWarehouseName?: string | null;
+    transferToWarehouseId?: string | null;
+    transferToWarehouseName?: string | null;
+    remark?: string;
+    isQualityControl?: boolean;
+    startDate?: string;
+    endDate?: string;
+    logs?: unknown;
 }
 
 export interface DocReceive extends BaseEntity {
@@ -453,18 +477,32 @@ export interface DocDisposalView extends DocDisposal {
     statusName?: string;
 }
 
+// ─── Paginated Result Wrapper ───────────────────────────────
+export interface PaginatedResult<T> {
+    data: T[];
+    total: number;
+    page?: number;
+    size?: number;
+    pageSize?: number;
+    limit?: number;
+    [key: string]: unknown;
+}
+
 // ─── API Response wrapper ────────────────────────────────────
 
-export interface ApiResponse<T> {
+export interface ApiResponse<T = unknown> {
     success: boolean;
     results?: T;
-    data: T;
+    data?: T;
     message?: string;
     error?: string;
     total?: number;
     page?: number;
     limit?: number;
+    [key: string]: unknown;
 }
+
+export type PaginatedApiResponse<T> = ApiResponse<PaginatedResult<T>>;
 
 export interface PaginationParams {
     page?: number;

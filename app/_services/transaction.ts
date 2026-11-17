@@ -1,13 +1,14 @@
 import type {
     DocReceive, DocReceiveDetail, DocIssue, DocIssueDetail,
     DocTransfer, DocRequest, DocDisposal, PaginationParams,
-    DocTrans,
+    DocTrans, PaginatedResult,
 } from '@/lib/types';
 import { apiClient } from '@/lib/api/client';
 
 export const transactionService = {
     docTrans: {
-        list: (data?: DocTrans) => apiClient.post<DocTrans[]>('/api/doctrans/list', data),
+        list: (data?: DocTrans) =>
+            apiClient.post<PaginatedResult<DocTrans>>('/api/doctrans/list', data || {}),
     },
     receive: {
         list: (p?: PaginationParams & { docNo?: string; docDate?: string; menuId?: string }) => {

@@ -38,14 +38,6 @@ export interface IssueInventoryResult {
 
 export const inventoryService = {
     list: (p?: InventoryListParams) => {
-        // const q = new URLSearchParams();
-        // if (p) {
-        //     for (const [key, val] of Object.entries(p)) {
-        //         if (val !== undefined && val !== null && val !== '') {
-        //             q.set(key, String(val));
-        //         }
-        //     }
-        // }
         return apiClient.post<InventoryView[]>(`/api/inventory/list`, p);
     },
     listAll: (p?: InventoryListParams) => {

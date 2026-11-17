@@ -121,7 +121,7 @@ function ReceiveFormContent() {
                     const res = await transactionService.receive.get(editId);
                     if (res && res.success) {
                         const foundDoc: (DocReceive & { details?: DocReceiveDetail[] }) | null = res?.success
-                            ? (res.results || res.data)
+                            ? (res.results || res.data || null)
                             : null;
 
                         if (foundDoc) {
