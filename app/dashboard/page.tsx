@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { StatCard } from '@/components/ui';
 import { useI18n } from '../providers';
-import { apiClient } from '@/lib/api/client';
 
 export default function DashboardPage() {
     const { t } = useI18n();
@@ -13,20 +12,22 @@ export default function DashboardPage() {
 
     useEffect(() => {
         fetch('/api/dashboard')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (data?.success) {
                     setStats(data.data);
                 }
+            })
+            .catch(() => {
+                // กรณีไม่มี endpoint /api/dashboard ให้แสดงค่าเริ่มต้น 0
             })
             .finally(() => setLoading(false));
     }, []);
 
-
     return (
         <AppLayout>
-            <div className="mb-6 flex items-center justify-between">
-                <h1 className="text-2xl font-bold">{t.dashboard.title}</h1>
+            <div className="mb-4 sm:mb-6 flex items-center justify-between gap-3">
+                <h1 className="text-xl sm:text-2xl font-bold">{t.dashboard.title}</h1>
             </div>
 
             {loading ? (
@@ -34,7 +35,7 @@ export default function DashboardPage() {
                     <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
                     <StatCard
                         title={t.dashboard.totalItems}
                         value={stats?.totalItems || 0}
@@ -63,15 +64,24 @@ export default function DashboardPage() {
                 </div>
             )}
 
-            {/* Placeholder for more content */}
-            <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-2xl p-6 border bg-card text-card-foreground shadow-sm" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+            <div className="mt-6 sm:mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+                <div
+                    className="rounded-2xl p-4 sm:p-6 border bg-card text-card-foreground shadow-sm"
+                    style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+                >
                     <h3 className="font-semibold mb-4">{t.dashboard.recentActivity}</h3>
-                    <p className="text-sm text-secondary" style={{ color: 'var(--text-secondary)' }}>{t.common.noData}</p>
+                    <p className="text-sm text-secondary" style={{ color: 'var(--text-secondary)' }}>
+                        {t.common.noData}
+                    </p>
                 </div>
-                <div className="rounded-2xl p-6 border bg-card text-card-foreground shadow-sm" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+                <div
+                    className="rounded-2xl p-4 sm:p-6 border bg-card text-card-foreground shadow-sm"
+                    style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+                >
                     <h3 className="font-semibold mb-4">{t.dashboard.stockByWarehouse}</h3>
-                    <p className="text-sm text-secondary" style={{ color: 'var(--text-secondary)' }}>{t.common.noData}</p>
+                    <p className="text-sm text-secondary" style={{ color: 'var(--text-secondary)' }}>
+                        {t.common.noData}
+                    </p>
                 </div>
             </div>
         </AppLayout>

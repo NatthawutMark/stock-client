@@ -15,12 +15,12 @@ import {
 } from '@/components/ui/index';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { masterService } from '@/app/_services/master';
+import { extractList, extractErrorMessage } from '@/lib/utils';
 import type { MastItem, MastBrand, MastLocation, MastUom } from '@/lib/types';
 import Swal from 'sweetalert2';
 
 interface ItemFormData {
     id?: string;
-    originalItemCode?: string;
     itemCode: string;
     itemName: string;
     brandId: string;
@@ -91,15 +91,9 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                 masterService.uoms.list(),
             ]);
 
-            if (brandRes?.success && Array.isArray(brandRes.results)) {
-                setBrands(brandRes.results);
-            }
-            if (locRes?.success && Array.isArray(locRes.results)) {
-                setLocations(locRes.results);
-            }
-            if (uomRes?.success && Array.isArray(uomRes.results)) {
-                setUoms(uomRes.results);
-            }
+            setBrands(extractList<MastBrand>(brandRes));
+            setLocations(extractList<MastLocation>(locRes));
+            setUoms(extractList<MastUom>(uomRes));
         } catch (err) {
             console.error('Failed to load dropdown options:', err);
         }
@@ -113,7 +107,6 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
             if (dataEdit) {
                 setFormData({
                     id: dataEdit.id,
-                    originalItemCode: dataEdit.itemCode || '',
                     itemCode: dataEdit.itemCode || '',
                     itemName: dataEdit.itemName || '',
                     brandId: dataEdit.brandId ? String(dataEdit.brandId) : '',
@@ -167,12 +160,13 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
 
         setSaving(true);
         try {
-            const payload: Record<string, unknown> = {
+            const payload: Partial<MastItem> = {
+                id: isEditMode ? formData.id : undefined,
                 itemCode: formData.itemCode.trim(),
                 itemName: formData.itemName.trim(),
-                brandId: formData.brandId ? String(formData.brandId) : null,
-                locationId: formData.locationId ? String(formData.locationId) : null,
-                uomId: formData.uomId ? String(formData.uomId) : null,
+                brandId: formData.brandId ? String(formData.brandId) : undefined,
+                locationId: formData.locationId ? String(formData.locationId) : undefined,
+                uomId: formData.uomId ? String(formData.uomId) : undefined,
                 buyPrice: Number(formData.buyPrice) || 0,
                 sellPrice: Number(formData.sellPrice) || 0,
                 minAlert: Number(formData.minAlert) || 0,
@@ -182,70 +176,49 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                 isActive: formData.isActive,
             };
 
-            if (isEditMode) {
-                payload.id = formData.id ? String(formData.id) : undefined;
-                payload.originalItemCode = formData.originalItemCode;
+            const res = isEditMode
+                ? await masterService.items.update(payload)
+                : await masterService.items.create(payload);
 
-                const res = await masterService.items.update(payload);
-
-                if (res && res.success) {
+            if (res && res.success !== false) {
+                onSaved();
+                if (andAddMore && !isEditMode) {
+                    resetForm();
+                    setAlertMessage({
+                        type: 'success',
+                        message: res.message || 'เพิ่มสินค้าใหม่เรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
+                    });
+                } else {
                     await Swal.fire({
                         icon: 'success',
                         title: 'สำเร็จ',
-                        text: 'แก้ไขข้อมูลสินค้าเรียบร้อยแล้ว',
+                        text:
+                            res.message ||
+                            (isEditMode ? 'แก้ไขข้อมูลสินค้าเรียบร้อยแล้ว' : 'เพิ่มสินค้าใหม่เรียบร้อยแล้ว'),
                         timer: 1500,
                         showConfirmButton: false,
                     });
-                    onSaved();
                     onOpenChange(false);
+                }
+            } else {
+                const errMsg = extractErrorMessage(
+                    res,
+                    isEditMode ? 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลสินค้า' : 'เกิดข้อผิดพลาดในการเพิ่มสินค้า'
+                );
+                if (andAddMore) {
+                    setAlertMessage({ type: 'error', message: errMsg });
                 } else {
                     Swal.fire({
                         icon: 'error',
-                        title: 'แก้ไขไม่สำเร็จ',
-                        text: 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลสินค้า',
+                        title: isEditMode ? 'แก้ไขไม่สำเร็จ' : 'เพิ่มไม่สำเร็จ',
+                        text: errMsg,
                         confirmButtonColor: '#dc2626',
                     });
-                }
-            } else {
-                const res = await masterService.items.create(payload);
-
-                if (res && res.success) {
-                    onSaved();
-                    if (andAddMore) {
-                        resetForm();
-                        setAlertMessage({
-                            type: 'success',
-                            message: 'เพิ่มสินค้าใหม่เรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
-                        });
-                    } else {
-                        await Swal.fire({
-                            icon: 'success',
-                            title: 'สำเร็จ',
-                            text: 'เพิ่มสินค้าใหม่เรียบร้อยแล้ว',
-                            timer: 1500,
-                            showConfirmButton: false,
-                        });
-                        onOpenChange(false);
-                    }
-                } else {
-                    // const errMsg = res?.error || res?.message || 'เกิดข้อผิดพลาดในการเพิ่มสินค้า';
-                    const errMsg = 'เกิดข้อผิดพลาดในการเพิ่มสินค้า';
-                    if (andAddMore) {
-                        setAlertMessage({ type: 'error', message: errMsg });
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'เพิ่มไม่สำเร็จ',
-                            text: errMsg,
-                            confirmButtonColor: '#dc2626',
-                        });
-                    }
                 }
             }
         } catch (error: unknown) {
             console.error('Save item failed:', error);
-            const err = error as { message?: string };
-            const errMsg = err.message || 'ไม่สามารถบันทึกข้อมูลได้';
+            const errMsg = extractErrorMessage(error, 'ไม่สามารถบันทึกข้อมูลได้');
             if (andAddMore) {
                 setAlertMessage({ type: 'error', message: errMsg });
             } else {
@@ -263,9 +236,9 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal={true}>
-            <DialogContent className="max-w-4xl sm:max-w-4xl w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl p-6">
-                <DialogHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4">
-                    <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+            <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[min(56rem,calc(100vw-2rem))] w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl p-4 sm:p-6 overflow-y-auto overscroll-contain">
+                <DialogHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4 pr-8">
+                    <DialogTitle className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
                         {isEditMode ? 'แก้ไขข้อมูลสินค้า' : 'สร้างสินค้าใหม่ (New Item)'}
                     </DialogTitle>
                     <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
@@ -302,8 +275,8 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
 
                 <div className="space-y-4 py-4">
                     {/* Row 1: Code and Name */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 รหัสสินค้า (Item Code) <span className="text-red-500">*</span>
                             </label>
@@ -313,11 +286,11 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                                 onChange={(e) => setFormData((prev) => ({ ...prev, itemCode: e.target.value }))}
                                 placeholder="เช่น ITM-001..."
                                 disabled={isEditMode}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 ชื่อสินค้า (Item Name) <span className="text-red-500">*</span>
                             </label>
@@ -326,21 +299,21 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                                 value={formData.itemName}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, itemName: e.target.value }))}
                                 placeholder="เช่น หน้ากากอนามัย, นมสด..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                     </div>
 
                     {/* Row 2: Brand, UOM, Location */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 แบรนด์ (Brand)
                             </label>
                             <select
                                 value={formData.brandId}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, brandId: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="">-- ไม่ระบุแบรนด์ --</option>
                                 {brands.map((b) => (
@@ -351,14 +324,14 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                             </select>
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 หน่วยนับ (UOM)
                             </label>
                             <select
                                 value={formData.uomId}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, uomId: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="">-- ไม่ระบุหน่วยนับ --</option>
                                 {uoms.map((u) => (
@@ -369,14 +342,14 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                             </select>
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 ตำแหน่งจัดเก็บ (Location)
                             </label>
                             <select
                                 value={formData.locationId}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, locationId: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="">-- ไม่ระบุตำแหน่ง --</option>
                                 {locations.map((l) => (
@@ -389,8 +362,8 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                     </div>
 
                     {/* Row 3: Prices & Alerts */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 ราคาซื้อ (Buy Price)
                             </label>
@@ -400,11 +373,11 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                                 min="0"
                                 value={formData.buyPrice}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, buyPrice: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 ราคาขาย (Sell Price)
                             </label>
@@ -414,11 +387,11 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                                 min="0"
                                 value={formData.sellPrice}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, sellPrice: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 แจ้งเตือนขั้นต่ำ (Min Alert)
                             </label>
@@ -427,11 +400,11 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                                 min="0"
                                 value={formData.minAlert}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, minAlert: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 แจ้งเตือนสูงสุด (Max Alert)
                             </label>
@@ -440,13 +413,13 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                                 min="0"
                                 value={formData.maxAlert}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, maxAlert: e.target.value }))}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                     </div>
 
                     {/* Row 4: Controls (Lot, Serial, Active) */}
-                    <div className="flex flex-wrap items-center gap-6 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                    <div className="flex flex-wrap items-center gap-4 sm:gap-6 pt-3 border-t border-zinc-100 dark:border-zinc-800">
                         <label className="flex items-center gap-2.5 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -491,7 +464,7 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                         disabled={saving}
-                        className="rounded-xl px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        className="w-full sm:w-auto rounded-xl px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     >
                         ยกเลิก
                     </Button>
@@ -500,7 +473,7 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                             type="button"
                             onClick={() => handleSave(true)}
                             disabled={saving}
-                            className="rounded-xl px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="w-full sm:w-auto rounded-xl px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
                             {saving ? 'กำลังบันทึก...' : 'บันทึกและเพิ่มอีก'}
                         </Button>
@@ -509,7 +482,7 @@ export function CreateItemModal({ open, onOpenChange, onSaved, dataEdit }: Creat
                         type="button"
                         onClick={() => handleSave(false)}
                         disabled={saving}
-                        className="rounded-xl px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                        className="w-full sm:w-auto rounded-xl px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
                     >
                         {saving ? 'กำลังบันทึก...' : isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูล'}
                     </Button>

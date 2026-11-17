@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { inventoryService, type InventoryListParams } from '@/app/_services/inventory';
 import { masterService } from '@/app/_services/master';
+import { getField, extractList, extractTotal } from '@/lib/utils';
 import type {
     InventoryView,
     MastWarehouse,
@@ -55,10 +56,6 @@ export type StockStatus = 'ALL' | 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'H
 
 export interface ExtendedInventoryItem extends InventoryView {
     minAlert?: number;
-    maxAlert?: number;
-    buyPrice?: number;
-    sellPrice?: number;
-    brandName?: string;
 }
 
 interface InventoryFilters {
@@ -114,59 +111,8 @@ const COLUMNS = [
     { colName: 'จัดการ', key: 'action', width: 140, align: 'text-center' },
 ];
 
-const TOTAL_KEYS = ['total', 'totalCount', 'totalRecords', 'total_count', 'total_records', 'count', 'recordsTotal'];
-
 const INPUT_CLASS =
     'w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 shadow-sm';
-
-// ─────────────────────────────────────────────────────────────
-// Helper Functions
-// ─────────────────────────────────────────────────────────────
-function getField<T = unknown>(item: Record<string, unknown> | undefined, ...keys: string[]): T | undefined {
-    if (!item) return undefined;
-    for (const key of keys) {
-        if (item[key] !== undefined && item[key] !== null) return item[key] as T;
-    }
-    const itemKeys = Object.keys(item);
-    for (const key of keys) {
-        const foundKey = itemKeys.find((k) => k.toLowerCase() === key.toLowerCase());
-        if (foundKey && item[foundKey] !== undefined && item[foundKey] !== null) {
-            return item[foundKey] as T;
-        }
-    }
-    return undefined;
-}
-
-interface ListResponse {
-    success?: boolean;
-    results?: unknown;
-    data?: unknown;
-}
-
-function extractList<T>(res: ListResponse | null | undefined): T[] {
-    if (!res?.success) return [];
-    if (Array.isArray(res.results)) return res.results as T[];
-    if (Array.isArray(res.data)) return res.data as T[];
-    if (res.results && typeof res.results === 'object') {
-        const nested = res.results as Record<string, unknown>;
-        for (const key of ['items', 'data', 'list']) {
-            if (Array.isArray(nested[key])) return nested[key] as T[];
-        }
-    }
-    return [];
-}
-
-function extractTotal(res: ListResponse): number | undefined {
-    const nested =
-        res.results && typeof res.results === 'object' && !Array.isArray(res.results)
-            ? (res.results as Record<string, unknown>)
-            : undefined;
-    const value =
-        getField(res as Record<string, unknown>, ...TOTAL_KEYS) ??
-        getField(nested, ...TOTAL_KEYS);
-    const num = Number(value);
-    return value !== undefined && !Number.isNaN(num) ? num : undefined;
-}
 
 function FilterField({
     id,
@@ -180,35 +126,29 @@ function FilterField({
     children: ReactNode;
 }) {
     return (
-        <div className="flex flex-col space-y-1.5">
-            <div className="flex items-center justify-between">
-                <Label htmlFor={id} className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        <div className="flex flex-col space-y-1.5 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+                <Label htmlFor={id} className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 shrink-0">
                     {label}
                 </Label>
-                <span className="text-xs text-zinc-400">{subLabel}</span>
+                <span className="text-xs text-zinc-400 truncate">{subLabel}</span>
             </div>
             {children}
         </div>
     );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Main Component: InventoryPage
-// ─────────────────────────────────────────────────────────────
 export default function InventoryPage() {
     const router = useRouter();
     const { pageTitle } = useLayout();
 
-    // ─────────────────────────────────────────────────────────────
-    // 1. Filter States (Dynamic)
-    // ─────────────────────────────────────────────────────────────
+    // 1. Filter States
     const [warehouseIdInput, setWarehouseIdInput] = useState<string>('');
     const [locationIdInput, setLocationIdInput] = useState<string>('');
     const [itemIdInput, setItemIdInput] = useState<string>('');
     const [keywordInput, setKeywordInput] = useState<string>('');
     const [lotNoInput, setLotNoInput] = useState<string>('');
     const [serialNoInput, setSerialNoInput] = useState<string>('');
-    const [stockStatusInput, setStockStatusInput] = useState<StockStatus>('ALL');
 
     const [appliedFilters, setAppliedFilters] = useState<InventoryFilters>(initialFilters);
 
@@ -218,7 +158,7 @@ export default function InventoryPage() {
     const [itemList, setItemList] = useState<MastItem[]>([]);
     const [uomList, setUomList] = useState<MastUom[]>([]);
 
-    // Document / Inventory Data (Raw from API)
+    // Inventory Data
     const [inventoryList, setInventoryList] = useState<InventoryView[]>([]);
     const [allInventoryList, setAllInventoryList] = useState<InventoryView[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -229,13 +169,7 @@ export default function InventoryPage() {
     const [pageSize, setPageSize] = useState<number>(10);
     const [totalRecords, setTotalRecords] = useState<number>(0);
 
-    // In-flight guards ป้องกัน request ซ้ำซ้อนขณะกำลังดึงข้อมูล
-    const isFetchingRef = useRef<boolean>(false);
-    const isFetchingAllRef = useRef<boolean>(false);
-
-    // ─────────────────────────────────────────────────────────────
-    // 2. โหลด Master Data สำหรับ Dynamic Dropdowns
-    // ─────────────────────────────────────────────────────────────
+    // 2. โหลด Master Data สำหรับ Dropdowns
     useEffect(() => {
         const loadMasters = async () => {
             try {
@@ -252,55 +186,47 @@ export default function InventoryPage() {
                 setUomList(extractList<MastUom>(uomRes));
             } catch (err) {
                 console.error('Failed to load masters:', err);
-                setWarehouseList([]);
-                setLocationList([]);
-                setItemList([]);
-                setUomList([]);
             }
         };
 
         loadMasters();
     }, []);
 
-    // ─────────────────────────────────────────────────────────────
     // 3. Dynamic Dropdown Options
-    // ─────────────────────────────────────────────────────────────
-    const warehouseOptions = useMemo<SearchableSelectOption[]>(() => {
-        return warehouseList.map((wh) => ({
-            value: String(wh.id),
-            label: `${wh.code ? `[${wh.code}] ` : ''}${wh.warehouseName || wh.description || `คลัง #${wh.id}`}`,
-            subLabel: wh.description && wh.description !== wh.warehouseName ? wh.description : undefined,
-        }));
-    }, [warehouseList]);
+    const warehouseOptions = useMemo<SearchableSelectOption[]>(
+        () =>
+            warehouseList.map((wh) => ({
+                value: String(wh.id),
+                label: `${wh.code ? `[${wh.code}] ` : ''}${wh.warehouseName || wh.description || `คลัง #${wh.id}`}`,
+                subLabel: wh.description && wh.description !== wh.warehouseName ? wh.description : undefined,
+            })),
+        [warehouseList]
+    );
 
-    // DYNAMIC FILTER: ตำแหน่งจัดเก็บจะถูกกรองตามคลังสินค้าที่เลือก
     const locationOptions = useMemo<SearchableSelectOption[]>(() => {
         const filteredLocations = warehouseIdInput
-            ? locationList.filter(
-                (loc) =>
-                    String(loc.warehouseId || '') === String(warehouseIdInput) ||
-                    String((loc as Record<string, unknown>).WarehouseId || '') === String(warehouseIdInput)
-            )
+            ? locationList.filter((loc) => String(loc.warehouseId || '') === String(warehouseIdInput))
             : locationList;
 
         return filteredLocations.map((loc) => ({
             value: String(loc.id),
             label: `${loc.code ? `[${loc.code}] ` : ''}${loc.name || `ตำแหน่ง #${loc.id}`}`,
             subLabel: loc.warehouseId
-                ? `คลัง: ${warehouseList.find((w) => String(w.id) === String(loc.warehouseId))?.warehouseName || loc.warehouseId}`
+                ? `คลัง: ${
+                      warehouseList.find((w) => String(w.id) === String(loc.warehouseId))?.warehouseName ||
+                      loc.warehouseId
+                  }`
                 : undefined,
         }));
     }, [locationList, warehouseIdInput, warehouseList]);
 
-    // เมื่อเปลี่ยนคลังสินค้า และตำแหน่งจัดเก็บเดิมไม่อยู่ในคลังใหม่ ให้รีเซ็ตตำแหน่งจัดเก็บ
     const handleWarehouseChange = (whId: string) => {
         setWarehouseIdInput(whId);
         if (whId) {
             const isValidLocation = locationList.some(
                 (loc) =>
                     String(loc.id) === String(locationIdInput) &&
-                    (String(loc.warehouseId || '') === String(whId) ||
-                        String((loc as Record<string, unknown>).WarehouseId || '') === String(whId))
+                    String(loc.warehouseId || '') === String(whId)
             );
             if (!isValidLocation) {
                 setLocationIdInput('');
@@ -308,20 +234,18 @@ export default function InventoryPage() {
         }
     };
 
-    const itemOptions = useMemo<SearchableSelectOption[]>(() => {
-        return itemList.map((item) => ({
-            value: String(item.id),
-            label: `${item.itemCode ? `[${item.itemCode}] ` : ''}${item.itemName || `สินค้า #${item.id}`}`,
-            subLabel: item.buyPrice ? `ราคาต้นทุน: ฿${item.buyPrice.toLocaleString()}` : undefined,
-        }));
-    }, [itemList]);
+    const itemOptions = useMemo<SearchableSelectOption[]>(
+        () =>
+            itemList.map((item) => ({
+                value: String(item.id),
+                label: `${item.itemCode ? `[${item.itemCode}] ` : ''}${item.itemName || `สินค้า #${item.id}`}`,
+                subLabel: item.buyPrice ? `ราคาต้นทุน: ฿${item.buyPrice.toLocaleString()}` : undefined,
+            })),
+        [itemList]
+    );
 
-    // ─────────────────────────────────────────────────────────────
-    // 4. โหลดข้อมูลสินค้าคงคลัง (Fetch Inventory Data)
-    // ─────────────────────────────────────────────────────────────
+    // 4. โหลดข้อมูลสินค้าคงคลังสำหรับตาราง
     const fetchInventory = useCallback(async () => {
-        if (isFetchingRef.current) return;
-        isFetchingRef.current = true;
         setLoading(true);
         try {
             const payload: InventoryListParams & { pageSize?: number; pageNumber?: number } = {
@@ -340,7 +264,6 @@ export default function InventoryPage() {
             };
 
             const res = await inventoryService.list(payload);
-
             if (!res?.success) {
                 setInventoryList([]);
                 setTotalRecords(0);
@@ -349,7 +272,6 @@ export default function InventoryPage() {
 
             const data = extractList<InventoryView>(res);
 
-            // กรณี Backend ส่งมาทั้งหมดรอบเดียว (Client Pagination)
             if (data.length > pageSize) {
                 const start = (currentPage - 1) * pageSize;
                 setTotalRecords(data.length);
@@ -357,73 +279,49 @@ export default function InventoryPage() {
                 return;
             }
 
-            // กรณี Backend แบ่งหน้ามาให้ (Server Pagination)
             setInventoryList(data);
             const total = extractTotal(res);
-            if (total !== undefined) {
-                setTotalRecords(total);
-            } else {
-                setTotalRecords(
-                    data.length === pageSize
+            setTotalRecords(
+                total !== undefined
+                    ? total
+                    : data.length === pageSize
                         ? currentPage * pageSize + 1
                         : (currentPage - 1) * pageSize + data.length
-                );
-            }
+            );
         } catch (error) {
             console.error('Fetch inventory list failed:', error);
             setInventoryList([]);
             setTotalRecords(0);
         } finally {
-            isFetchingRef.current = false;
             setLoading(false);
         }
     }, [currentPage, pageSize, appliedFilters]);
 
-    // ─────────────────────────────────────────────────────────────
-    // 5. โหลดข้อมูลสินค้าคงคลังทั้งหมด (Fetch All Inventory for Stats)
-    // ─────────────────────────────────────────────────────────────
+    // 5. โหลดข้อมูลสินค้าคงคลังทั้งหมดสำหรับคำนวณ KPI Stats
     const fetchInventoryAll = useCallback(async () => {
-        if (isFetchingAllRef.current) return;
-        isFetchingAllRef.current = true;
         setLoadingStats(true);
         try {
             const res = await inventoryService.listAll({});
-
-            if (res?.success) {
-                const data = extractList<InventoryView>(res);
-                setAllInventoryList(data);
-            } else {
-                setAllInventoryList([]);
-            }
+            setAllInventoryList(res?.success ? extractList<InventoryView>(res) : []);
         } catch (error) {
             console.error('Fetch all inventory for stats failed:', error);
             setAllInventoryList([]);
         } finally {
-            isFetchingAllRef.current = false;
             setLoadingStats(false);
         }
     }, []);
 
-    // ─────────────────────────────────────────────────────────────
-    // UseEffect 1: สำหรับดึงข้อมูลแสดงผลในตาราง (Table Pagination & Filtering)
-    // ─────────────────────────────────────────────────────────────
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchInventory();
     }, [fetchInventory]);
 
-    // ─────────────────────────────────────────────────────────────
-    // UseEffect 2: สำหรับดึงข้อมูลทั้งหมด (ListAll) เพื่อคำนวณ Stats / KPI Dashboard
-    // ─────────────────────────────────────────────────────────────
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchInventoryAll();
     }, [fetchInventoryAll]);
 
-    // ─────────────────────────────────────────────────────────────
-    // 6. Enrich Inventory List for Display (In-Memory Memoization)
-    //    ซิงค์ชื่อ Master Data ในหน่วยความจำโดยไม่ต้องยิง API ซ้ำ
-    // ─────────────────────────────────────────────────────────────
+    // 6. ซิงค์ชื่อ Master Data กับรายการสินค้าในตาราง
     const displayInventoryList = useMemo<ExtendedInventoryItem[]>(() => {
         return inventoryList.map((inv) => {
             const raw = inv as unknown as Record<string, unknown>;
@@ -442,19 +340,42 @@ export default function InventoryPage() {
             const matchedUom = uomList.find((u) => String(u.id) === String(uomId));
 
             const itemQty = Number(getField<number>(raw, 'itemQty', 'item_qty', 'qty', 'quantity') ?? 0);
-            const itemPrice = Number(getField<number>(raw, 'itemPrice', 'item_price', 'price', 'buyPrice') ?? matchedItem?.buyPrice ?? 0);
+            const itemPrice = Number(
+                getField<number>(raw, 'itemPrice', 'item_price', 'price', 'buyPrice') ??
+                    matchedItem?.buyPrice ??
+                    0
+            );
 
             return {
                 ...inv,
                 id: String(getField<string>(raw, 'id') ?? ''),
                 itemId: String(itemId || ''),
-                itemCode: String(getField<string>(raw, 'itemCode', 'item_code') || matchedItem?.itemCode || `ITM-${itemId || '-'}`),
-                itemName: String(getField<string>(raw, 'itemName', 'item_name') || matchedItem?.itemName || `สินค้า #${itemId || '-'}`),
+                itemCode: String(
+                    getField<string>(raw, 'itemCode', 'item_code') ||
+                        matchedItem?.itemCode ||
+                        `ITM-${itemId || '-'}`
+                ),
+                itemName: String(
+                    getField<string>(raw, 'itemName', 'item_name') ||
+                        matchedItem?.itemName ||
+                        `สินค้า #${itemId || '-'}`
+                ),
                 warehouseId: String(whId || ''),
-                warehouseName: String(getField<string>(raw, 'warehouseName', 'warehouse_name') || matchedWh?.warehouseName || `คลัง #${whId || '-'}`),
+                warehouseName: String(
+                    getField<string>(raw, 'warehouseName', 'warehouse_name') ||
+                        matchedWh?.warehouseName ||
+                        `คลัง #${whId || '-'}`
+                ),
                 locationId: String(locId || ''),
-                locationName: String(getField<string>(raw, 'locationName', 'location_name') || matchedLoc?.name || matchedLoc?.code || `ตำแหน่ง #${locId || '-'}`),
-                uomName: String(getField<string>(raw, 'uomName', 'uom_name') || matchedUom?.name || 'ชิ้น'),
+                locationName: String(
+                    getField<string>(raw, 'locationName', 'location_name') ||
+                        matchedLoc?.name ||
+                        matchedLoc?.code ||
+                        `ตำแหน่ง #${locId || '-'}`
+                ),
+                uomName: String(
+                    getField<string>(raw, 'uomName', 'uom_name') || matchedUom?.name || 'ชิ้น'
+                ),
                 lotNo: String(getField<string>(raw, 'lotNo', 'lot_no', 'lot') || ''),
                 serialNo: String(getField<string>(raw, 'serialNo', 'serial_no', 'serial') || ''),
                 itemQty,
@@ -462,27 +383,21 @@ export default function InventoryPage() {
                 mfgDate: String(getField<string>(raw, 'mfgDate', 'mfg_date') || ''),
                 expireDate: String(getField<string>(raw, 'expireDate', 'expire_date', 'expDate') || ''),
                 minAlert: matchedItem?.minAlert ?? 5,
-                maxAlert: matchedItem?.maxAlert ?? 50,
-                buyPrice: matchedItem?.buyPrice ?? itemPrice,
-                sellPrice: matchedItem?.sellPrice ?? 0,
-                brandName: (matchedItem as Record<string, unknown>)?.brandName as string | undefined,
             };
         });
     }, [inventoryList, itemList, warehouseList, locationList, uomList]);
 
-    // ─────────────────────────────────────────────────────────────
     // 7. Actions & Handlers
-    // ─────────────────────────────────────────────────────────────
     const handleSearch = () => {
-        setAppliedFilters({
+        setAppliedFilters((prev) => ({
+            ...prev,
             warehouseId: warehouseIdInput,
             locationId: locationIdInput,
             itemId: itemIdInput,
             keyword: keywordInput,
             lotNo: lotNoInput,
             serialNo: serialNoInput,
-            stockStatus: stockStatusInput,
-        });
+        }));
         setCurrentPage(1);
     };
 
@@ -493,13 +408,11 @@ export default function InventoryPage() {
         setKeywordInput('');
         setLotNoInput('');
         setSerialNoInput('');
-        setStockStatusInput('ALL');
         setAppliedFilters({ ...initialFilters });
         setCurrentPage(1);
     };
 
     const handleQuickTabSelect = (status: StockStatus) => {
-        setStockStatusInput(status);
         setAppliedFilters((prev) => ({
             ...prev,
             stockStatus: status,
@@ -515,7 +428,6 @@ export default function InventoryPage() {
         if (key === 'keyword') setKeywordInput('');
         if (key === 'lotNo') setLotNoInput('');
         if (key === 'serialNo') setSerialNoInput('');
-        if (key === 'stockStatus') setStockStatusInput('ALL');
 
         setAppliedFilters((prev) => ({
             ...prev,
@@ -524,16 +436,15 @@ export default function InventoryPage() {
         setCurrentPage(1);
     };
 
-    // คำนวณสรุปข้อมูล KPI Dashboard จากข้อมูลทั้งหมด (allInventoryList)
+    // คำนวณสรุปข้อมูล KPI Dashboard จาก allInventoryList
     const stats = useMemo(() => {
-        const sourceList = allInventoryList;
-        const totalItemsCount = sourceList.length;
+        const totalItemsCount = allInventoryList.length;
         let totalStockQty = 0;
         let lowStockCount = 0;
         let outOfStockCount = 0;
         let totalStockValue = 0;
 
-        for (const inv of sourceList) {
+        for (const inv of allInventoryList) {
             const raw = inv as unknown as Record<string, unknown>;
             const itemId = getField<number | string>(raw, 'itemId', 'item_id', 'itemCode');
             const matchedItem = itemList.find(
@@ -541,7 +452,11 @@ export default function InventoryPage() {
             );
 
             const itemQty = Number(getField<number>(raw, 'itemQty', 'item_qty', 'qty', 'quantity') ?? 0);
-            const itemPrice = Number(getField<number>(raw, 'itemPrice', 'item_price', 'price', 'buyPrice') ?? matchedItem?.buyPrice ?? 0);
+            const itemPrice = Number(
+                getField<number>(raw, 'itemPrice', 'item_price', 'price', 'buyPrice') ??
+                    matchedItem?.buyPrice ??
+                    0
+            );
             const minAlert = matchedItem?.minAlert ?? 5;
 
             totalStockQty += itemQty;
@@ -560,27 +475,26 @@ export default function InventoryPage() {
             outOfStockCount,
             totalStockValue,
         };
-    }, [allInventoryList, inventoryList, itemList]);
+    }, [allInventoryList, itemList]);
 
     const hasActiveFilters = Boolean(
         appliedFilters.warehouseId ||
-        appliedFilters.locationId ||
-        appliedFilters.itemId ||
-        appliedFilters.keyword ||
-        appliedFilters.lotNo ||
-        appliedFilters.serialNo ||
-        appliedFilters.stockStatus !== 'ALL'
+            appliedFilters.locationId ||
+            appliedFilters.itemId ||
+            appliedFilters.keyword ||
+            appliedFilters.lotNo ||
+            appliedFilters.serialNo ||
+            appliedFilters.stockStatus !== 'ALL'
     );
 
-    const handleAlert = async () => {
+    const handleAlert = () => {
         Swal.fire({
             icon: 'info',
             title: 'แจ้งเตือน',
-            html: 'ระบบนี้ยังไม่พร้อมใช้งาน'
-        })
-    }
+            html: 'ระบบนี้ยังไม่พร้อมใช้งาน',
+        });
+    };
 
-    // Helper แสดงป้ายสถานะจำนวนสต็อก
     const renderStockBadge = (qty: number, minAlert = 5) => {
         if (qty <= 0) {
             return (
@@ -608,19 +522,17 @@ export default function InventoryPage() {
 
     return (
         <AppLayout>
-            {/* ─────────────────────────────────────────────────────────────
-                Page Header & Action Buttons
-               ───────────────────────────────────────────────────────────── */}
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            {/* Page Header & Action Buttons */}
+            <div className="mb-4 sm:mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
                         {pageTitle || 'สินค้าคงคลัง (Inventory Stock)'}
                     </h1>
-                    <p className="text-sm mt-1 text-zinc-500 dark:text-zinc-400">
+                    <p className="text-xs sm:text-sm mt-1 text-zinc-500 dark:text-zinc-400">
                         ตรวจสอบยอดคงเหลือ ตำแหน่งจัดเก็บ Lot/Serial และสถานะสินค้าในคลัง (Inventory Management)
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                     <Button
                         variant="outline"
                         onClick={() => {
@@ -628,14 +540,14 @@ export default function InventoryPage() {
                             fetchInventoryAll();
                         }}
                         disabled={loading || loadingStats}
-                        className="h-9 px-3 text-xs rounded-xl border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        className="flex-1 sm:flex-none justify-center h-9 px-3 text-xs rounded-xl border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     >
                         <RotateCcw className={`w-3.5 h-3.5 mr-1.5 ${loading || loadingStats ? 'animate-spin' : ''}`} />
                         รีเฟรชข้อมูล
                     </Button>
                     <Button
                         onClick={() => router.push('/transaction/receive/form')}
-                        className="px-4 py-2 text-sm font-medium text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5"
+                        className="flex-1 sm:flex-none justify-center px-4 py-2 text-sm font-medium text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5"
                     >
                         <Package className="w-4 h-4" />
                         รับสินค้าเข้าสต็อก
@@ -643,105 +555,97 @@ export default function InventoryPage() {
                 </div>
             </div>
 
-            {/* ─────────────────────────────────────────────────────────────
-                KPI Summary Stats Cards
-               ───────────────────────────────────────────────────────────── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {/* 1. รายการสินค้าทั้งหมด */}
+            {/* KPI Summary Stats Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5 sm:mb-6">
                 <Card className="border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900">
-                    <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    <CardContent className="p-3 sm:p-4 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 block truncate">
                                 รายการในสต็อก (SKUs)
                             </span>
-                            <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">
+                            <div className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">
                                 {stats.totalItemsCount.toLocaleString()}
                                 <span className="text-xs font-normal text-zinc-400 ml-1.5">รายการ</span>
                             </div>
                         </div>
-                        <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                             <Package className="w-5 h-5" />
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* 2. จำนวนคงเหลือรวม */}
                 <Card className="border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900">
-                    <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    <CardContent className="p-3 sm:p-4 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 block truncate">
                                 ยอดคงเหลือรวม (Total Qty)
                             </span>
-                            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                            <div className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                                 {stats.totalStockQty.toLocaleString()}
                                 <span className="text-xs font-normal text-zinc-400 ml-1.5">ชิ้น</span>
                             </div>
                         </div>
-                        <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                             <Boxes className="w-5 h-5" />
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* 3. สินค้าใกล้หมด / หมดสต็อก */}
                 <Card className="border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900">
-                    <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    <CardContent className="p-3 sm:p-4 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 block truncate">
                                 แจ้งเตือนสต็อก (Alerts)
                             </span>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                            <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 mt-1">
+                                <span className="text-xl sm:text-2xl font-bold text-amber-600 dark:text-amber-400">
                                     {stats.lowStockCount}
                                 </span>
                                 <span className="text-xs text-zinc-400">ใกล้หมด /</span>
-                                <span className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+                                <span className="text-xl sm:text-2xl font-bold text-rose-600 dark:text-rose-400">
                                     {stats.outOfStockCount}
                                 </span>
                                 <span className="text-xs text-zinc-400">หมดสต็อก</span>
                             </div>
                         </div>
-                        <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                             <AlertTriangle className="w-5 h-5" />
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* 4. มูลค่ารวมสต็อกสินค้า */}
                 <Card className="border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900">
-                    <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    <CardContent className="p-3 sm:p-4 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 block truncate">
                                 มูลค่าสินค้าคงคลัง (Total Value)
                             </span>
-                            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">
+                            <div className="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1 truncate">
                                 ฿{stats.totalStockValue.toLocaleString()}
                             </div>
                         </div>
-                        <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
                             <Coins className="w-5 h-5" />
                         </div>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* ─────────────────────────────────────────────────────────────
-                1. Filter / Search Section (Dynamic Filters)
-               ───────────────────────────────────────────────────────────── */}
+            {/* 1. Filter / Search Section */}
             <Card className="mb-6 border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden">
-                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                        <Search className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <Search className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                         <span className="font-semibold text-sm text-zinc-800 dark:text-zinc-200">
                             เงื่อนไขการค้นหาสินค้าคงคลัง (Dynamic Search & Filter)
                         </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={handleResetFilter}
-                            className="h-8 px-3 text-xs rounded-lg border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            className="flex-1 sm:flex-none h-8 px-3 text-xs rounded-lg border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                         >
                             <RotateCcw className="w-3.5 h-3.5 mr-1" />
                             ล้างค่า (Reset)
@@ -749,7 +653,7 @@ export default function InventoryPage() {
                         <Button
                             size="sm"
                             onClick={handleSearch}
-                            className="h-8 px-4 text-xs rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                            className="flex-1 sm:flex-none h-8 px-4 text-xs rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
                         >
                             <Search className="w-3.5 h-3.5 mr-1" />
                             ค้นหา
@@ -757,9 +661,9 @@ export default function InventoryPage() {
                     </div>
                 </div>
 
-                <CardContent className="p-6 space-y-5">
+                <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-5">
                     {/* Quick Filter Status Tabs */}
-                    <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                    <div className="flex items-center gap-2 overflow-x-auto overscroll-x-contain pb-1 scrollbar-none">
                         <span className="text-xs font-semibold text-zinc-400 mr-1 flex items-center gap-1 shrink-0">
                             <Sparkles className="w-3.5 h-3.5 text-blue-500" />
                             สถานะ:
@@ -771,10 +675,11 @@ export default function InventoryPage() {
                                     key={tab.key}
                                     type="button"
                                     onClick={() => handleQuickTabSelect(tab.key)}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 flex items-center gap-1.5 ${isActive
-                                        ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/20'
-                                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                                        }`}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 flex items-center gap-1.5 ${
+                                        isActive
+                                            ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/20'
+                                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                                    }`}
                                 >
                                     {tab.icon}
                                     {tab.label}
@@ -784,8 +689,7 @@ export default function InventoryPage() {
                     </div>
 
                     {/* Filter Inputs Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                        {/* 1. คลังสินค้า (Warehouse) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                         <FilterField id="filter-warehouse" label="คลังสินค้า" subLabel="Warehouse">
                             <SearchableSelect
                                 id="filter-warehouse"
@@ -798,7 +702,6 @@ export default function InventoryPage() {
                             />
                         </FilterField>
 
-                        {/* 2. ตำแหน่งจัดเก็บ (Location) - DYNAMIC DEPENDENT */}
                         <FilterField
                             id="filter-location"
                             label="ตำแหน่งจัดเก็บ"
@@ -819,7 +722,6 @@ export default function InventoryPage() {
                             />
                         </FilterField>
 
-                        {/* 3. รายการสินค้า (Item / SKU) */}
                         <FilterField id="filter-item" label="รายการสินค้า" subLabel="Item / SKU">
                             <SearchableSelect
                                 id="filter-item"
@@ -832,7 +734,6 @@ export default function InventoryPage() {
                             />
                         </FilterField>
 
-                        {/* 4. คำค้นหาอิสระ (Keyword Search) */}
                         <FilterField id="filter-keyword" label="ค้นหาทั่วไป" subLabel="Search Keyword">
                             <div className="relative">
                                 <input
@@ -858,7 +759,6 @@ export default function InventoryPage() {
                             </div>
                         </FilterField>
 
-                        {/* 5. หมายเลขล็อต (Lot No.) */}
                         <FilterField id="filter-lotno" label="หมายเลขล็อต" subLabel="Lot Number">
                             <div className="relative">
                                 <input
@@ -884,7 +784,6 @@ export default function InventoryPage() {
                             </div>
                         </FilterField>
 
-                        {/* 6. หมายเลขซีเรียล (Serial No.) */}
                         <FilterField id="filter-serial" label="หมายเลขซีเรียล" subLabel="Serial Number">
                             <div className="relative">
                                 <input
@@ -911,7 +810,7 @@ export default function InventoryPage() {
                         </FilterField>
                     </div>
 
-                    {/* Active Filter Chips / Badges */}
+                    {/* Active Filter Chips */}
                     {hasActiveFilters && (
                         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
                             <span className="text-xs font-medium text-zinc-400">ตัวกรองที่ใช้งานอยู่:</span>
@@ -936,8 +835,8 @@ export default function InventoryPage() {
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900">
                                     <MapPin className="w-3 h-3" />
                                     ตำแหน่ง:{' '}
-                                    {locationList.find((l) => String(l.id) === String(appliedFilters.locationId))?.name ||
-                                        appliedFilters.locationId}
+                                    {locationList.find((l) => String(l.id) === String(appliedFilters.locationId))
+                                        ?.name || appliedFilters.locationId}
                                     <button
                                         type="button"
                                         onClick={() => handleRemoveSingleFilter('locationId')}
@@ -1030,15 +929,13 @@ export default function InventoryPage() {
                 </CardContent>
             </Card>
 
-            {/* ─────────────────────────────────────────────────────────────
-                2. Table Section (Table-Inventory)
-               ───────────────────────────────────────────────────────────── */}
+            {/* 2. Table Section */}
             <Card className="flex flex-col w-full border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl overflow-hidden bg-white dark:bg-zinc-900">
-                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/40">
+                <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-zinc-50/50 dark:bg-zinc-800/40">
                     <div className="flex items-center gap-2">
-                        <Boxes className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                        <h2 className="font-semibold text-base text-zinc-900 dark:text-zinc-100">
-                            Table-Inventory (รายการสต็อกสินค้าคงคลัง)
+                        <Boxes className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <h2 className="font-semibold text-sm sm:text-base text-zinc-900 dark:text-zinc-100">
+                            รายการสต็อกสินค้าคงคลัง (Inventory Stock List)
                         </h2>
                     </div>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -1046,185 +943,311 @@ export default function InventoryPage() {
                     </span>
                 </div>
 
-                <CardContent className="p-0 w-full overflow-x-auto">
-                    <Table className="w-full">
-                        <TableHeader className="bg-zinc-100/80 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
-                            <TableRow>
-                                {COLUMNS.map((col) => (
-                                    <TableHead
-                                        key={col.key}
-                                        style={{ width: `${col.width}px` }}
-                                        className={`font-bold text-xs uppercase tracking-wider text-zinc-800 dark:text-zinc-200 py-3.5 px-4 ${col.align || 'text-left'
-                                            }`}
+                <CardContent className="p-0 w-full">
+                    {/* Mobile Card View */}
+                    <div className="md:hidden">
+                        {loading ? (
+                            <div className="h-48 flex flex-col items-center justify-center gap-2 text-zinc-500 p-4">
+                                <div className="w-7 h-7 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                <span className="text-sm">กำลังโหลดข้อมูลสินค้าคงคลัง...</span>
+                            </div>
+                        ) : displayInventoryList.length === 0 ? (
+                            <div className="h-48 flex flex-col items-center justify-center gap-2 text-zinc-500 p-6 text-center">
+                                <Package className="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
+                                <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                                    ไม่พบข้อมูลสินค้าคงคลังที่ตรงกับเงื่อนไข
+                                </p>
+                                <p className="text-xs text-zinc-400">
+                                    ลองปรับเปลี่ยนเงื่อนไขการค้นหาเพื่อค้นหาใหม่อีกครั้ง
+                                </p>
+                                {hasActiveFilters && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleResetFilter}
+                                        className="mt-2 text-xs"
                                     >
-                                        {col.colName}
-                                    </TableHead>
-                                ))}
-                            </TableRow>
-                        </TableHeader>
-
-                        <TableBody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                            {loading ? (
-                                <TableRow key="loading-row">
-                                    <TableCell colSpan={COLUMNS.length} className="h-48 text-center text-zinc-500">
-                                        <div className="flex flex-col items-center justify-center gap-2">
-                                            <div className="w-7 h-7 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                                            <span className="text-sm">กำลังโหลดข้อมูลสินค้าคงคลัง...</span>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ) : displayInventoryList.length === 0 ? (
-                                <TableRow key="empty-row">
-                                    <TableCell colSpan={COLUMNS.length} className="h-48 text-center text-zinc-500">
-                                        <div className="flex flex-col items-center justify-center gap-2">
-                                            <Package className="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
-                                            <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-                                                ไม่พบข้อมูลสินค้าคงคลังที่ตรงกับเงื่อนไข
-                                            </p>
-                                            <p className="text-xs text-zinc-400">
-                                                ลองปรับเปลี่ยนเงื่อนไขการค้นหาเพื่อค้นหาใหม่อีกครั้ง
-                                            </p>
-                                            {hasActiveFilters && (
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={handleResetFilter}
-                                                    className="mt-2 text-xs"
-                                                >
-                                                    ล้างเงื่อนไขการค้นหา
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                displayInventoryList.map((item, index) => {
+                                        ล้างเงื่อนไขการค้นหา
+                                    </Button>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="p-3 space-y-3 bg-zinc-50/40 dark:bg-zinc-950/20">
+                                {displayInventoryList.map((item, index) => {
                                     const qty = item.itemQty ?? 0;
                                     const price = item.itemPrice ?? 0;
                                     const totalVal = qty * price;
                                     const minAlert = item.minAlert ?? 5;
 
                                     return (
-                                        <TableRow
-                                            key={item.id ?? `inv-${index}`}
-                                            className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors group"
+                                        <div
+                                            key={item.id ?? `inv-card-${index}`}
+                                            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5 space-y-3 shadow-xs"
                                         >
-                                            {/* รหัสสินค้า */}
-                                            <TableCell className="py-3 px-4 font-semibold text-zinc-900 dark:text-zinc-100 font-mono text-sm">
-                                                <span className="text-blue-600 dark:text-blue-400 group-hover:underline">
-                                                    {item.itemCode || '-'}
-                                                </span>
-                                            </TableCell>
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <div className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
+                                                        {item.itemCode || '-'}
+                                                    </div>
+                                                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mt-0.5 break-words">
+                                                        {item.itemName || '-'}
+                                                    </h3>
+                                                </div>
+                                                <div className="shrink-0">
+                                                    {renderStockBadge(qty, minAlert)}
+                                                </div>
+                                            </div>
 
-                                            {/* ชื่อสินค้า */}
-                                            <TableCell className="py-3 px-4 text-sm font-medium text-zinc-800 dark:text-zinc-200 max-w-[240px] truncate" title={item.itemName}>
-                                                {item.itemName || '-'}
-                                            </TableCell>
+                                            <div className="grid grid-cols-3 gap-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs">
+                                                <div>
+                                                    <span className="block text-[11px] text-zinc-400">คงเหลือ</span>
+                                                    <span className="font-bold font-mono text-zinc-900 dark:text-zinc-100">
+                                                        {qty.toLocaleString()}{' '}
+                                                        <span className="font-sans font-normal text-zinc-500">
+                                                            {item.uomName || 'ชิ้น'}
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span className="block text-[11px] text-zinc-400">ราคา/หน่วย</span>
+                                                    <span className="font-mono text-zinc-700 dark:text-zinc-300">
+                                                        ฿{price.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className="block text-[11px] text-zinc-400">มูลค่ารวม</span>
+                                                    <span className="font-bold font-mono text-zinc-900 dark:text-zinc-100">
+                                                        ฿{totalVal.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            </div>
 
-                                            {/* คลังสินค้า */}
-                                            <TableCell className="py-3 px-4 text-xs text-zinc-700 dark:text-zinc-300">
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
-                                                    <WarehouseIcon className="w-3 h-3 text-blue-500" />
+                                            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+                                                    <WarehouseIcon className="w-3 h-3 text-blue-500 shrink-0" />
                                                     {item.warehouseName || '-'}
                                                 </span>
-                                            </TableCell>
-
-                                            {/* ตำแหน่งจัดเก็บ */}
-                                            <TableCell className="py-3 px-4 text-xs text-zinc-700 dark:text-zinc-300">
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800">
-                                                    <MapPin className="w-3 h-3 text-purple-500" />
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800">
+                                                    <MapPin className="w-3 h-3 text-purple-500 shrink-0" />
                                                     {item.locationName || '-'}
                                                 </span>
-                                            </TableCell>
+                                            </div>
 
-                                            {/* Lot No. */}
-                                            <TableCell className="py-3 px-4 text-xs font-mono text-zinc-600 dark:text-zinc-400">
-                                                {item.lotNo ? (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                                                        <Tag className="w-3 h-3 text-zinc-400" />
-                                                        {item.lotNo}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-zinc-400">-</span>
-                                                )}
-                                            </TableCell>
-
-                                            {/* Serial No. */}
-                                            <TableCell className="py-3 px-4 text-xs font-mono text-zinc-600 dark:text-zinc-400">
-                                                {item.serialNo ? (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900">
-                                                        <Barcode className="w-3 h-3 text-indigo-400" />
-                                                        {item.serialNo}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-zinc-400">-</span>
-                                                )}
-                                            </TableCell>
-
-                                            {/* วันที่ผลิต / วันที่หมดอายุ */}
-                                            <TableCell className="py-3 px-4 text-xs text-zinc-500 dark:text-zinc-400">
-                                                {item.expireDate ? (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-zinc-700 dark:text-zinc-300">
+                                            {(item.lotNo || item.serialNo || item.expireDate || item.mfgDate) && (
+                                                <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono text-zinc-600 dark:text-zinc-400">
+                                                    {item.lotNo && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                                                            <Tag className="w-3 h-3 text-zinc-400" />
+                                                            Lot: {item.lotNo}
+                                                        </span>
+                                                    )}
+                                                    {item.serialNo && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900">
+                                                            <Barcode className="w-3 h-3 text-indigo-400" />
+                                                            SN: {item.serialNo}
+                                                        </span>
+                                                    )}
+                                                    {item.expireDate && (
+                                                        <span className="px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300">
                                                             EXP: {item.expireDate.slice(0, 10)}
                                                         </span>
-                                                        {item.mfgDate && (
-                                                            <span className="text-zinc-400 text-[11px]">
-                                                                MFG: {item.mfgDate.slice(0, 10)}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                ) : item.mfgDate ? (
-                                                    <span>MFG: {item.mfgDate.slice(0, 10)}</span>
-                                                ) : (
-                                                    <span>-</span>
-                                                )}
-                                            </TableCell>
+                                                    )}
+                                                    {item.mfgDate && (
+                                                        <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                                                            MFG: {item.mfgDate.slice(0, 10)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
 
-                                            {/* จำนวนคงเหลือ พร้อม Badge */}
-                                            <TableCell className="py-3 px-4 text-right">
-                                                {renderStockBadge(qty, minAlert)}
-                                            </TableCell>
-
-                                            {/* หน่วยนับ */}
-                                            <TableCell className="py-3 px-4 text-xs text-zinc-600 dark:text-zinc-400">
-                                                {item.uomName || 'ชิ้น'}
-                                            </TableCell>
-
-                                            {/* ราคาต่อหน่วย */}
-                                            <TableCell className="py-3 px-4 text-right text-xs font-mono text-zinc-700 dark:text-zinc-300">
-                                                ฿{price.toLocaleString()}
-                                            </TableCell>
-
-                                            {/* มูลค่ารวม */}
-                                            <TableCell className="py-3 px-4 text-right text-sm font-bold font-mono text-zinc-900 dark:text-zinc-100">
-                                                ฿{totalVal.toLocaleString()}
-                                            </TableCell>
-
-                                            {/* Actions */}
-                                            <TableCell className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                            <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800">
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
                                                     onClick={handleAlert}
-                                                    className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
-                                                    title="ย้ายสถานที่จัดเก็บ"
+                                                    className="w-full h-9 px-3 text-xs rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                                                 >
-                                                    <RefreshCw className="w-3.5 h-3.5 mr-1 text-zinc-500" />
+                                                    <RefreshCw className="w-3.5 h-3.5 mr-1.5 text-zinc-500" />
                                                     ย้ายสถานที่จัดเก็บ
                                                 </Button>
-                                            </TableCell>
-                                        </TableRow>
+                                            </div>
+                                        </div>
                                     );
-                                })
-                            )}
-                        </TableBody>
-                    </Table>
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <Table className="w-full">
+                            <TableHeader className="bg-zinc-100/80 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
+                                <TableRow>
+                                    {COLUMNS.map((col) => (
+                                        <TableHead
+                                            key={col.key}
+                                            style={{ width: `${col.width}px` }}
+                                            className={`font-bold text-xs uppercase tracking-wider text-zinc-800 dark:text-zinc-200 py-3.5 px-4 ${
+                                                col.align || 'text-left'
+                                            }`}
+                                        >
+                                            {col.colName}
+                                        </TableHead>
+                                    ))}
+                                </TableRow>
+                            </TableHeader>
+
+                            <TableBody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                {loading ? (
+                                    <TableRow key="loading-row">
+                                        <TableCell colSpan={COLUMNS.length} className="h-48 text-center text-zinc-500">
+                                            <div className="flex flex-col items-center justify-center gap-2">
+                                                <div className="w-7 h-7 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                                <span className="text-sm">กำลังโหลดข้อมูลสินค้าคงคลัง...</span>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : displayInventoryList.length === 0 ? (
+                                    <TableRow key="empty-row">
+                                        <TableCell colSpan={COLUMNS.length} className="h-48 text-center text-zinc-500">
+                                            <div className="flex flex-col items-center justify-center gap-2">
+                                                <Package className="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
+                                                <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                                                    ไม่พบข้อมูลสินค้าคงคลังที่ตรงกับเงื่อนไข
+                                                </p>
+                                                <p className="text-xs text-zinc-400">
+                                                    ลองปรับเปลี่ยนเงื่อนไขการค้นหาเพื่อค้นหาใหม่อีกครั้ง
+                                                </p>
+                                                {hasActiveFilters && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={handleResetFilter}
+                                                        className="mt-2 text-xs"
+                                                    >
+                                                        ล้างเงื่อนไขการค้นหา
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    displayInventoryList.map((item, index) => {
+                                        const qty = item.itemQty ?? 0;
+                                        const price = item.itemPrice ?? 0;
+                                        const totalVal = qty * price;
+                                        const minAlert = item.minAlert ?? 5;
+
+                                        return (
+                                            <TableRow
+                                                key={item.id ?? `inv-${index}`}
+                                                className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors group"
+                                            >
+                                                <TableCell className="py-3 px-4 font-semibold text-zinc-900 dark:text-zinc-100 font-mono text-sm">
+                                                    <span className="text-blue-600 dark:text-blue-400 group-hover:underline">
+                                                        {item.itemCode || '-'}
+                                                    </span>
+                                                </TableCell>
+
+                                                <TableCell
+                                                    className="py-3 px-4 text-sm font-medium text-zinc-800 dark:text-zinc-200 max-w-[240px] truncate"
+                                                    title={item.itemName}
+                                                >
+                                                    {item.itemName || '-'}
+                                                </TableCell>
+
+                                                <TableCell className="py-3 px-4 text-xs text-zinc-700 dark:text-zinc-300">
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+                                                        <WarehouseIcon className="w-3 h-3 text-blue-500" />
+                                                        {item.warehouseName || '-'}
+                                                    </span>
+                                                </TableCell>
+
+                                                <TableCell className="py-3 px-4 text-xs text-zinc-700 dark:text-zinc-300">
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800">
+                                                        <MapPin className="w-3 h-3 text-purple-500" />
+                                                        {item.locationName || '-'}
+                                                    </span>
+                                                </TableCell>
+
+                                                <TableCell className="py-3 px-4 text-xs font-mono text-zinc-600 dark:text-zinc-400">
+                                                    {item.lotNo ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                                                            <Tag className="w-3 h-3 text-zinc-400" />
+                                                            {item.lotNo}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-zinc-400">-</span>
+                                                    )}
+                                                </TableCell>
+
+                                                <TableCell className="py-3 px-4 text-xs font-mono text-zinc-600 dark:text-zinc-400">
+                                                    {item.serialNo ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900">
+                                                            <Barcode className="w-3 h-3 text-indigo-400" />
+                                                            {item.serialNo}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-zinc-400">-</span>
+                                                    )}
+                                                </TableCell>
+
+                                                <TableCell className="py-3 px-4 text-xs text-zinc-500 dark:text-zinc-400">
+                                                    {item.expireDate ? (
+                                                        <div className="flex flex-col">
+                                                            <span className="text-zinc-700 dark:text-zinc-300">
+                                                                EXP: {item.expireDate.slice(0, 10)}
+                                                            </span>
+                                                            {item.mfgDate && (
+                                                                <span className="text-zinc-400 text-[11px]">
+                                                                    MFG: {item.mfgDate.slice(0, 10)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    ) : item.mfgDate ? (
+                                                        <span>MFG: {item.mfgDate.slice(0, 10)}</span>
+                                                    ) : (
+                                                        <span>-</span>
+                                                    )}
+                                                </TableCell>
+
+                                                <TableCell className="py-3 px-4 text-right">
+                                                    {renderStockBadge(qty, minAlert)}
+                                                </TableCell>
+
+                                                <TableCell className="py-3 px-4 text-xs text-zinc-600 dark:text-zinc-400">
+                                                    {item.uomName || 'ชิ้น'}
+                                                </TableCell>
+
+                                                <TableCell className="py-3 px-4 text-right text-xs font-mono text-zinc-700 dark:text-zinc-300">
+                                                    ฿{price.toLocaleString()}
+                                                </TableCell>
+
+                                                <TableCell className="py-3 px-4 text-right text-sm font-bold font-mono text-zinc-900 dark:text-zinc-100">
+                                                    ฿{totalVal.toLocaleString()}
+                                                </TableCell>
+
+                                                <TableCell className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={handleAlert}
+                                                        className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                                                        title="ย้ายสถานที่จัดเก็บ"
+                                                    >
+                                                        <RefreshCw className="w-3.5 h-3.5 mr-1 text-zinc-500" />
+                                                        ย้ายสถานที่จัดเก็บ
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
 
-                {/* ─────────────────────────────────────────────────────────────
-                    3. Bottom Pagination Bar (เหมือนกับ receive/page.tsx)
-                   ───────────────────────────────────────────────────────────── */}
                 <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/60">
                     <TablePagination
                         currentPage={currentPage}

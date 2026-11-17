@@ -21,17 +21,17 @@ export function StatCard({ title, value, icon, sub, accent = 'blue', trend }: St
   const a = accents[accent];
   return (
     <div
-      className={`rounded-2xl p-5 border flex items-start gap-4 transition-shadow hover:shadow-md ${a.border}`}
+      className={`rounded-2xl p-4 sm:p-5 border flex items-start gap-3 sm:gap-4 transition-shadow hover:shadow-md ${a.border}`}
       style={{ background: 'var(--bg-card)' }}
     >
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0 ${a.bg}`}>
+      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-xl sm:text-2xl shrink-0 ${a.bg}`}>
         {icon}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs font-medium mb-1 truncate" style={{ color: 'var(--text-secondary)' }}>
           {title}
         </p>
-        <p className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+        <p className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
           {typeof value === 'number' ? value.toLocaleString('th-TH') : value}
         </p>
         {sub && (

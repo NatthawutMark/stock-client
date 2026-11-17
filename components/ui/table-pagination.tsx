@@ -74,17 +74,17 @@ export function TablePagination({
 
     return (
         <div
-            className={`border-t border-zinc-200 dark:border-zinc-800 px-4 py-3 bg-zinc-50/50 dark:bg-zinc-800/30 flex flex-col md:flex-row md:items-center justify-between gap-4 text-sm ${className}`}
+            className={`border-t border-zinc-200 dark:border-zinc-800 px-3 sm:px-4 py-3 bg-zinc-50/50 dark:bg-zinc-800/30 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 text-xs sm:text-sm ${className}`}
         >
             {/* Left: Range and Page Size */}
-            <div className="flex flex-wrap items-center gap-4 text-zinc-600 dark:text-zinc-400">
+            <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2 sm:gap-4 text-zinc-600 dark:text-zinc-400">
                 <div>
                     แสดง <span className="font-semibold text-zinc-900 dark:text-zinc-100">{startIndex}</span> ถึง{' '}
-                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">{endIndex}</span> จากทั้งหมด{' '}
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">{endIndex}</span> จาก{' '}
                     <span className="font-semibold text-zinc-900 dark:text-zinc-100">{filteredCount}</span> รายการ
                     {filteredCount !== totalItems && (
                         <span className="text-xs text-zinc-400 ml-1">
-                            (กรองจากทั้งหมด {totalItems} รายการ)
+                            (กรองจาก {totalItems})
                         </span>
                     )}
                 </div>
@@ -92,10 +92,12 @@ export function TablePagination({
                     <span className="text-xs">แสดง</span>
                     <select
                         value={pageSize}
+                        data-compact="true"
                         onChange={(e) => {
                             onPageSizeChange(Number(e.target.value));
                         }}
-                        className="h-8 px-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        aria-label="จำนวนแถวต่อหน้า"
+                        className="h-9 sm:h-8 px-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                     >
                         {pageSizeOptions.map((opt) => (
                             <option key={opt} value={opt}>
@@ -108,8 +110,8 @@ export function TablePagination({
             </div>
 
             {/* Right: Shadcn Pagination Component */}
-            <Pagination className="mx-0 w-auto justify-end">
-                <PaginationContent className="gap-1">
+            <Pagination className="mx-0 w-full md:w-auto justify-center md:justify-end">
+                <PaginationContent className="gap-1 flex-wrap justify-center">
                     <PaginationItem>
                         <PaginationPrevious
                             href="#"
@@ -128,10 +130,17 @@ export function TablePagination({
                         />
                     </PaginationItem>
 
+                    {/* แสดงเลขหน้าแบบย่อบนหน้าจอมือถือเล็ก (< sm) เพื่อกันเบียดล้นจอ */}
+                    <PaginationItem className="sm:hidden">
+                        <span className="inline-flex items-center px-2.5 h-8 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                            หน้า {safeCurrentPage} / {totalPages}
+                        </span>
+                    </PaginationItem>
+
                     {getPageNumbers().map((pageItem, idx) => {
                         if (typeof pageItem === 'string') {
                             return (
-                                <PaginationItem key={`ellipsis-${idx}`}>
+                                <PaginationItem key={`ellipsis-${idx}`} className="hidden sm:inline-flex">
                                     <PaginationEllipsis />
                                 </PaginationItem>
                             );
@@ -139,7 +148,7 @@ export function TablePagination({
 
                         const isActive = pageItem === safeCurrentPage;
                         return (
-                            <PaginationItem key={`page-${pageItem}`}>
+                            <PaginationItem key={`page-${pageItem}`} className="hidden sm:inline-flex">
                                 <PaginationLink
                                     href="#"
                                     isActive={isActive}

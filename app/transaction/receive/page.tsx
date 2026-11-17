@@ -7,19 +7,48 @@ import { useLayout } from '@/app/providers';
 import { transactionService } from '@/app/_services/transaction';
 import { masterService } from '@/app/_services/master';
 import { ServiceSystem } from '@/app/_services/ServiceSystem';
+import { getField, extractList, extractTotal } from '@/lib/utils';
 import type {
-    DocReceive, DocTrans, DocReceiveDetail,
-    MastVendor, MastEmployee, MastDocType,
+    DocReceive,
+    DocTrans,
+    DocReceiveDetail,
+    MastVendor,
+    MastEmployee,
+    MastDocType,
 } from '@/lib/types';
 import {
-    Button, Table, TableHeader, TableHead, TableBody, TableRow, TableCell,
-    Card, CardContent, Label, TablePagination,
-    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-    DatePicker, SearchableSelect, SearchableSelectOption,
+    Button,
+    Table,
+    TableHeader,
+    TableHead,
+    TableBody,
+    TableRow,
+    TableCell,
+    Card,
+    CardContent,
+    Label,
+    TablePagination,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DatePicker,
+    SearchableSelect,
+    SearchableSelectOption,
     renderStatusBadge,
 } from '@/components/ui';
 import {
-    Search, RotateCcw, Plus, Eye, Layers, Calendar, FileText, Building2, Truck, Pencil,
+    Search,
+    RotateCcw,
+    Plus,
+    Eye,
+    Layers,
+    Calendar,
+    FileText,
+    Building2,
+    Truck,
+    Pencil,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
@@ -27,8 +56,7 @@ import {
 // ─────────────────────────────────────────────────────────────
 const MENU_ID = '00E03A994280450ABF7E2EE62A7AD4D6';
 
-/** สถานะที่ไม่อนุญาตให้แก้ไขเอกสาร */
-const LOCKED_STATUSES = ['CANCEL', 'CONFIRM', 'COMPLETED', 'PARTIAL_PUTAWAY'];
+const LOCKED_STATUSES = ['CANCEL', 'CANCELLED', 'CONFIRM', 'COMPLETE', 'COMPLETED', 'PARTIAL_PUTAWAY'];
 
 const STATUS_OPTIONS: SearchableSelectOption[] = [
     { value: 'DRAFT', label: 'Draft (ร่าง)' },
@@ -51,8 +79,6 @@ const COLUMNS = [
     { colName: 'Action', key: 'action', width: 140 },
 ];
 
-const TOTAL_KEYS = ['total', 'totalCount', 'totalRecords', 'total_count', 'total_records', 'count', 'recordsTotal'];
-
 const INPUT_CLASS =
     'w-full h-10 px-3.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 shadow-sm';
 
@@ -74,88 +100,35 @@ const initialFilters: ReceiveFilters = {
     statusCode: '',
 };
 
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
-
-/** ดึงค่าฟิลด์ตามลำดับ key ที่ระบุ (fallback แบบ case-insensitive) */
-function getField<T = unknown>(item: Record<string, unknown> | undefined, ...keys: string[]): T | undefined {
-    if (!item) return undefined;
-    for (const key of keys) {
-        if (item[key] !== undefined && item[key] !== null) return item[key] as T;
-    }
-    const itemKeys = Object.keys(item);
-    for (const key of keys) {
-        const foundKey = itemKeys.find((k) => k.toLowerCase() === key.toLowerCase());
-        if (foundKey && item[foundKey] !== undefined && item[foundKey] !== null) {
-            return item[foundKey] as T;
-        }
-    }
-    return undefined;
-}
-
-interface ListResponse {
-    success?: boolean;
-    results?: unknown;
-    data?: unknown;
-}
-
-/** ดึง array จาก response (รองรับ results[], data[] หรือ results.{items|data|list}) */
-function extractList<T>(res: ListResponse | null | undefined): T[] {
-    if (!res?.success) return [];
-    if (Array.isArray(res.results)) return res.results as T[];
-    if (Array.isArray(res.data)) return res.data as T[];
-    if (res.results && typeof res.results === 'object') {
-        const nested = res.results as Record<string, unknown>;
-        for (const key of ['items', 'data', 'list']) {
-            if (Array.isArray(nested[key])) return nested[key] as T[];
-        }
-    }
-    return [];
-}
-
-/** ดึงจำนวนทั้งหมดจาก response (ทั้งระดับบนและภายใน results object) */
-function extractTotal(res: ListResponse): number | undefined {
-    const nested = res.results && typeof res.results === 'object' && !Array.isArray(res.results)
-        ? (res.results as Record<string, unknown>)
-        : undefined;
-    const value =
-        getField(res as Record<string, unknown>, ...TOTAL_KEYS) ??
-        getField(nested, ...TOTAL_KEYS);
-    const num = Number(value);
-    return value !== undefined && !Number.isNaN(num) ? num : undefined;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Sub Components
-// ─────────────────────────────────────────────────────────────
-function FilterField({ id, label, subLabel, children }: {
+function FilterField({
+    id,
+    label,
+    subLabel,
+    children,
+}: {
     id: string;
     label: string;
     subLabel: string;
     children: ReactNode;
 }) {
     return (
-        <div className="flex flex-col space-y-1.5">
-            <div className="flex items-center justify-between">
-                <Label htmlFor={id} className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        <div className="flex flex-col space-y-1.5 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+                <Label htmlFor={id} className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 shrink-0">
                     {label}
                 </Label>
-                <span className="text-xs text-zinc-400">{subLabel}</span>
+                <span className="text-xs text-zinc-400 truncate">{subLabel}</span>
             </div>
             {children}
         </div>
     );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Page
-// ─────────────────────────────────────────────────────────────
 export default function ReceivePage() {
     const router = useRouter();
     const { pageTitle } = useLayout();
 
-    // Filter inputs (ยังไม่ apply จนกว่าจะกดค้นหา)
+    // Filter inputs
     const [docNoInput, setDocNoInput] = useState('');
     const [employeeIdInput, setEmployeeIdInput] = useState('');
     const [vendorIdInput, setVendorIdInput] = useState('');
@@ -197,38 +170,48 @@ export default function ReceivePage() {
                 setDocTypeList(extractList<MastDocType>(dTypeRes));
             } catch (err) {
                 console.error('Failed to load filter masters:', err);
-                setVendorList([]);
-                setEmployeeList([]);
-                setDocTypeList([]);
             }
         };
         loadFilterMasters();
     }, []);
 
     // ─── 2. Dropdown Options ────────────────────────────────────
-    const employeeOptions = useMemo<SearchableSelectOption[]>(() =>
-        employeeList.map((e) => ({
-            value: String(e.id),
-            label: `${e.empCode ? `[${e.empCode}] ` : ''}${e.fName || ''} ${e.lName || ''}`.trim() || String(e.id),
-            subLabel: e.department || e.position
-                ? `${e.department || ''}${e.position ? ` (${e.position})` : ''}`
-                : (e.tel ? `โทร: ${e.tel}` : undefined),
-        })), [employeeList]);
+    const employeeOptions = useMemo<SearchableSelectOption[]>(
+        () =>
+            employeeList.map((e) => ({
+                value: String(e.id),
+                label:
+                    `${e.empCode ? `[${e.empCode}] ` : ''}${e.fName || ''} ${e.lName || ''}`.trim() ||
+                    String(e.id),
+                subLabel: e.tel ? `โทร: ${e.tel}` : undefined,
+            })),
+        [employeeList]
+    );
 
-    const vendorOptions = useMemo<SearchableSelectOption[]>(() =>
-        vendorList.map((v) => ({
-            value: String(v.id),
-            label: `${v.vendCode ? `[${v.vendCode}] ` : ''}${v.vendName || ''}`.trim() || String(v.id),
-            subLabel: v.contactName
-                ? `ผู้ติดต่อ: ${v.contactName}${v.tel ? ` (${v.tel})` : ''}`
-                : (v.tel ? `โทร: ${v.tel}` : undefined),
-        })), [vendorList]);
+    const vendorOptions = useMemo<SearchableSelectOption[]>(
+        () =>
+            vendorList.map((v) => ({
+                value: String(v.id),
+                label:
+                    `${v.vendCode ? `[${v.vendCode}] ` : ''}${v.vendName || ''}`.trim() ||
+                    String(v.id),
+                subLabel: v.contactName
+                    ? `ผู้ติดต่อ: ${v.contactName}${v.tel ? ` (${v.tel})` : ''}`
+                    : v.tel
+                        ? `โทร: ${v.tel}`
+                        : undefined,
+            })),
+        [vendorList]
+    );
 
-    const docTypeOptions = useMemo<SearchableSelectOption[]>(() =>
-        docTypeList.map((dt) => ({
-            value: String(dt.id),
-            label: dt.docTypeName || dt.name || String(dt.id),
-        })), [docTypeList]);
+    const docTypeOptions = useMemo<SearchableSelectOption[]>(
+        () =>
+            docTypeList.map((dt) => ({
+                value: String(dt.id),
+                label: dt.docTypeName || dt.name || String(dt.id),
+            })),
+        [docTypeList]
+    );
 
     // ─── 3. โหลดเอกสาร (Server Pagination) ──────────────────────
     const fetchDocuments = useCallback(async () => {
@@ -257,19 +240,16 @@ export default function ReceivePage() {
             }
 
             const data = extractList<DocReceive>(res);
-            console.log('load data', data);
-
-            // Backend ตัดหน้ามาแล้ว (Server Pagination)
             setDocList(data);
+
             const total = extractTotal(res);
-            if (total !== undefined) {
-                setTotalRecords(total);
-            } else {
-                // ไม่มี total: ถ้าได้เต็ม pageSize ถือว่ายังมีหน้าถัดไป
-                setTotalRecords(data.length === pageSize
-                    ? currentPage * pageSize + 1
-                    : (currentPage - 1) * pageSize + data.length);
-            }
+            setTotalRecords(
+                total !== undefined
+                    ? total
+                    : data.length === pageSize
+                        ? currentPage * pageSize + 1
+                        : (currentPage - 1) * pageSize + data.length
+            );
         } catch (error) {
             console.error('Fetch receive documents failed:', error);
             setDocList([]);
@@ -284,7 +264,7 @@ export default function ReceivePage() {
         fetchDocuments();
     }, [fetchDocuments]);
 
-    // ─── 5. โหลดรายการสินค้าเมื่อเปิด Modal ─────────────────────
+    // ─── 4. โหลดรายการสินค้าเมื่อเปิด Modal ─────────────────────
     useEffect(() => {
         const fetchItems = async () => {
             if (!isDetailOpen || !selectedDoc?.id) {
@@ -293,7 +273,7 @@ export default function ReceivePage() {
             }
             try {
                 const res = await transactionService.receive.listItem({ docId: selectedDoc.id });
-                setDocItemList(res?.success && Array.isArray(res.results) ? res.results : []);
+                setDocItemList(extractList<DocReceiveDetail>(res));
             } catch (err) {
                 console.error('Failed to load receive doc items:', err);
                 setDocItemList([]);
@@ -303,7 +283,6 @@ export default function ReceivePage() {
     }, [isDetailOpen, selectedDoc]);
 
     // ─── Handlers ───────────────────────────────────────────────
-    // สร้าง object ใหม่ทุกครั้ง เพื่อให้ fetchDocuments ทำงานแม้เงื่อนไขเหมือนเดิม
     const handleSearch = () => {
         setAppliedFilters({
             docNo: docNoInput,
@@ -333,24 +312,51 @@ export default function ReceivePage() {
     };
 
     const hasActiveFilters = Object.values(appliedFilters).some(Boolean);
-    const isSelectedLocked = LOCKED_STATUSES.includes(String(selectedDoc?.statusCode));
+    const isSelectedLocked = LOCKED_STATUSES.includes(
+        String(selectedDoc?.statusCode || '').toUpperCase()
+    );
+
+    const resolvedDocList = useMemo(
+        () =>
+            docList.map((item) => {
+                const rec = item as unknown as Record<string, unknown>;
+                const str = (...keys: string[]) => String(getField(rec, ...keys) || '-');
+                const statusCode = str('statusCode', 'status', 'statusName');
+                const isLocked = LOCKED_STATUSES.includes(statusCode.toUpperCase());
+                const docDateVal = str('docDate', 'doc_date', 'createDate');
+                return {
+                    item,
+                    docNo: str('docNo', 'doc_no'),
+                    docType: str('docTypeName', 'menuName', 'menu_name', 'menuId'),
+                    docDateFormatted: ServiceSystem.formatThaiDate(docDateVal),
+                    refDoc: str('docNoRef', 'doc_no_ref', 'refDocNo', 'refDoc'),
+                    employee: str('empName', 'employeeName', 'employeeId'),
+                    vendor: str('vendName', 'vendorName', 'vendor', 'vendId', 'vendorId'),
+                    warehouse: str('warehouseName', 'warehouse', 'warehouseId'),
+                    statusCode,
+                    isLocked,
+                    remarkVal: str('remark'),
+                };
+            }),
+        [docList]
+    );
 
     return (
         <AppLayout>
             {/* Page Header */}
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                        {pageTitle || 'รับสินค้า (Goods Receive)'}
+            <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                        {pageTitle || 'รับสินค้าเข้าคลัง (Goods Receive)'}
                     </h1>
-                    <p className="text-sm mt-1 text-zinc-500 dark:text-zinc-400">
-                        ค้นหาและจัดการเอกสารรับเข้าสินค้าตามรหัสเอกสาร วันที่ และประเภทเมนู (Receive Document Management)
+                    <p className="text-xs sm:text-sm mt-1 text-zinc-500 dark:text-zinc-400">
+                        ค้นหาและจัดการเอกสารรับสินค้าตามรหัสเอกสาร วันที่ และประเภทเอกสาร
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                     <Button
                         onClick={() => router.push('/transaction/receive/form')}
-                        className="px-4 py-2 text-sm font-medium text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5"
+                        className="w-full sm:w-auto justify-center px-4 py-2 text-sm font-medium text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity bg-blue-600 hover:bg-blue-700 flex items-center gap-1.5"
                     >
                         <Plus className="w-4 h-4" />
                         สร้างใบรับสินค้า
@@ -358,21 +364,21 @@ export default function ReceivePage() {
                 </div>
             </div>
 
-            {/* ─── 1. Filter Section ─── */}
+            {/* 1. Filter Section */}
             <Card className="mb-6 border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden">
-                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 flex items-center justify-between">
+                <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                        <Search className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <Search className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                         <span className="font-semibold text-sm text-zinc-800 dark:text-zinc-200">
                             เงื่อนไขการค้นหาเอกสาร (Search Criteria)
                         </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={handleResetFilter}
-                            className="h-8 px-3 text-xs rounded-lg border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            className="flex-1 sm:flex-none h-8 px-3 text-xs rounded-lg border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                         >
                             <RotateCcw className="w-3.5 h-3.5 mr-1" />
                             ล้างค่า (Reset)
@@ -380,7 +386,7 @@ export default function ReceivePage() {
                         <Button
                             size="sm"
                             onClick={handleSearch}
-                            className="h-8 px-4 text-xs rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                            className="flex-1 sm:flex-none h-8 px-4 text-xs rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
                         >
                             <Search className="w-3.5 h-3.5 mr-1" />
                             ค้นหา
@@ -388,8 +394,8 @@ export default function ReceivePage() {
                     </div>
                 </div>
 
-                <CardContent className="p-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <CardContent className="p-4 sm:p-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                         <FilterField id="filter-docno" label="เลขที่เอกสาร" subLabel="Doc No.">
                             <div className="relative">
                                 <input
@@ -434,7 +440,7 @@ export default function ReceivePage() {
                                 onChange={setVendorIdInput}
                                 options={vendorOptions}
                                 placeholder="-- ทั้งหมด (All Vendors) --"
-                                searchPlaceholder="ค้นหารหัส หรือชื่อผู้จัดจำหน่าย..."
+                                searchPlaceholder="ค้นหารหัส หรือชื่อผู้จำหน่าย..."
                                 clearable
                             />
                         </FilterField>
@@ -478,150 +484,243 @@ export default function ReceivePage() {
                 </CardContent>
             </Card>
 
-            {/* ─── 2. Table Section ─── */}
+            {/* 2. Table Section */}
             <Card className="flex flex-col w-full border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl overflow-hidden bg-white dark:bg-zinc-900">
-                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/40">
+                <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-zinc-50/50 dark:bg-zinc-800/40">
                     <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                        <h2 className="font-semibold text-base text-zinc-900 dark:text-zinc-100">
-                            Table-Document (รายการเอกสารรับสินค้า)
+                        <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <h2 className="font-semibold text-sm sm:text-base text-zinc-900 dark:text-zinc-100">
+                            รายการเอกสารรับสินค้า (Receive Documents)
                         </h2>
                     </div>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                        พบทั้งหมด {totalRecords} รายการ
-                    </span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fetchDocuments()}
+                        disabled={loading}
+                        className="self-start sm:self-auto h-8 px-3 text-xs rounded-lg border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                        <RotateCcw className={`w-3.5 h-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                        รีเฟรช
+                    </Button>
                 </div>
 
-                <CardContent className="p-0 w-full overflow-x-auto">
-                    <Table className="w-full">
-                        <TableHeader className="bg-zinc-100/80 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
-                            <TableRow>
-                                {COLUMNS.map((col) => (
-                                    <TableHead
-                                        key={col.key}
-                                        style={{ width: `${col.width}px` }}
-                                        className={`font-bold text-xs uppercase tracking-wider text-zinc-800 dark:text-zinc-200 py-3.5 px-4 ${col.key === 'action' ? 'text-right' : 'text-left'}`}
+                <CardContent className="p-0">
+                    {/* Mobile Card View */}
+                    <div className="md:hidden">
+                        {loading ? (
+                            <div className="h-56 flex flex-col items-center justify-center gap-2 text-zinc-400 p-4">
+                                <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                <span className="text-xs">กำลังโหลดข้อมูลเอกสาร...</span>
+                            </div>
+                        ) : resolvedDocList.length === 0 ? (
+                            <div className="h-56 flex flex-col items-center justify-center gap-2 text-zinc-400 p-6 text-center">
+                                <FileText className="w-8 h-8 stroke-[1.5] text-zinc-300 dark:text-zinc-600" />
+                                <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                                    ไม่พบข้อมูลเอกสาร
+                                </p>
+                                <p className="text-xs text-zinc-400">
+                                    {hasActiveFilters
+                                        ? 'ลองปรับเปลี่ยนเงื่อนไขการค้นหาใหม่'
+                                        : 'ยังไม่มีรายการเอกสารรับสินค้าในระบบ'}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="p-3 space-y-3 bg-zinc-50/40 dark:bg-zinc-950/20">
+                                {resolvedDocList.map((row, index) => (
+                                    <div
+                                        key={row.item.id ?? `card-${index}`}
+                                        onClick={() => handleViewDetail(row.item)}
+                                        className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5 space-y-3 shadow-xs cursor-pointer active:bg-zinc-50/80 dark:active:bg-zinc-800/40 transition-colors"
                                     >
-                                        {col.colName}
-                                    </TableHead>
-                                ))}
-                            </TableRow>
-                        </TableHeader>
-
-                        <TableBody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                            {loading ? (
-                                <TableRow key="loading-row">
-                                    <TableCell colSpan={COLUMNS.length} className="h-48 text-center text-zinc-500">
-                                        <div className="flex flex-col items-center justify-center gap-2">
-                                            <div className="w-7 h-7 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                                            <span className="text-sm">กำลังโหลดข้อมูลเอกสาร...</span>
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0 space-y-1">
+                                                <div className="font-mono text-sm font-bold text-blue-600 dark:text-blue-400">
+                                                    {row.docNo}
+                                                </div>
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+                                                    <Layers className="w-3 h-3 text-blue-500 shrink-0" />
+                                                    {row.docType}
+                                                </span>
+                                            </div>
+                                            <div className="shrink-0">{renderStatusBadge(row.statusCode)}</div>
                                         </div>
-                                    </TableCell>
-                                </TableRow>
-                            ) : docList.length === 0 ? (
-                                <TableRow key="empty-row">
-                                    <TableCell colSpan={COLUMNS.length} className="h-48 text-center text-zinc-500">
-                                        <div className="flex flex-col items-center justify-center gap-2">
-                                            <FileText className="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
-                                            <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-                                                ไม่พบข้อมูลเอกสารที่ตรงกับเงื่อนไข
+
+                                        <div className="grid grid-cols-2 gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <Calendar className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                                                <span className="truncate">{row.docDateFormatted}</span>
+                                            </div>
+                                            {row.refDoc !== '-' && (
+                                                <div className="text-right font-mono truncate text-zinc-500">
+                                                    Ref: {row.refDoc}
+                                                </div>
+                                            )}
+                                            <div className="flex items-center gap-1.5 min-w-0 col-span-2">
+                                                <Truck className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                                                <span className="truncate text-zinc-800 dark:text-zinc-200 font-medium">
+                                                    {row.vendor}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 min-w-0 col-span-2">
+                                                <Building2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                                                <span className="truncate">{row.warehouse}</span>
+                                                <span className="text-zinc-300 dark:text-zinc-700">•</span>
+                                                <span className="truncate">{row.employee}</span>
+                                            </div>
+                                        </div>
+
+                                        {row.remarkVal !== '-' && (
+                                            <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg px-2.5 py-1.5">
+                                                หมายเหตุ: {row.remarkVal}
                                             </p>
-                                            <p className="text-xs text-zinc-400">
-                                                ลองปรับเปลี่ยนเงื่อนไขการค้นหาเพื่อค้นหาใหม่อีกครั้ง
-                                            </p>
-                                            {hasActiveFilters && (
+                                        )}
+
+                                        <div
+                                            className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            {!row.isLocked && (
                                                 <Button
-                                                    variant="outline"
                                                     size="sm"
-                                                    onClick={handleResetFilter}
-                                                    className="mt-2 text-xs"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        router.push(`/transaction/receive/form?id=${row.item.id}`)
+                                                    }
+                                                    className="flex-1 h-9 px-3 text-xs rounded-lg border-amber-300 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
                                                 >
-                                                    ล้างเงื่อนไขการค้นหา
+                                                    <Pencil className="w-3.5 h-3.5 mr-1" />
+                                                    แก้ไข
                                                 </Button>
                                             )}
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => router.push(`/transaction/receive/${row.item.id}`)}
+                                                className="flex-1 h-9 px-3 text-xs rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                                            >
+                                                <Eye className="w-3.5 h-3.5 mr-1 text-zinc-500" />
+                                                รายละเอียด
+                                            </Button>
                                         </div>
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                docList.map((item, index) => {
-                                    const rec = item as unknown as Record<string, unknown>;
-                                    const str = (...keys: string[]) => String(getField(rec, ...keys) || '-');
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
-                                    const rawDate = str('docDate', 'doc_date', 'createDate');
-                                    const docDateVal = rawDate.length >= 10 ? rawDate.slice(0, 10) : rawDate;
-                                    const remarkVal = str('remark');
-                                    const statusCode = str('statusCode');
-                                    const isLocked = LOCKED_STATUSES.includes(statusCode);
-
-                                    return (
-                                        <TableRow
-                                            key={`rc-${item.docNo || item.id || index}-${index}`}
-                                            className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer group"
-                                            onClick={() => handleViewDetail(item)}
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="bg-zinc-50/80 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-700 hover:bg-transparent">
+                                    {COLUMNS.map((col) => (
+                                        <TableHead
+                                            key={col.key}
+                                            style={{ width: col.width }}
+                                            className={`py-3.5 px-4 font-semibold text-xs tracking-wider uppercase text-zinc-500 dark:text-zinc-400 ${
+                                                col.key === 'action' ? 'text-right' : ''
+                                            }`}
                                         >
-                                            {/* เลขที่เอกสาร */}
+                                            {col.colName}
+                                        </TableHead>
+                                    ))}
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {loading ? (
+                                    <TableRow key="loading-row">
+                                        <TableCell colSpan={COLUMNS.length} className="h-64 text-center">
+                                            <div className="flex flex-col items-center justify-center gap-2 text-zinc-400">
+                                                <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                                <span className="text-xs">กำลังโหลดข้อมูลเอกสาร...</span>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : resolvedDocList.length === 0 ? (
+                                    <TableRow key="empty-row">
+                                        <TableCell colSpan={COLUMNS.length} className="h-64 text-center">
+                                            <div className="flex flex-col items-center justify-center gap-2 text-zinc-400">
+                                                <FileText className="w-8 h-8 stroke-[1.5] text-zinc-300 dark:text-zinc-600" />
+                                                <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                                                    ไม่พบข้อมูลเอกสาร
+                                                </p>
+                                                <p className="text-xs text-zinc-400">
+                                                    {hasActiveFilters
+                                                        ? 'ลองปรับเปลี่ยนเงื่อนไขการค้นหาใหม่'
+                                                        : 'ยังไม่มีรายการเอกสารรับสินค้าในระบบ'}
+                                                </p>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    resolvedDocList.map((row, index) => (
+                                        <TableRow
+                                            key={row.item.id ?? `row-${index}`}
+                                            className="group hover:bg-blue-50/30 dark:hover:bg-blue-950/20 transition-colors border-b border-zinc-100 dark:border-zinc-800/80 cursor-pointer"
+                                            onClick={() => handleViewDetail(row.item)}
+                                        >
                                             <TableCell className="py-3.5 px-4 font-semibold text-zinc-900 dark:text-zinc-100 font-mono text-sm">
                                                 <span className="text-blue-600 dark:text-blue-400 group-hover:underline">
-                                                    {str('docNo', 'doc_no')}
+                                                    {row.docNo}
                                                 </span>
                                             </TableCell>
 
-                                            {/* ประเภทเอกสาร */}
                                             <TableCell className="py-3.5 px-4 text-xs">
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
                                                     <Layers className="w-3 h-3 text-blue-500" />
-                                                    {str('docTypeName', 'menuName', 'menu_name', 'menuId')}
+                                                    {row.docType}
                                                 </span>
                                             </TableCell>
 
-                                            {/* วันที่เอกสาร */}
                                             <TableCell className="py-3.5 px-4 text-sm text-zinc-600 dark:text-zinc-400">
                                                 <div className="flex items-center gap-1.5">
                                                     <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-                                                    <span>{ServiceSystem.formatThaiDate(docDateVal)}</span>
+                                                    <span>{row.docDateFormatted}</span>
                                                 </div>
                                             </TableCell>
 
-                                            {/* เลขที่อ้างอิง */}
                                             <TableCell className="py-3.5 px-4 text-sm text-zinc-600 dark:text-zinc-400 font-mono">
-                                                {str('docNoRef', 'doc_no_ref', 'refDocNo', 'refDoc')}
+                                                {row.refDoc}
                                             </TableCell>
 
-                                            {/* พนักงาน */}
                                             <TableCell className="py-3.5 px-4 text-sm text-zinc-700 dark:text-zinc-300">
-                                                {str('empName', 'employeeName', 'employeeId')}
+                                                {row.employee}
                                             </TableCell>
 
-                                            {/* ผู้จัดจำหน่าย */}
                                             <TableCell className="py-3.5 px-4 text-sm text-zinc-700 dark:text-zinc-300">
-                                                {str('vendName', 'vendorName', 'vendor', 'vendorId')}
+                                                {row.vendor}
                                             </TableCell>
 
-                                            {/* คลังสินค้า */}
                                             <TableCell className="py-3.5 px-4 text-sm text-zinc-700 dark:text-zinc-300">
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
-                                                    {str('warehouseName', 'warehouse', 'warehouseId')}
+                                                    {row.warehouse}
                                                 </span>
                                             </TableCell>
 
-                                            {/* สถานะ */}
                                             <TableCell className="py-3.5 px-4 text-sm text-zinc-700 dark:text-zinc-300">
-                                                {renderStatusBadge(statusCode)}
+                                                {renderStatusBadge(row.statusCode)}
                                             </TableCell>
 
-                                            {/* หมายเหตุ */}
-                                            <TableCell className="py-3.5 px-4 text-xs text-zinc-500 dark:text-zinc-400 max-w-[200px] truncate" title={remarkVal}>
-                                                {remarkVal}
+                                            <TableCell
+                                                className="py-3.5 px-4 text-xs text-zinc-500 dark:text-zinc-400 max-w-[200px] truncate"
+                                                title={row.remarkVal}
+                                            >
+                                                {row.remarkVal}
                                             </TableCell>
 
-                                            {/* Actions */}
-                                            <TableCell className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                            <TableCell
+                                                className="py-3.5 px-4 text-right"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     <Button
-                                                        hidden={isLocked}
+                                                        hidden={row.isLocked}
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() => router.push(`/transaction/receive/form?id=${item.id}`)}
+                                                        onClick={() =>
+                                                            router.push(`/transaction/receive/form?id=${row.item.id}`)
+                                                        }
                                                         className="px-4 py-2 text-sm rounded-xl border-amber-300 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5"
                                                         title="แก้ไขเอกสาร"
                                                     >
@@ -631,7 +730,7 @@ export default function ReceivePage() {
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() => router.push(`/transaction/receive/${item.id}`)}
+                                                        onClick={() => router.push(`/transaction/receive/${row.item.id}`)}
                                                         className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                                                         title="ดูรายละเอียดเอกสาร"
                                                     >
@@ -641,14 +740,13 @@ export default function ReceivePage() {
                                                 </div>
                                             </TableCell>
                                         </TableRow>
-                                    );
-                                })
-                            )}
-                        </TableBody>
-                    </Table>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
 
-                {/* ─── 3. Pagination ─── */}
                 <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/60">
                     <TablePagination
                         currentPage={currentPage}
@@ -665,69 +763,75 @@ export default function ReceivePage() {
                 </div>
             </Card>
 
-            {/* ─── Modal: รายละเอียดเอกสาร ─── */}
+            {/* Detail Modal (View Quick Detail) */}
             {selectedDoc && (
                 <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-                    <DialogContent className="max-w-5xl bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
-                        <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-zinc-100">
-                                <FileText className="w-5 h-5 text-blue-600" />
-                                รายละเอียดเอกสารรับเข้า (Receive Document)
+                    <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-4xl p-4 sm:p-6 max-h-[90dvh] overflow-y-auto overscroll-contain rounded-2xl">
+                        <DialogHeader className="pr-8">
+                            <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                                <FileText className="w-5 h-5 text-blue-600 shrink-0" />
+                                รายละเอียดใบรับสินค้า (Goods Receive Detail)
                             </DialogTitle>
                         </DialogHeader>
 
-                        <div className="py-4 space-y-4">
-                            {/* ข้อมูลส่วนหัวเอกสาร */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-700">
-                                <div>
-                                    <span className="block text-xs font-semibold text-zinc-400">เลขที่เอกสาร</span>
-                                    <span className="text-sm font-bold font-mono text-zinc-900 dark:text-zinc-100">
-                                        {selectedDoc.docNo || '-'}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="block text-xs font-semibold text-zinc-400">วันที่เอกสาร</span>
-                                    <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.docDate?.slice(0, 10) || selectedDoc.createDate?.slice(0, 10) || '-'}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="block text-xs font-semibold text-zinc-400">พนักงาน</span>
-                                    <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.empName || '-'}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="block text-xs font-semibold text-zinc-400">สถานะเอกสาร</span>
-                                    <div className="mt-0.5">
-                                        {renderStatusBadge(selectedDoc.statusCode)}
+                        <div className="space-y-4 my-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40">
+                                    <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 mb-1">
+                                        <FileText className="w-3.5 h-3.5" />
+                                        เลขที่เอกสาร
                                     </div>
+                                    <p className="font-mono font-bold text-sm text-zinc-900 dark:text-zinc-100">
+                                        {selectedDoc.docNo || `#${selectedDoc.id}`}
+                                    </p>
                                 </div>
-                            </div>
-
-                            {/* คลังสินค้า & ผู้จัดจำหน่าย */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                                <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40">
+                                    <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 mb-1">
+                                        <Calendar className="w-3.5 h-3.5" />
+                                        วันที่เอกสาร
+                                    </div>
+                                    <p className="font-medium text-zinc-800 dark:text-zinc-200 text-sm">
+                                        {selectedDoc.docDate
+                                            ? ServiceSystem.formatThaiDate(selectedDoc.docDate)
+                                            : '-'}
+                                    </p>
+                                </div>
                                 <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40">
                                     <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 mb-1">
                                         <Building2 className="w-3.5 h-3.5" />
-                                        คลังสินค้ารับเข้า (Warehouse)
+                                        คลังสินค้า
+                                    </div>
+                                    <p className="font-medium text-zinc-800 dark:text-zinc-200 text-sm">
+                                        {selectedDoc.warehouseName || selectedDoc.warehouseId || '-'}
+                                    </p>
+                                </div>
+                                <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40">
+                                    <div className="text-xs font-semibold text-zinc-500 mb-1">สถานะ</div>
+                                    {renderStatusBadge(selectedDoc.statusCode || selectedDoc.statusName)}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40">
+                                    <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 mb-1">
+                                        <Layers className="w-3.5 h-3.5" />
+                                        ประเภทเอกสาร
                                     </div>
                                     <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.warehouseName || '-'}
+                                        {selectedDoc.menuName || selectedDoc.menuId || '-'}
                                     </p>
                                 </div>
                                 <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/40">
                                     <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 mb-1">
                                         <Truck className="w-3.5 h-3.5" />
-                                        ผู้จำหน่าย (Vendor)
+                                        ผู้จัดจำหน่าย (Vendor)
                                     </div>
                                     <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                                        {selectedDoc.vendName || `Vendor ID: ${selectedDoc.vendId || '-'}`}
+                                        {selectedDoc.vendName || selectedDoc.vendId || '-'}
                                     </p>
                                 </div>
                             </div>
 
-                            {/* หมายเหตุ */}
                             {selectedDoc.remark && (
                                 <div className="text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/40 p-3 rounded-lg border border-zinc-100 dark:border-zinc-700">
                                     <span className="font-semibold text-zinc-700 dark:text-zinc-300">หมายเหตุ: </span>
@@ -735,12 +839,11 @@ export default function ReceivePage() {
                                 </div>
                             )}
 
-                            {/* รายการสินค้าที่รับเข้า */}
                             <div>
                                 <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2">
                                     รายการสินค้าที่รับเข้า (Received Items)
                                 </h4>
-                                <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                                <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-x-auto">
                                     <Table>
                                         <TableHeader className="bg-zinc-50 dark:bg-zinc-800">
                                             <TableRow>
@@ -760,8 +863,10 @@ export default function ReceivePage() {
                                                 </TableRow>
                                             ) : (
                                                 docItemList.map((detail, idx) => (
-                                                    <TableRow key={`rc-item-${detail.id ?? 'row'}-${idx}`}>
-                                                        <TableCell className="py-2.5 px-3 text-xs text-zinc-500">{idx + 1}</TableCell>
+                                                    <TableRow key={detail.id || idx}>
+                                                        <TableCell className="py-2.5 px-3 text-xs text-zinc-500">
+                                                            {idx + 1}
+                                                        </TableCell>
                                                         <TableCell className="py-2.5 px-3 text-xs font-medium text-zinc-800 dark:text-zinc-200">
                                                             {detail.itemName}
                                                         </TableCell>
@@ -783,26 +888,31 @@ export default function ReceivePage() {
                             </div>
                         </div>
 
-                        <DialogFooter className={`flex items-center ${isSelectedLocked ? 'justify-end sm:justify-end' : 'justify-between sm:justify-between'}`}>
-                            <Button
-                                hidden={isSelectedLocked}
-                                variant="outline"
-                                onClick={() => {
-                                    setIsDetailOpen(false);
-                                    router.push(`/transaction/receive/form?id=${selectedDoc.id}`);
-                                }}
-                                className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/40"
-                            >
-                                <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                                แก้ไขเอกสารนี้
-                            </Button>
+                        <DialogFooter
+                            className={`flex flex-col-reverse sm:flex-row sm:items-center gap-2 sm:-mx-6 sm:-mb-6 sm:px-6 ${
+                                isSelectedLocked ? 'sm:justify-end' : 'sm:justify-between'
+                            }`}
+                        >
                             <Button
                                 variant="outline"
                                 onClick={() => setIsDetailOpen(false)}
-                                className="px-4 py-2 text-sm"
+                                className="w-full sm:w-auto sm:order-2 px-4 py-2 text-sm"
                             >
                                 ปิดหน้าต่าง
                             </Button>
+                            {!isSelectedLocked && (
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setIsDetailOpen(false);
+                                        router.push(`/transaction/receive/form?id=${selectedDoc.id}`);
+                                    }}
+                                    className="w-full sm:w-auto sm:order-1 px-4 py-2 text-sm text-blue-600 hover:text-blue-700 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                                >
+                                    <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                                    แก้ไขเอกสารนี้
+                                </Button>
+                            )}
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>

@@ -15,12 +15,12 @@ import {
 } from '@/components/ui/index';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { masterService } from '@/app/_services/master';
+import { extractErrorMessage } from '@/lib/utils';
 import type { MastVendor } from '@/lib/types';
 import Swal from 'sweetalert2';
 
 interface VendorFormData {
-    id?: string | number;
-    originalVendCode?: string;
+    id?: string;
     vendCode: string;
     vendName: string;
     contactName: string;
@@ -75,7 +75,6 @@ export function CreateVendorModal({ open, onOpenChange, onSaved, dataEdit }: Cre
             if (dataEdit) {
                 setFormData({
                     id: dataEdit.id,
-                    originalVendCode: dataEdit.vendCode || '',
                     vendCode: dataEdit.vendCode || '',
                     vendName: dataEdit.vendName || '',
                     contactName: dataEdit.contactName || '',
@@ -124,87 +123,62 @@ export function CreateVendorModal({ open, onOpenChange, onSaved, dataEdit }: Cre
 
         setSaving(true);
         try {
-            if (isEditMode) {
-                const payload = {
-                    id: formData.id ? String(formData.id) : undefined,
-                    vendCode: formData.vendCode.trim(),
-                    vendName: formData.vendName.trim(),
-                    contactName: formData.contactName.trim(),
-                    tel: formData.tel.trim(),
-                    address: formData.address.trim(),
-                    remark: formData.remark.trim(),
-                    isActive: formData.isActive,
-                };
+            const payload: Partial<MastVendor> = {
+                id: isEditMode ? formData.id : undefined,
+                vendCode: formData.vendCode.trim(),
+                vendName: formData.vendName.trim(),
+                contactName: formData.contactName.trim(),
+                tel: formData.tel.trim(),
+                address: formData.address.trim(),
+                remark: formData.remark.trim(),
+                isActive: formData.isActive,
+            };
 
-                const res = await masterService.vendors.update(payload);
+            const res = isEditMode
+                ? await masterService.vendors.update(payload)
+                : await masterService.vendors.create(payload);
 
-                if (res && res.success) {
+            if (res && res.success !== false) {
+                onSaved();
+                if (andAddMore && !isEditMode) {
+                    resetForm();
+                    setAlertMessage({
+                        type: 'success',
+                        message: res.message || 'เพิ่มผู้จำหน่ายใหม่เรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
+                    });
+                } else {
                     await Swal.fire({
                         icon: 'success',
                         title: 'สำเร็จ',
-                        text: res.message || 'แก้ไขข้อมูลผู้จำหน่ายเรียบร้อยแล้ว',
+                        text:
+                            res.message ||
+                            (isEditMode ? 'แก้ไขข้อมูลผู้จำหน่ายเรียบร้อยแล้ว' : 'เพิ่มผู้จำหน่ายใหม่เรียบร้อยแล้ว'),
                         timer: 1500,
                         showConfirmButton: false,
                     });
-                    onSaved();
                     onOpenChange(false);
+                }
+            } else {
+                const errMsg = extractErrorMessage(
+                    res,
+                    isEditMode
+                        ? 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลผู้จำหน่าย'
+                        : 'เกิดข้อผิดพลาดในการเพิ่มผู้จำหน่าย'
+                );
+                if (andAddMore) {
+                    setAlertMessage({ type: 'error', message: errMsg });
                 } else {
                     Swal.fire({
                         icon: 'error',
-                        title: 'แก้ไขไม่สำเร็จ',
-                        text: res?.error || res?.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลผู้จำหน่าย',
+                        title: isEditMode ? 'แก้ไขไม่สำเร็จ' : 'เพิ่มไม่สำเร็จ',
+                        text: errMsg,
                         confirmButtonColor: '#dc2626',
                     });
-                }
-            } else {
-                const payload = {
-                    vendCode: formData.vendCode.trim(),
-                    vendName: formData.vendName.trim(),
-                    contactName: formData.contactName.trim(),
-                    tel: formData.tel.trim(),
-                    address: formData.address.trim(),
-                    remark: formData.remark.trim(),
-                    isActive: formData.isActive,
-                };
-
-                const res = await masterService.vendors.create(payload);
-
-                if (res && res.success) {
-                    onSaved();
-                    if (andAddMore) {
-                        resetForm();
-                        setAlertMessage({
-                            type: 'success',
-                            message: res.message || 'เพิ่มผู้จำหน่ายใหม่เรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
-                        });
-                    } else {
-                        await Swal.fire({
-                            icon: 'success',
-                            title: 'สำเร็จ',
-                            text: res.message || 'เพิ่มผู้จำหน่ายใหม่เรียบร้อยแล้ว',
-                            timer: 1500,
-                            showConfirmButton: false,
-                        });
-                        onOpenChange(false);
-                    }
-                } else {
-                    const errMsg = res?.error || res?.message || 'เกิดข้อผิดพลาดในการเพิ่มผู้จำหน่าย';
-                    if (andAddMore) {
-                        setAlertMessage({ type: 'error', message: errMsg });
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'เพิ่มไม่สำเร็จ',
-                            text: errMsg,
-                            confirmButtonColor: '#dc2626',
-                        });
-                    }
                 }
             }
         } catch (error: unknown) {
             console.error('Save vendor failed:', error);
-            const err = error as { message?: string };
-            const errMsg = err.message || 'ไม่สามารถบันทึกข้อมูลได้';
+            const errMsg = extractErrorMessage(error, 'ไม่สามารถบันทึกข้อมูลได้');
             if (andAddMore) {
                 setAlertMessage({ type: 'error', message: errMsg });
             } else {
@@ -222,9 +196,9 @@ export function CreateVendorModal({ open, onOpenChange, onSaved, dataEdit }: Cre
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal={true}>
-            <DialogContent className="max-w-4xl sm:max-w-4xl w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
-                <DialogHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4">
-                    <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+            <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[min(56rem,calc(100vw-2rem))] w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl p-4 sm:p-6 max-h-[90dvh] overflow-y-auto overscroll-contain">
+                <DialogHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4 pr-8">
+                    <DialogTitle className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
                         {isEditMode ? 'แก้ไขข้อมูลผู้จำหน่าย' : 'เพิ่มผู้จำหน่ายใหม่ (New Vendor)'}
                     </DialogTitle>
                     <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
@@ -260,9 +234,9 @@ export function CreateVendorModal({ open, onOpenChange, onSaved, dataEdit }: Cre
                 )}
 
                 <div className="space-y-4 py-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         {/* Vendor Code */}
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 รหัสผู้จำหน่าย (Vendor Code) <span className="text-red-500">*</span>
                             </label>
@@ -275,12 +249,12 @@ export function CreateVendorModal({ open, onOpenChange, onSaved, dataEdit }: Cre
                                     if (alertMessage) setAlertMessage(null);
                                 }}
                                 placeholder="เช่น VEN-001..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
                         {/* Vendor Name */}
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 ชื่อผู้จำหน่าย / บริษัท <span className="text-red-500">*</span>
                             </label>
@@ -292,14 +266,14 @@ export function CreateVendorModal({ open, onOpenChange, onSaved, dataEdit }: Cre
                                     if (alertMessage) setAlertMessage(null);
                                 }}
                                 placeholder="เช่น บริษัท สยาม ซัพพลาย จำกัด..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         {/* Contact Name */}
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 ผู้ติดต่อ (Contact Person)
                             </label>
@@ -308,12 +282,12 @@ export function CreateVendorModal({ open, onOpenChange, onSaved, dataEdit }: Cre
                                 value={formData.contactName}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, contactName: e.target.value }))}
                                 placeholder="เช่น คุณสมชาย จัดซื้อ..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
                         {/* Telephone */}
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 เบอร์โทรศัพท์ (Telephone)
                             </label>
@@ -322,7 +296,7 @@ export function CreateVendorModal({ open, onOpenChange, onSaved, dataEdit }: Cre
                                 value={formData.tel}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, tel: e.target.value }))}
                                 placeholder="เช่น 02-123-4567, 081-xxx-xxxx..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                     </div>
@@ -377,7 +351,7 @@ export function CreateVendorModal({ open, onOpenChange, onSaved, dataEdit }: Cre
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                         disabled={saving}
-                        className="rounded-xl px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        className="w-full sm:w-auto rounded-xl px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     >
                         ยกเลิก
                     </Button>
@@ -386,7 +360,7 @@ export function CreateVendorModal({ open, onOpenChange, onSaved, dataEdit }: Cre
                             type="button"
                             onClick={() => handleSave(true)}
                             disabled={saving}
-                            className="rounded-xl px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="w-full sm:w-auto rounded-xl px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
                             {saving ? 'กำลังบันทึก...' : 'บันทึกและเพิ่มอีก'}
                         </Button>
@@ -395,7 +369,7 @@ export function CreateVendorModal({ open, onOpenChange, onSaved, dataEdit }: Cre
                         type="button"
                         onClick={() => handleSave(false)}
                         disabled={saving}
-                        className="rounded-xl px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                        className="w-full sm:w-auto rounded-xl px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
                     >
                         {saving ? 'กำลังบันทึก...' : isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูล'}
                     </Button>

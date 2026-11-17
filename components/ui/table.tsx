@@ -3,11 +3,25 @@
 import * as React from "react"
 import { cn } from "cn"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  containerClassName,
+  ariaLabel,
+  ...props
+}: React.ComponentProps<"table"> & {
+  containerClassName?: string
+  ariaLabel?: string
+}) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      tabIndex={0}
+      role="region"
+      aria-label={ariaLabel || "ตารางข้อมูล"}
+      className={cn(
+        "relative w-full overflow-x-auto overscroll-x-contain focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
+        containerClassName
+      )}
     >
       <table
         data-slot="table"

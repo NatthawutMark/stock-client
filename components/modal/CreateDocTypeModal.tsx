@@ -15,13 +15,14 @@ import {
 } from '@/components/ui/index';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { masterService } from '@/app/_services/master';
+import { extractList, extractErrorMessage } from '@/lib/utils';
 import type { MastDocType, MastTransType } from '@/lib/types';
 import Swal from 'sweetalert2';
 import { SystemMenuService } from '@/app/_services/systemMenu';
 
 interface DocTypeFormData {
-    id?: string | number;
-    transTypeId: string | number;
+    id?: string;
+    transTypeId: string;
     name: string;
     isActive: boolean;
 }
@@ -37,11 +38,20 @@ interface CreateDocTypeModalProps {
     onOpenChange: (open: boolean) => void;
     onSaved: () => void;
     dataEdit: MastDocType | null;
+    transTypeOptions?: { id: string | number; name: string }[];
 }
 
-export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: CreateDocTypeModalProps) {
+export function CreateDocTypeModal({
+    open,
+    onOpenChange,
+    onSaved,
+    dataEdit,
+    transTypeOptions,
+}: CreateDocTypeModalProps) {
     const [formData, setFormData] = useState<DocTypeFormData>({ ...defaultFormData });
-    const [transTypeList, setTransTypeList] = useState<{ id: number | string; name: string }[]>([]);
+    const [fetchedTransTypes, setFetchedTransTypes] = useState<{ id: string; name: string }[]>([]);
+    const transTypeList =
+        transTypeOptions && transTypeOptions.length > 0 ? transTypeOptions : fetchedTransTypes;
     const [saving, setSaving] = useState(false);
     const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -61,43 +71,36 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
         }
     }, [alertMessage]);
 
-    // Load transaction types from API
+    // Load transaction types from API if not passed via props
     useEffect(() => {
+        if (transTypeOptions && transTypeOptions.length > 0) return;
+
         const fetchTransTypes = async () => {
             try {
                 const res = await SystemMenuService.menuTransactionList();
-                if (res && res.success) {
-                    const data = Array.isArray(res.results)
-                        ? res.results
-                        : Array.isArray(res.data)
-                            ? res.data
-                            : [];
-
-                    console.log('Fetched transaction types:', data); // Debug log
-                    if (data.length > 0) {
-                        setTransTypeList(
-                            data.map((item: MastTransType) => {
-                                const id = item.menuId ?? item.transTypeId ?? item.id ?? '';
-                                const name =
-                                    item.menuName ??
-                                    (item.nameTh && item.nameEn
-                                        ? `${item.nameTh} (${item.nameEn})`
-                                        : item.nameTh || item.name || item.transTypeName || `Type ${id}`);
-                                return { id, name };
-                            })
-                        );
-                    }
+                const data = extractList<MastTransType>(res);
+                if (data.length > 0) {
+                    setFetchedTransTypes(
+                        data.map((item) => {
+                            const id = String(item.menuId ?? item.transTypeId ?? item.id ?? '');
+                            const name =
+                                item.menuName ??
+                                (item.nameTh && item.nameEn
+                                    ? `${item.nameTh} (${item.nameEn})`
+                                    : item.nameTh || item.name || item.transTypeName || `Type ${id}`);
+                            return { id, name };
+                        })
+                    );
                 }
             } catch (err) {
                 console.error('Failed to load transaction types:', err);
-                // Keep DEFAULT_TRANS_TYPES
             }
         };
 
         if (open) {
             fetchTransTypes();
         }
-    }, [open]);
+    }, [open, transTypeOptions]);
 
     useEffect(() => {
         if (open) {
@@ -154,83 +157,60 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
 
         setSaving(true);
         try {
-            if (isEditMode) {
-                const payload = {
-                    id: formData.id ? String(formData.id) : undefined,
-                    transTypeId: String(formData.transTypeId),
-                    menuId: String(formData.transTypeId),
-                    name: formData.name.trim(),
-                    docTypeName: formData.name.trim(),
-                    isActive: formData.isActive,
-                };
+            const payload: Partial<MastDocType> = {
+                id: isEditMode ? formData.id : undefined,
+                transTypeId: String(formData.transTypeId),
+                menuId: String(formData.transTypeId),
+                name: formData.name.trim(),
+                docTypeName: formData.name.trim(),
+                isActive: formData.isActive,
+            };
 
-                const res = await masterService.docTypes.update(payload);
+            const res = isEditMode
+                ? await masterService.docTypes.update(payload)
+                : await masterService.docTypes.create(payload);
 
-                if (res && res.success) {
+            if (res && res.success !== false) {
+                onSaved();
+                if (andAddMore && !isEditMode) {
+                    resetForm();
+                    setAlertMessage({
+                        type: 'success',
+                        message: res.message || 'เพิ่มประเภทเอกสารใหม่เรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
+                    });
+                } else {
                     await Swal.fire({
                         icon: 'success',
                         title: 'สำเร็จ',
-                        text: res.message || 'แก้ไขข้อมูลประเภทเอกสารเรียบร้อยแล้ว',
+                        text:
+                            res.message ||
+                            (isEditMode ? 'แก้ไขข้อมูลประเภทเอกสารเรียบร้อยแล้ว' : 'เพิ่มประเภทเอกสารใหม่เรียบร้อยแล้ว'),
                         timer: 1500,
                         showConfirmButton: false,
                     });
-                    onSaved();
                     onOpenChange(false);
+                }
+            } else {
+                const errMsg = extractErrorMessage(
+                    res,
+                    isEditMode
+                        ? 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลประเภทเอกสาร'
+                        : 'เกิดข้อผิดพลาดในการเพิ่มประเภทเอกสาร'
+                );
+                if (andAddMore) {
+                    setAlertMessage({ type: 'error', message: errMsg });
                 } else {
                     Swal.fire({
                         icon: 'error',
-                        title: 'แก้ไขไม่สำเร็จ',
-                        text: res?.error || res?.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลประเภทเอกสาร',
+                        title: isEditMode ? 'แก้ไขไม่สำเร็จ' : 'เพิ่มไม่สำเร็จ',
+                        text: errMsg,
                         confirmButtonColor: '#dc2626',
                     });
-                }
-            } else {
-                const payload = {
-                    transTypeId: String(formData.transTypeId),
-                    menuId: String(formData.transTypeId),
-                    name: formData.name.trim(),
-                    docTypeName: formData.name.trim(),
-                    isActive: formData.isActive,
-                };
-
-                const res = await masterService.docTypes.create(payload);
-
-                if (res && res.success) {
-                    onSaved();
-                    if (andAddMore) {
-                        resetForm();
-                        setAlertMessage({
-                            type: 'success',
-                            message: res.message || 'เพิ่มประเภทเอกสารใหม่เรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
-                        });
-                    } else {
-                        await Swal.fire({
-                            icon: 'success',
-                            title: 'สำเร็จ',
-                            text: res.message || 'เพิ่มประเภทเอกสารใหม่เรียบร้อยแล้ว',
-                            timer: 1500,
-                            showConfirmButton: false,
-                        });
-                        onOpenChange(false);
-                    }
-                } else {
-                    const errMsg = res?.error || res?.message || 'เกิดข้อผิดพลาดในการเพิ่มประเภทเอกสาร';
-                    if (andAddMore) {
-                        setAlertMessage({ type: 'error', message: errMsg });
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'เพิ่มไม่สำเร็จ',
-                            text: errMsg,
-                            confirmButtonColor: '#dc2626',
-                        });
-                    }
                 }
             }
         } catch (error: unknown) {
             console.error('Save docType failed:', error);
-            const err = error as { message?: string };
-            const errMsg = err.message || 'ไม่สามารถบันทึกข้อมูลได้';
+            const errMsg = extractErrorMessage(error, 'ไม่สามารถบันทึกข้อมูลได้');
             if (andAddMore) {
                 setAlertMessage({ type: 'error', message: errMsg });
             } else {
@@ -248,9 +228,9 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal={true}>
-            <DialogContent className="max-w-lg sm:max-w-lg w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl p-6">
-                <DialogHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4">
-                    <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+            <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl p-4 sm:p-6 overflow-y-auto overscroll-contain">
+                <DialogHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4 pr-8">
+                    <DialogTitle className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
                         {isEditMode ? 'แก้ไขประเภทเอกสาร' : 'เพิ่มประเภทเอกสารใหม่ (New Document Type)'}
                     </DialogTitle>
                     <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
@@ -297,7 +277,7 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
                                 setFormData((prev) => ({ ...prev, transTypeId: e.target.value }));
                                 if (alertMessage) setAlertMessage(null);
                             }}
-                            className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                            className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         >
                             <option value="">-- เลือกประเภทธุรกรรม --</option>
                             {transTypeList.map((tt) => (
@@ -347,7 +327,7 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                         disabled={saving}
-                        className="rounded-xl px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        className="w-full sm:w-auto rounded-xl px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     >
                         ยกเลิก
                     </Button>
@@ -356,7 +336,7 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
                             type="button"
                             onClick={() => handleSave(true)}
                             disabled={saving}
-                            className="rounded-xl px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="w-full sm:w-auto rounded-xl px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
                             {saving ? 'กำลังบันทึก...' : 'บันทึกและเพิ่มอีก'}
                         </Button>
@@ -365,7 +345,7 @@ export function CreateDocTypeModal({ open, onOpenChange, onSaved, dataEdit }: Cr
                         type="button"
                         onClick={() => handleSave(false)}
                         disabled={saving}
-                        className="rounded-xl px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                        className="w-full sm:w-auto rounded-xl px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
                     >
                         {saving ? 'กำลังบันทึก...' : isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูล'}
                     </Button>

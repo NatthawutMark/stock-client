@@ -1,12 +1,8 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import type { ApiResponse } from '@/lib/types';
+import { config as appConfig } from '@/lib/config';
 
-// อ่าน Base URL จาก Environment Variable ของ Next.js Client Side
-const API_IP = process.env.NEXT_PUBLIC_API_IP;
-const API_PORT = process.env.NEXT_PUBLIC_API_PORT;
-
-const BASE_URL = API_IP && API_PORT ? `${API_IP}:${API_PORT}` : '';
-// const BASE_URL = API_IP  ? `${API_IP}` : '';
+const BASE_URL = appConfig.api.baseUrl;
 
 // ==========================================
 // Types & Interfaces
@@ -65,19 +61,11 @@ const getStoredRefreshToken = (): string | null => {
     return getStoredTokens()?.refreshToken || null;
 };
 
-// const setStoredTokens = (accessToken: string, refreshToken?: string) => {
-//     if (typeof window === 'undefined') return;
-//     localStorage.setItem('wms-token', JSON.stringify(accessToken));
-//     if (refreshToken) {
-//         localStorage.setItem('wms-refresh-token', refreshToken);
-//     }
-// };
 const setStoredTokens = (accessToken: string, refreshToken?: string) => {
     if (typeof window === 'undefined') return;
 
-    // ดึงของเก่ามาเผื่อกรณีที่ API Refresh ไม่ได้ส่ง refreshToken ตัวใหม่มาให้ จะได้ใช้ตัวเดิมต่อ
     const currentTokens = getStoredTokens();
-    const newTokens = {
+    const newTokens: TokenData = {
         accessToken,
         refreshToken: refreshToken || currentTokens?.refreshToken || '',
     };
@@ -88,7 +76,7 @@ const setStoredTokens = (accessToken: string, refreshToken?: string) => {
 const clearAuthAndRedirect = () => {
     if (typeof window === 'undefined') return;
     localStorage.removeItem('wms-token');
-    // localStorage.removeItem('wms-user');
+    localStorage.removeItem('wms-user');
     window.location.href = '/login';
 };
 
@@ -100,7 +88,6 @@ const axiosInstance: AxiosInstance = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    // timeout: 15000,
 });
 
 // ==========================================
@@ -108,12 +95,10 @@ const axiosInstance: AxiosInstance = axios.create({
 // ==========================================
 axiosInstance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-
         const token = getStoredAccessToken();
 
         if (!token && !config.url?.includes('/auth/login')) {
             clearAuthAndRedirect();
-            window.location.href = '/login';
             return Promise.reject(new Error('No token found in localStorage'));
         }
 
@@ -126,7 +111,7 @@ axiosInstance.interceptors.request.use(
 );
 
 // ==========================================
-// 2. Response Interceptor (Direct External Backend Refresh)
+// 2. Response Interceptor (Refresh Token)
 // ==========================================
 axiosInstance.interceptors.response.use(
     (response) => response,
@@ -137,7 +122,6 @@ axiosInstance.interceptors.response.use(
             return Promise.reject(error);
         }
 
-        // ป้องกัน Loop กรณีที่เส้น API ขอ Token ใหม่พังซะเอง
         if (originalRequest.url?.includes('/api/auth/refresh') || originalRequest._retry) {
             clearAuthAndRedirect();
             return Promise.reject(error);
@@ -160,9 +144,6 @@ axiosInstance.interceptors.response.use(
         isRefreshing = true;
 
         const refreshToken = getStoredRefreshToken();
-        // **จุดสังเกต:** ถ้าฝั่ง C# ของคุณต้องใช้ Access Token เก่าคู่กับ Refresh Token ด้วย ให้ดึงมาส่งไปพร้อมกัน
-        // const accessToken = getStoredAccessToken(); 
-
         if (!refreshToken) {
             isRefreshing = false;
             clearAuthAndRedirect();
@@ -172,14 +153,15 @@ axiosInstance.interceptors.response.use(
         try {
             const response = await axios.post<ApiResponse<RefreshTokenResponse> | RefreshTokenResponse>(
                 `${BASE_URL}/api/auth/refresh`,
-                { refreshToken }, // ถ้า C# ขอ accessToken ด้วย ให้แก้เป็น { accessToken, refreshToken }
+                { refreshToken },
                 { headers: { 'Content-Type': 'application/json' } }
             );
 
             const responseData = response.data;
-            const tokenData = ('data' in responseData && responseData.data)
-                ? responseData.data
-                : (responseData as RefreshTokenResponse);
+            const tokenData =
+                'data' in responseData && responseData.data
+                    ? responseData.data
+                    : (responseData as RefreshTokenResponse);
 
             const newAccessToken = tokenData?.accessToken;
             const newRefreshToken = tokenData?.refreshToken;
@@ -193,9 +175,9 @@ axiosInstance.interceptors.response.use(
 
                 processQueue(null, newAccessToken);
                 return axiosInstance(originalRequest);
-            } else {
-                throw new Error('Invalid refresh token response');
             }
+
+            throw new Error('Invalid refresh token response');
         } catch (refreshError) {
             processQueue(refreshError, null);
             clearAuthAndRedirect();

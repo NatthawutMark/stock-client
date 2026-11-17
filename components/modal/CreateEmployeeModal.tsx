@@ -15,19 +15,16 @@ import {
 } from '@/components/ui/index';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { masterService } from '@/app/_services/master';
+import { extractErrorMessage } from '@/lib/utils';
 import type { MastEmployee } from '@/lib/types';
 import Swal from 'sweetalert2';
 
 interface EmployeeFormData {
     id?: string;
-    originalEmpCode?: string;
     empCode: string;
     fName: string;
     lName: string;
     tel: string;
-    // email: string;
-    // position: string;
-    // department: string;
     remark: string;
     isActive: boolean;
 }
@@ -37,9 +34,6 @@ const defaultFormData: EmployeeFormData = {
     fName: '',
     lName: '',
     tel: '',
-    // email: '',
-    // position: '',
-    // department: '',
     remark: '',
     isActive: true,
 };
@@ -79,7 +73,6 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
             if (dataEdit) {
                 setFormData({
                     id: dataEdit.id,
-                    originalEmpCode: dataEdit.empCode || '',
                     empCode: dataEdit.empCode || '',
                     fName: dataEdit.fName || '',
                     lName: dataEdit.lName || '',
@@ -140,58 +133,34 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
         setSaving(true);
         try {
             const payload: Partial<MastEmployee> = {
-                id: formData.id ? formData.id : undefined,
+                id: isEditMode ? formData.id : undefined,
                 empCode: formData.empCode.trim(),
                 fName: formData.fName.trim(),
                 lName: formData.lName.trim(),
                 tel: formData.tel.trim(),
-                // email: formData.email.trim(),
-                // position: formData.position.trim(),
-                // department: formData.department.trim(),
                 remark: formData.remark.trim(),
                 isActive: formData.isActive,
             };
 
-            let isSuccess = false;
-            let responseMsg = '';
+            const res = isEditMode
+                ? await masterService.employees.update(payload)
+                : await masterService.employees.create(payload);
 
-            try {
-                if (isEditMode) {
-                    const res = await masterService.employees.update(payload);
-                    if (res && res.success) {
-                        isSuccess = true;
-                        responseMsg = res.message || 'แก้ไขข้อมูลพนักงานเรียบร้อยแล้ว';
-                    } else {
-                        responseMsg = res?.error || res?.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลพนักงาน';
-                    }
-                } else {
-                    const res = await masterService.employees.create(payload);
-                    if (res && res.success) {
-                        isSuccess = true;
-                        responseMsg = res.message || 'เพิ่มข้อมูลพนักงานเรียบร้อยแล้ว';
-                    } else {
-                        responseMsg = res?.error || res?.message || 'เกิดข้อผิดพลาดในการสร้างข้อมูลพนักงาน';
-                    }
-                }
-            } catch (err) {
-                console.error('Save employee error:', err);
-                isSuccess = false;
-                responseMsg = 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์';
-            }
-
-            if (isSuccess) {
+            if (res && res.success !== false) {
                 onSaved();
-                if (andAddMore) {
+                if (andAddMore && !isEditMode) {
                     resetForm();
                     setAlertMessage({
                         type: 'success',
-                        message: responseMsg || 'เพิ่มข้อมูลพนักงานเรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
+                        message: res.message || 'เพิ่มข้อมูลพนักงานเรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
                     });
                 } else {
                     await Swal.fire({
                         icon: 'success',
                         title: 'สำเร็จ',
-                        text: responseMsg || (isEditMode ? 'แก้ไขข้อมูลพนักงานเรียบร้อยแล้ว' : 'เพิ่มข้อมูลพนักงานเรียบร้อยแล้ว'),
+                        text:
+                            res.message ||
+                            (isEditMode ? 'แก้ไขข้อมูลพนักงานเรียบร้อยแล้ว' : 'เพิ่มข้อมูลพนักงานเรียบร้อยแล้ว'),
                         timer: 1500,
                         showConfirmButton: false,
                     });
@@ -199,21 +168,26 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
                     onOpenChange(false);
                 }
             } else {
+                const errMsg = extractErrorMessage(
+                    res,
+                    isEditMode
+                        ? 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลพนักงาน'
+                        : 'เกิดข้อผิดพลาดในการสร้างข้อมูลพนักงาน'
+                );
                 if (andAddMore) {
-                    setAlertMessage({ type: 'error', message: responseMsg });
+                    setAlertMessage({ type: 'error', message: errMsg });
                 } else {
                     Swal.fire({
                         icon: 'error',
-                        title: 'ไม่สำเร็จ',
-                        text: responseMsg,
+                        title: isEditMode ? 'แก้ไขไม่สำเร็จ' : 'สร้างไม่สำเร็จ',
+                        text: errMsg,
                         confirmButtonColor: '#dc2626',
                     });
                 }
             }
         } catch (error: unknown) {
             console.error('Save employee error:', error);
-            const err = error as { message?: string };
-            const errMsg = err?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์';
+            const errMsg = extractErrorMessage(error, 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
             if (andAddMore) {
                 setAlertMessage({ type: 'error', message: errMsg });
             } else {
@@ -237,9 +211,9 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal={true}>
-            <DialogContent className="max-w-4xl sm:max-w-4xl">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
+            <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[min(56rem,calc(100vw-2rem))] p-4 sm:p-6 overflow-y-auto overscroll-contain">
+                <DialogHeader className="pr-8">
+                    <DialogTitle className="flex flex-wrap items-center gap-2 text-lg sm:text-xl">
                         <span>{isEditMode ? 'แก้ไขข้อมูลพนักงาน' : 'สร้างข้อมูลพนักงานใหม่'}</span>
                         {isEditMode && formData.empCode && (
                             <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 font-normal">
@@ -281,9 +255,9 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
 
                 {/* Form Fields */}
                 <div className="space-y-4 py-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                         {/* รหัสพนักงาน */}
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 รหัสพนักงาน <span className="text-red-500">*</span>
                             </label>
@@ -296,12 +270,12 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
                                     if (alertMessage) setAlertMessage(null);
                                 }}
                                 placeholder="เช่น EMP001..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                             />
                         </div>
 
                         {/* ชื่อ */}
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 ชื่อพนักงาน <span className="text-red-500">*</span>
                             </label>
@@ -313,12 +287,12 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
                                     if (alertMessage) setAlertMessage(null);
                                 }}
                                 placeholder="เช่น สมชาย..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
                         {/* นามสกุล */}
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 นามสกุล <span className="text-red-500">*</span>
                             </label>
@@ -330,14 +304,14 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
                                     if (alertMessage) setAlertMessage(null);
                                 }}
                                 placeholder="เช่น ใจดี..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         {/* เบอร์โทรศัพท์ */}
-                        <div>
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
                                 เบอร์โทรศัพท์ (Telephone)
                             </label>
@@ -346,67 +320,23 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
                                 value={formData.tel}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, tel: e.target.value }))}
                                 placeholder="เช่น 02-123-4567, 081-xxx-xxxx..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
-                        {/* อีเมล */}
-                        {/* <div>
+                        {/* หมายเหตุ */}
+                        <div className="min-w-0">
                             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
-                                อีเมล (Email)
-                            </label>
-                            <input
-                                type="email"
-                                value={formData.email}
-                                onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                                placeholder="เช่น employee@company.com..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div> */}
-                    </div>
-
-                    {/*<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                         ตำแหน่ง */}
-                        {/* <div>
-                            <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
-                                ตำแหน่ง (Position)
+                                หมายเหตุ (Remark)
                             </label>
                             <input
                                 type="text"
-                                value={formData.position}
-                                onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
-                                placeholder="เช่น เจ้าหน้าที่คลังสินค้า..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={formData.remark}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, remark: e.target.value }))}
+                                placeholder="หมายเหตุเพิ่มเติม..."
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
-                        </div> */}
-
-                        {/* แผนก */}
-                        {/* <div>
-                            <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
-                                แผนก (Department)
-                            </label>
-                            <input
-                                type="text"
-                                value={formData.department}
-                                onChange={(e) => setFormData((prev) => ({ ...prev, department: e.target.value }))}
-                                placeholder="เช่น คลังสินค้า, โลจิสติกส์..."
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div> 
-                    </div>*/}
-
-                    {/* หมายเหตุ */}
-                    <div>
-                        <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1.5">
-                            หมายเหตุ (Remark)
-                        </label>
-                        <input
-                            type="text"
-                            value={formData.remark}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, remark: e.target.value }))}
-                            placeholder="หมายเหตุเพิ่มเติม..."
-                            className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                        </div>
                     </div>
 
                     {/* สถานะใช้งาน */}
@@ -431,7 +361,7 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
                         variant="outline"
                         onClick={handleClose}
                         disabled={saving}
-                        className="rounded-xl px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        className="w-full sm:w-auto rounded-xl px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     >
                         ยกเลิก
                     </Button>
@@ -440,7 +370,7 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
                             type="button"
                             onClick={() => handleSave(true)}
                             disabled={saving}
-                            className="rounded-xl px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="w-full sm:w-auto rounded-xl px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
                             {saving ? 'กำลังบันทึก...' : 'บันทึกและเพิ่มอีก'}
                         </Button>
@@ -449,7 +379,7 @@ export function CreateEmployeeModal({ open, onOpenChange, onSaved, dataEdit }: C
                         type="button"
                         onClick={() => handleSave(false)}
                         disabled={saving}
-                        className="rounded-xl px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                        className="w-full sm:w-auto rounded-xl px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
                     >
                         {saving ? 'กำลังบันทึก...' : isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูล'}
                     </Button>

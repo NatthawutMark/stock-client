@@ -1,7 +1,17 @@
 import type {
-    MastItem, MastBrand, MastWarehouse, MastLocation, MastLocationParams, MastUom, MastVendor, MastCustomer,
-    MastEmployee, MastDocType, MastTransType,
-    PaginationParams, ApiResponse,
+    MastItem,
+    MastBrand,
+    MastWarehouse,
+    MastLocation,
+    MastLocationParams,
+    MastUom,
+    MastVendor,
+    MastCustomer,
+    MastEmployee,
+    MastDocType,
+    MastTransType,
+    PaginationParams,
+    ApiResponse,
 } from '@/lib/types';
 import { apiClient } from '@/lib/api/client';
 
@@ -10,15 +20,8 @@ export type MasterResult<T = unknown> = ApiResponse<T>;
 export const masterService = {
     // ─── Items ───────────────────────────────────────────────────
     items: {
-        list: (obj?: Partial<MastItem> | (PaginationParams & Record<string, unknown>)) => {
-            return apiClient.post<MasterResult<MastItem[]>>('/api/MastItem/list', obj);
-        },
-        // list: (p?: PaginationParams) => {
-        //     return apiClient.post<MasterResult<MastItem[]>>('/api/MastItem/list', {
-        //         itemCode: p?.search || '',
-        //         isActive: p?.isActive || null
-        //     });
-        // },
+        list: (obj?: Partial<MastItem> | (PaginationParams & Record<string, unknown>)) =>
+            apiClient.post<MasterResult<MastItem[]>>('/api/MastItem/list', obj),
         getByCode: (code: string) =>
             apiClient.get<MasterResult<MastItem>>(`/api/MastItem/getByCode?code=${encodeURIComponent(code)}`),
         create: (data: Partial<MastItem>) =>
@@ -31,11 +34,10 @@ export const masterService = {
 
     // ─── Brands ──────────────────────────────────────────────────
     brands: {
-        list: (p?: PaginationParams) => {
-            return apiClient.post<MasterResult<MastBrand[]>>('/api/MastBrand/list', {
+        list: (p?: PaginationParams) =>
+            apiClient.post<MasterResult<MastBrand[]>>('/api/MastBrand/list', {
                 nameTh: p?.search || '',
-            });
-        },
+            }),
         getByName: (name: string) =>
             apiClient.get<MasterResult<MastBrand>>(`/api/MastBrand/getByName?name=${encodeURIComponent(name)}`),
         create: (data: Partial<MastBrand>) =>
@@ -48,11 +50,10 @@ export const masterService = {
 
     // ─── Warehouses ──────────────────────────────────────────────
     warehouses: {
-        list: (p?: PaginationParams) => {
-            return apiClient.post<MasterResult<MastWarehouse[]>>('/api/MastWarehouse/list', {
+        list: (p?: PaginationParams) =>
+            apiClient.post<MasterResult<MastWarehouse[]>>('/api/MastWarehouse/list', {
                 Code: p?.search || '',
-            });
-        },
+            }),
         getByCode: (code: string) =>
             apiClient.get<MasterResult<MastWarehouse>>(`/api/MastWarehouse/getByCode?code=${encodeURIComponent(code)}`),
         create: (data: Partial<MastWarehouse>) =>
@@ -65,12 +66,11 @@ export const masterService = {
 
     // ─── Locations ───────────────────────────────────────────────
     locations: {
-        list: (p?: MastLocationParams) => {
-            return apiClient.post<MasterResult<MastLocation[]>>('/api/MastLocation/list', {
+        list: (p?: MastLocationParams) =>
+            apiClient.post<MasterResult<MastLocation[]>>('/api/MastLocation/list', {
                 code: p?.code || p?.search || '',
                 warehouseId: p?.warehouseId || '',
-            });
-        },
+            }),
         getByName: (name: string) =>
             apiClient.get<MasterResult<MastLocation>>(`/api/MastLocation/getByName?name=${encodeURIComponent(name)}`),
         create: (data: Partial<MastLocation>) =>
@@ -83,11 +83,10 @@ export const masterService = {
 
     // ─── UOMs ────────────────────────────────────────────────────
     uoms: {
-        list: (p?: PaginationParams) => {
-            return apiClient.post<MasterResult<MastUom[]>>('/api/MastUom/list', {
+        list: (p?: PaginationParams) =>
+            apiClient.post<MasterResult<MastUom[]>>('/api/MastUom/list', {
                 name: p?.search || '',
-            });
-        },
+            }),
         getByName: (name: string) =>
             apiClient.get<MasterResult<MastUom>>(`/api/MastUom/getByName?name=${encodeURIComponent(name)}`),
         create: (data: Partial<MastUom>) =>
@@ -100,12 +99,11 @@ export const masterService = {
 
     // ─── Vendors ─────────────────────────────────────────────────
     vendors: {
-        list: (p?: PaginationParams) => {
-            return apiClient.post<MasterResult<MastVendor[]>>('/api/MastVendor/list', {
+        list: (p?: PaginationParams) =>
+            apiClient.post<MasterResult<MastVendor[]>>('/api/MastVendor/list', {
                 vendCode: p?.search || '',
                 vendName: p?.search || '',
-            });
-        },
+            }),
         getByCode: (code: string) =>
             apiClient.get<MasterResult<MastVendor>>(`/api/MastVendor/getByCode?code=${encodeURIComponent(code)}`),
         create: (data: Partial<MastVendor>) =>
@@ -118,12 +116,11 @@ export const masterService = {
 
     // ─── Customers ───────────────────────────────────────────────
     customers: {
-        list: (p?: PaginationParams) => {
-            return apiClient.post<MasterResult<MastCustomer[]>>('/api/MastCustomer/list', {
+        list: (p?: PaginationParams) =>
+            apiClient.post<MasterResult<MastCustomer[]>>('/api/MastCustomer/list', {
                 custCode: p?.search || '',
                 custName: p?.search || '',
-            });
-        },
+            }),
         getByCode: (code: string) =>
             apiClient.get<MasterResult<MastCustomer>>(`/api/MastCustomer/getByCode?Code=${encodeURIComponent(code)}`),
         create: (data: Partial<MastCustomer>) =>
@@ -136,13 +133,12 @@ export const masterService = {
 
     // ─── Employees ───────────────────────────────────────────────
     employees: {
-        list: (p?: PaginationParams) => {
-            return apiClient.post<MasterResult<MastEmployee[]>>('/api/MastEmployee/list', {
+        list: (p?: PaginationParams) =>
+            apiClient.post<MasterResult<MastEmployee[]>>('/api/MastEmployee/list', {
                 empCode: p?.search || '',
                 fName: p?.search || '',
                 lName: p?.search || '',
-            });
-        },
+            }),
         getByCode: (code: string) =>
             apiClient.get<MasterResult<MastEmployee>>(`/api/MastEmployee/getByCode?code=${encodeURIComponent(code)}`),
         getById: (id: string) =>
@@ -177,10 +173,9 @@ export const masterService = {
 
     // ─── TransTypes ──────────────────────────────────────────────
     transTypes: {
-        list: (p?: PaginationParams) => {
-            return apiClient.post<MasterResult<MastTransType[]>>('/api/MastTransType/list', {
+        list: (p?: PaginationParams) =>
+            apiClient.post<MasterResult<MastTransType[]>>('/api/MastTransType/list', {
                 name: p?.search || '',
-            });
-        },
+            }),
     },
 };

@@ -21,7 +21,7 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue>({
     theme: 'light',
-    toggleTheme: () => { },
+    toggleTheme: () => {},
 });
 
 export const useTheme = () => useContext(ThemeContext);
@@ -37,7 +37,7 @@ interface I18nContextValue {
 const I18nContext = createContext<I18nContextValue>({
     lang: 'th',
     t: translations.th,
-    setLang: () => { },
+    setLang: () => {},
 });
 
 export const useI18n = () => useContext(I18nContext);
@@ -54,15 +54,15 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue>({
     user: null,
-    setUser: () => { },
+    setUser: () => {},
     token: null,
-    setToken: () => { },
-    logout: () => { },
+    setToken: () => {},
+    logout: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
 
-// ─── PageTitleLayout ───────────────────────────────────────────────────
+// ─── PageTitleLayout ──────────────────────────────────────────
 
 interface LayoutContextValue {
     pageTitle: string;
@@ -71,10 +71,11 @@ interface LayoutContextValue {
 
 const LayoutContext = createContext<LayoutContextValue>({
     pageTitle: '',
-    setPageTitle: () => { },
+    setPageTitle: () => {},
 });
 
 export const useLayout = () => useContext(LayoutContext);
+
 // ─── Providers ────────────────────────────────────────────────
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -83,34 +84,47 @@ export function Providers({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<CurrentUser | null>(null);
     const [token, setToken] = useState<Token | null>(null);
     const [mounted, setMounted] = useState(false);
-    const router = useRouter();
-    const pathname = usePathname();
     const [pageTitle, setPageTitle] = useState<string>('');
 
-    // Load from localStorage after mount
+    const router = useRouter();
+    const pathname = usePathname();
+
+    // โหลดค่าเริ่มต้นจาก localStorage หลัง mount
     useEffect(() => {
         const savedTheme = (localStorage.getItem('wms-theme') as 'light' | 'dark') ?? 'light';
         const savedLang = (localStorage.getItem('wms-lang') as Lang) ?? 'th';
         const savedUser = localStorage.getItem('wms-user');
+        const savedToken = localStorage.getItem('wms-token');
+
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setTheme(savedTheme);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLangState(savedLang);
+
         if (savedUser) {
-            try { setUser(JSON.parse(savedUser)); } catch { /* ignore */ }
+            try {
+                setUser(JSON.parse(savedUser));
+            } catch {
+                /* ignore invalid json */
+            }
+        }
+        if (savedToken) {
+            try {
+                setToken(JSON.parse(savedToken));
+            } catch {
+                /* ignore invalid json */
+            }
         }
         setMounted(true);
     }, []);
 
-    // Sync theme class on <html>
+    // ซิงค์ class 'dark' บน <html>
     useEffect(() => {
         if (!mounted) return;
-        const root = document.documentElement;
-        root.classList.toggle('dark', theme === 'dark');
+        document.documentElement.classList.toggle('dark', theme === 'dark');
         localStorage.setItem('wms-theme', theme);
     }, [theme, mounted]);
 
-    // Route Protection
+    // ตรวจสอบสิทธิ์การเข้าถึงหน้าเว็บ (Route Protection)
     useEffect(() => {
         if (!mounted) return;
         if (!user && !token && pathname !== '/login') {
@@ -121,7 +135,7 @@ export function Providers({ children }: { children: ReactNode }) {
     }, [user, token, pathname, mounted, router]);
 
     const toggleTheme = useCallback(() => {
-        setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+        setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
     }, []);
 
     const setLang = useCallback((l: Lang) => {
@@ -131,6 +145,7 @@ export function Providers({ children }: { children: ReactNode }) {
 
     const logout = useCallback(() => {
         setUser(null);
+        setToken(null);
         localStorage.removeItem('wms-user');
         localStorage.removeItem('wms-token');
         router.replace('/login');
@@ -148,9 +163,8 @@ export function Providers({ children }: { children: ReactNode }) {
         else localStorage.removeItem('wms-token');
     }, []);
 
-    // Prevent SSR flash and hide content until route protection resolves
     if (!mounted) return null;
-    if (!user && pathname !== '/login') return null; // wait for redirect
+    if (!user && pathname !== '/login') return null;
 
     return (
         <ThemeContext.Provider value={{ theme, toggleTheme }}>
@@ -164,4 +178,3 @@ export function Providers({ children }: { children: ReactNode }) {
         </ThemeContext.Provider>
     );
 }
-

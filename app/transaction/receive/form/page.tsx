@@ -6,15 +6,38 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import { transactionService } from '@/app/_services/transaction';
+import { extractList, extractErrorMessage } from '@/lib/utils';
 import type { DocReceive, DocReceiveDetail, MastDocType, MastEmployee, MastVendor, MastWarehouse } from '@/lib/types';
 import { MasterItemTable, TransactionItem } from '@/components/transaction';
 import { Button, Card, CardContent, DatePicker, Label, SearchableSelect, renderStatusBadge } from '@/components/ui';
 import Swal from 'sweetalert2';
-import {
-    Save, FileCheck, FileText, Layers,
-} from 'lucide-react';
+import { Save, FileCheck, FileText, Layers } from 'lucide-react';
 
 const MENU_ID = '00E03A994280450ABF7E2EE62A7AD4D6';
+
+function mapDetailToTableItem(d: DocReceiveDetail, index: number): TransactionItem {
+    const qty = Number(d.itemQty) || 1;
+    const price = Number(d.itemPrice) || 0;
+    return {
+        id: d.id || `edit-item-${index}`,
+        itemId: d.itemId ?? '',
+        itemCode: d.itemCode || `ITM${d.itemId}`,
+        itemName: d.itemName || '',
+        uomId: d.uomId,
+        uomName: d.uomName || 'ชิ้น',
+        itemQty: qty,
+        putawayQty: Number(d.putawayQty) || 0,
+        itemPrice: price,
+        totalPrice: qty * price,
+        lotNo: d.lotNo || '',
+        serialNo: d.serialNo || '',
+        isLotNo: Boolean(d.isLotNo || d.lotNo),
+        isSerialNo: Boolean(d.isSerialNo || d.serialNo),
+        locationId: d.locationId,
+        locationName: d.locationName || '',
+        remark: d.remark || '',
+    };
+}
 
 function ReceiveFormContent() {
     const router = useRouter();
@@ -25,7 +48,7 @@ function ReceiveFormContent() {
     const { setPageTitle } = useLayout();
 
     // ─────────────────────────────────────────────────────────────
-    // Form Header States
+    // ข้อมูลส่วนหัวเอกสาร (Form Header State)
     // ─────────────────────────────────────────────────────────────
     const [docNo, setDocNo] = useState<string>('');
     const [docDate, setDocDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -49,16 +72,16 @@ function ReceiveFormContent() {
     const [loading, setLoading] = useState<boolean>(false);
     const [saving, setSaving] = useState<boolean>(false);
 
-    // ─────────────────────────────────────────────────────────────
-    // 1. ตั้งชื่อหัวข้อหน้า
-    // ─────────────────────────────────────────────────────────────
     useEffect(() => {
-        const title = isEditMode ? 'แก้ไขใบรับสินค้า (Edit Goods Receive)' : 'สร้างใบรับสินค้า (Create Goods Receive)';
-        setPageTitle(title);
+        setPageTitle(
+            isEditMode
+                ? 'แก้ไขใบรับสินค้า (Edit Goods Receive)'
+                : 'สร้างใบรับสินค้า (Create Goods Receive)'
+        );
     }, [isEditMode, setPageTitle]);
 
     // ─────────────────────────────────────────────────────────────
-    // 2. โหลด Master Dropdowns (Vendor, Warehouse, Employee, DocType)
+    // โหลดข้อมูลตัวเลือก Master Dropdowns
     // ─────────────────────────────────────────────────────────────
     useEffect(() => {
         const loadMasters = async () => {
@@ -70,39 +93,17 @@ function ReceiveFormContent() {
                     masterService.docTypes.list({ menuId: MENU_ID }),
                 ]);
 
-                // Vendor
-                const vData = vendRes?.success
-                    ? (Array.isArray(vendRes.results) ? vendRes.results : Array.isArray(vendRes.data) ? vendRes.data : [])
-                    : [];
-                setVendorList(vData);
+                const warehouses = extractList<MastWarehouse>(whRes);
+                setVendorList(extractList<MastVendor>(vendRes));
+                setWarehouseList(warehouses);
+                setEmployeeList(extractList<MastEmployee>(empRes));
+                setDocTypeList(extractList<MastDocType>(dTypeRes));
 
-                // Warehouse
-                const wData = whRes?.success
-                    ? (Array.isArray(whRes.results) ? whRes.results : Array.isArray(whRes.data) ? whRes.data : [])
-                    : [];
-                setWarehouseList(wData);
-
-                if (!isEditMode && wData.length > 0) {
-                    setWarehouseId((prev) => prev || String(wData[0].id));
+                if (!isEditMode && warehouses.length > 0 && warehouses[0].id) {
+                    setWarehouseId((prev) => prev || String(warehouses[0].id));
                 }
-
-                // Employee
-                const eData = empRes?.success
-                    ? (Array.isArray(empRes.results) ? empRes.results : Array.isArray(empRes.data) ? empRes.data : [])
-                    : [];
-                setEmployeeList(eData);
-
-                // DocType
-                const dTypeData = dTypeRes?.success
-                    ? (Array.isArray(dTypeRes.results) ? dTypeRes.results : Array.isArray(dTypeRes.data) ? dTypeRes.data : [])
-                    : [];
-                setDocTypeList(dTypeData);
             } catch (err) {
                 console.error('Failed to load masters from DB:', err);
-                setVendorList([]);
-                setWarehouseList([]);
-                setEmployeeList([]);
-                setDocTypeList([]);
             }
         };
 
@@ -110,173 +111,96 @@ function ReceiveFormContent() {
     }, [isEditMode]);
 
     // ─────────────────────────────────────────────────────────────
-    // 3. โหลดข้อมูลเมื่อเป็น Edit Mode หรือตั้งค่าเริ่มต้นสำหรับ Create Mode
+    // โหลดข้อมูลเอกสารเดิมเมื่ออยู่ในโหมดแก้ไข (Edit Mode)
     // ─────────────────────────────────────────────────────────────
     useEffect(() => {
-        if (isEditMode && editId) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (!isEditMode || !editId) return;
+
+        const loadEditDoc = async () => {
             setLoading(true);
-            const loadEditDoc = async () => {
-                try {
-                    const res = await transactionService.receive.get(editId);
-                    if (res && res.success) {
-                        const foundDoc: (DocReceive & { details?: DocReceiveDetail[] }) | null = res?.success
-                            ? (res.results || res.data || null)
-                            : null;
+            try {
+                const res = await transactionService.receive.get(editId);
+                const foundDoc: (DocReceive & { details?: DocReceiveDetail[] }) | null =
+                    res?.success ? (res.results || res.data || null) : null;
 
-                        if (foundDoc) {
-                            setDocNo(foundDoc.docNo || '');
-                            const rawDate = foundDoc.docDate || '';
-                            setDocDate(rawDate.length >= 10 ? rawDate.slice(0, 10) : new Date().toISOString().split('T')[0]);
-                            setVendorId(foundDoc.vendId ? String(foundDoc.vendId) : '');
-                            setDocTypeId(foundDoc.docTypeId ? String(foundDoc.docTypeId) : '');
-                            setDocNoRef(foundDoc.refDocNo || '');
-                            setEmployeeId(foundDoc.empId ? String(foundDoc.empId) : '');
-                            setRemark(foundDoc.remark || '');
-                            if (foundDoc.warehouseId) {
-                                setWarehouseId(String(foundDoc.warehouseId));
-                            }
-                            if (foundDoc.statusCode) {
-                                setStatusCode(foundDoc.statusCode);
-                            }
-
-                            // โหลดรายการสินค้าที่มีอยู่จริงจาก DB
-                            const details = Array.isArray(foundDoc.details) ? foundDoc.details : [];
-                            if (details.length > 0) {
-                                console.log('details', details);
-
-                                setItems(
-                                    details.map((d: DocReceiveDetail, index: number) => ({
-                                        id: d.id || `edit-item-${index}`,
-                                        itemId: d.itemId ?? '',
-                                        itemCode: d.itemCode || `ITM${d.itemId}`,
-                                        itemName: d.itemName || '',
-                                        uomId: d.uomId,
-                                        uomName: d.uomName || 'ชิ้น',
-                                        itemQty: Number(d.itemQty) || 1,
-                                        putawayQty: Number(d.putawayQty) || 0,
-                                        itemPrice: Number(d.itemPrice) || 0,
-                                        totalPrice: (Number(d.itemQty) || 1) * (Number(d.itemPrice) || 0),
-                                        lotNo: d.lotNo || '',
-                                        serialNo: d.serialNo || '',
-                                        isLotNo: d.isLotNo || false,
-                                        isSerialNo: d.isSerialNo || false,
-                                        locationId: d.locationId,
-                                        locationName: d.locationName || '',
-                                        remark: d.remark || '',
-                                    }))
-                                );
-                            } else {
-                                setItems([]);
-                            }
-                        } else {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'ไม่พบเอกสาร',
-                                text: `ไม่พบเอกสารรับสินค้ารหัส #${editId} ในฐานข้อมูล`,
-                            });
-                            router.push('/transaction/receive');
-                        }
-                    }
-                } catch (err) {
-                    console.error('Failed to load receive doc from API:', err);
-                    Swal.fire({
+                if (!foundDoc) {
+                    await Swal.fire({
                         icon: 'error',
-                        title: 'เกิดข้อผิดพลาด',
-                        text: 'ไม่สามารถโหลดข้อมูลเอกสารจากฐานข้อมูลได้',
+                        title: 'ไม่พบเอกสาร',
+                        text: `ไม่พบเอกสารรับสินค้ารหัส #${editId} ในฐานข้อมูล`,
                     });
                     router.push('/transaction/receive');
-                } finally {
-                    setLoading(false);
+                    return;
                 }
-            };
-            loadEditDoc();
-        } else {
-            setDocDate(new Date().toISOString().split('T')[0]);
-            setItems([]);
-        }
+
+                setDocNo(foundDoc.docNo || '');
+                const rawDate = foundDoc.docDate || '';
+                setDocDate(
+                    rawDate.length >= 10
+                        ? rawDate.slice(0, 10)
+                        : new Date().toISOString().split('T')[0]
+                );
+                setVendorId(foundDoc.vendId ? String(foundDoc.vendId) : '');
+                setDocTypeId(foundDoc.docTypeId ? String(foundDoc.docTypeId) : '');
+                setDocNoRef(foundDoc.refDocNo || '');
+                setEmployeeId(foundDoc.empId ? String(foundDoc.empId) : '');
+                setRemark(foundDoc.remark || '');
+                if (foundDoc.warehouseId) setWarehouseId(String(foundDoc.warehouseId));
+                if (foundDoc.statusCode) setStatusCode(foundDoc.statusCode);
+
+                const details = Array.isArray(foundDoc.details) ? foundDoc.details : [];
+                setItems(details.map(mapDetailToTableItem));
+            } catch (err) {
+                console.error('Failed to load receive doc from API:', err);
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: 'ไม่สามารถโหลดข้อมูลเอกสารจากฐานข้อมูลได้',
+                });
+                router.push('/transaction/receive');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadEditDoc();
     }, [isEditMode, editId, router]);
 
     // ─────────────────────────────────────────────────────────────
-    // 4. บันทึกข้อมูลเอกสาร (Save / Submit)
+    // ตรวจสอบความถูกต้องและบันทึกเอกสาร
     // ─────────────────────────────────────────────────────────────
-    const handleSubmit = async (targetStatus: 'Draft' | 'Save' | 'Complete' | 'Confirm' = 'Save') => {
-        // Validation
-        if (!docDate) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'กรุณาระบุวันที่เอกสาร (Docdate)',
-                confirmButtonColor: '#2563eb',
-            });
-            return;
-        }
+    const validateForm = (): string | null => {
+        if (!docDate) return 'กรุณาระบุวันที่เอกสาร (Doc Date)';
+        if (!docTypeId) return 'กรุณาเลือกประเภทเอกสาร (Doc Type)';
+        if (!employeeId) return 'กรุณาเลือกพนักงาน (Employee)';
+        if (!warehouseId) return 'กรุณาเลือกคลังรับเข้า (Warehouse)';
+        if (items.length === 0) return 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ';
 
-        if (!docTypeId) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'กรุณาเลือกประเภทเอกสาร',
-                confirmButtonColor: '#2563eb',
-            });
-            return;
-        }
-
-        if (!employeeId) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'กรุณาเลือกพนักงาน (Employee)',
-                confirmButtonColor: '#2563eb',
-            });
-            return;
-        }
-
-        if (!warehouseId) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'กรุณาเลือกคลังสินค้า (Warehouse)',
-                confirmButtonColor: '#2563eb',
-            });
-            return;
-        }
-
-        if (items.length === 0) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ',
-                text: 'ในตาราง "Table add Item" ด้านล่าง',
-                confirmButtonColor: '#2563eb',
-            });
-            return;
-        }
-
-        // ตรวจสอบจำนวนสินค้า
         const invalidQty = items.find((i) => !i.itemQty || i.itemQty <= 0);
         if (invalidQty) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'จำนวนสินค้าต้องมากกว่า 0',
-                text: `กรุณาตรวจสอบสินค้า: ${invalidQty.itemName}`,
-                confirmButtonColor: '#2563eb',
-            });
-            return;
+            return `จำนวนสินค้าต้องมากกว่า 0 (ตรวจสอบ: ${invalidQty.itemName})`;
         }
 
         const invalidLotNo = items.find((i) => i.isLotNo && !i.lotNo?.trim());
         if (invalidLotNo) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'มีบางรายการไม่ได้ระบุ LotNo',
-                text: `กรุณาตรวจสอบสินค้า: ${invalidLotNo.itemName}`,
-                confirmButtonColor: '#2563eb',
-            });
-            return;
+            return `กรุณาระบุ Lot No. สำหรับสินค้า: ${invalidLotNo.itemName}`;
         }
 
         const invalidSerialNo = items.find((i) => i.isSerialNo && !i.serialNo?.trim());
         if (invalidSerialNo) {
+            return `กรุณาระบุ Serial No. สำหรับสินค้า: ${invalidSerialNo.itemName}`;
+        }
+
+        return null;
+    };
+
+    const handleSubmit = async (targetStatus: 'Draft' | 'Save' = 'Save') => {
+        const validationError = validateForm();
+        if (validationError) {
             Swal.fire({
                 icon: 'warning',
-                title: 'มีบางรายการไม่ได้ระบุ Serial No',
-                text: `กรุณาตรวจสอบสินค้า: ${invalidSerialNo.itemName}`,
+                title: 'ข้อมูลไม่ครบถ้วน',
+                text: validationError,
                 confirmButtonColor: '#2563eb',
             });
             return;
@@ -294,47 +218,41 @@ function ReceiveFormContent() {
                 menuId: MENU_ID,
                 docTypeId,
                 statusCode: targetStatus,
-                details: items.map((item) => ({
-                    itemId: String(item.itemId),
-                    itemCode: item.itemCode,
-                    itemName: item.itemName,
-                    uomId: item.uomId ? String(item.uomId) : undefined,
-                    uomName: item.uomName,
-                    itemQty: Number(item.itemQty) || 1,
-                    itemPrice: Number(item.itemPrice) || 0,
-                    totalPrice: Number(item.totalPrice) || ((Number(item.itemQty) || 1) * (Number(item.itemPrice) || 0)),
-                    lotNo: item.lotNo || '',
-                    serialNo: item.serialNo || '',
-                    locationId: item.locationId ? String(item.locationId) : undefined,
-                    locationName: item.locationName || '',
-                    remark: item.remark || '',
-                })),
+                details: items.map((item) => {
+                    const qty = Number(item.itemQty) || 1;
+                    const price = Number(item.itemPrice) || 0;
+                    return {
+                        itemId: String(item.itemId),
+                        itemCode: item.itemCode,
+                        itemName: item.itemName,
+                        uomId: item.uomId ? String(item.uomId) : undefined,
+                        uomName: item.uomName,
+                        itemQty: qty,
+                        itemPrice: price,
+                        totalPrice: Number(item.totalPrice) || qty * price,
+                        lotNo: item.lotNo || '',
+                        serialNo: item.serialNo || '',
+                        locationId: item.locationId ? String(item.locationId) : undefined,
+                        locationName: item.locationName || '',
+                        remark: item.remark || '',
+                    };
+                }),
             };
 
-            // แสดง Loading Modal ขณะกำลังบันทึกข้อมูล
             Swal.fire({
                 title: 'กำลังบันทึกข้อมูล',
                 html: 'โปรดรอสักครู่...',
                 allowOutsideClick: false,
                 allowEscapeKey: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                },
+                didOpen: () => Swal.showLoading(),
             });
 
-            let createdId: string | undefined = undefined;
+            let createdId: string | undefined;
 
             if (isEditMode && editId) {
-                if (['Draft', 'Save'].includes(targetStatus)) {
-                    const res = await transactionService.receive.update(editId, payload);
-                    console.log('editId', editId);
-                    console.log('payload', payload);
-                    if (res && res.success === false) {
-                        throw new Error(res.message || 'ไม่สามารถแก้ไขเอกสารได้');
-                    }
-                }
-                if (['Confirm'].includes(targetStatus)) {
-                    await transactionService.receive.confirm(editId);
+                const res = await transactionService.receive.update(editId, payload);
+                if (res && res.success === false) {
+                    throw new Error(res.message || 'ไม่สามารถแก้ไขเอกสารได้');
                 }
             } else {
                 const res = await transactionService.receive.create(payload);
@@ -342,15 +260,11 @@ function ReceiveFormContent() {
                     throw new Error(res.message || 'ไม่สามารถสร้างเอกสารได้');
                 }
 
-                // ดึง id เอกสารที่สร้างขึ้นใหม่จาก response
-                if (res) {
-                    const raw = res as unknown as Record<string, unknown>;
-                    const data = (raw.results ?? raw.data ?? raw) as Record<string, unknown> | string;
-                    if (typeof data === 'string' || typeof data === 'number') {
-                        createdId = data;
-                    } else if (data && typeof data === 'object') {
-                        createdId = (data.id ?? data.docId ?? data.DocId ?? data.ID) as string
-                    }
+                const data = (res?.results ?? res?.data ?? res) as Record<string, unknown> | string | undefined;
+                if (typeof data === 'string' || typeof data === 'number') {
+                    createdId = String(data);
+                } else if (data && typeof data === 'object') {
+                    createdId = String(data.id ?? data.docId ?? data.DocId ?? data.ID ?? '');
                 }
             }
 
@@ -363,29 +277,13 @@ function ReceiveFormContent() {
             });
 
             const targetId = isEditMode ? editId : createdId;
-            if (targetId) {
-                router.push(`/transaction/receive/${targetId}`);
-            } else {
-                router.push('/transaction/receive');
-            }
-
+            router.push(targetId ? `/transaction/receive/${targetId}` : '/transaction/receive');
         } catch (error: unknown) {
             console.error('Save error:', error);
-            let errMsg = 'ไม่สามารถบันทึกข้อมูลเอกสารได้';
-            if (error instanceof Error) {
-                errMsg = error.message;
-            }
-            const axiosErr = error as { response?: { data?: { message?: string; error?: string } } };
-            if (axiosErr.response?.data?.message) {
-                errMsg = axiosErr.response.data.message;
-            } else if (axiosErr.response?.data?.error) {
-                errMsg = axiosErr.response.data.error;
-            }
-
             Swal.fire({
                 icon: 'error',
                 title: 'เกิดข้อผิดพลาด',
-                text: errMsg,
+                text: extractErrorMessage(error, 'ไม่สามารถบันทึกข้อมูลเอกสารได้'),
             });
         } finally {
             setSaving(false);
@@ -405,40 +303,35 @@ function ReceiveFormContent() {
 
     return (
         <AppLayout>
-            {/* Top Navigation & Breadcrumb */}
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
-                            <span className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400">
-                                <FileText className="w-5 h-5" />
-                            </span>
-                            {isEditMode ? 'แก้ไขใบรับสินค้า (Edit Goods Receive)' : 'สร้างใบรับสินค้า (Create Goods Receive)'}
-                        </h1>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                            {isEditMode
-                                ? `กำลังแก้ไขข้อมูลเอกสารเลขที่ ${docNo}`
-                                : 'บันทึกข้อมูลการรับสินค้าเข้าคลัง และระบุรายการสินค้า'}
-                        </p>
-                    </div>
+            {/* ส่วนหัวหน้าจอ */}
+            <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
+                        <span className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shrink-0">
+                            <FileText className="w-5 h-5" />
+                        </span>
+                        {isEditMode
+                            ? 'แก้ไขใบรับสินค้า (Edit Goods Receive)'
+                            : 'สร้างใบรับสินค้า (Create Goods Receive)'}
+                    </h1>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                        {isEditMode
+                            ? `กำลังแก้ไขข้อมูลเอกสารเลขที่ ${docNo}`
+                            : 'บันทึกข้อมูลการรับสินค้าเข้าคลัง และระบุรายการสินค้า'}
+                    </p>
                 </div>
 
-                {/* Status Badge */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs text-zinc-400">สถานะ:</span>
                     {renderStatusBadge(statusCode)}
                 </div>
             </div>
 
-            {/* ─────────────────────────────────────────────────────────────
-                1. Form Header Section
-                - Left Column: Docdate, DocType, Employee, Warehouse
-                - Right Column: Vendor, DocnoRef, Remark
-               ───────────────────────────────────────────────────────────── */}
+            {/* 1. ข้อมูลส่วนหัวเอกสาร */}
             <Card className="mb-6 border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden">
-                <div className="px-6 py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 flex items-center justify-between">
+                <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                         <span className="font-semibold text-sm text-zinc-800 dark:text-zinc-200">
                             ข้อมูลส่วนหัวเอกสาร (Document Header)
                         </span>
@@ -448,15 +341,14 @@ function ReceiveFormContent() {
                     </span>
                 </div>
 
-                <CardContent className="p-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* ─── ฝั่งซ้าย (Left Column) ─── */}
-                        <div className="space-y-4">
-                            {/* Docdate */}
-                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
+                <CardContent className="p-4 sm:p-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-8">
+                        {/* คอลัมน์ซ้าย */}
+                        <div className="space-y-4 min-w-0">
+                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-1.5 sm:gap-2">
                                 <Label
                                     htmlFor="docDate"
-                                    className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5 select-none"
+                                    className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-start sm:justify-end sm:text-right gap-1.5 select-none"
                                 >
                                     <span className="text-red-500">*</span> วันที่เอกสาร :
                                 </Label>
@@ -464,16 +356,18 @@ function ReceiveFormContent() {
                                     id="docDate"
                                     value={docDate}
                                     isRequire
-                                    onChange={(val) => setDocDate(val)}
+                                    onChange={setDocDate}
                                     placeholder="เลือกวันที่เอกสาร (Docdate)..."
                                     formatString="dd/MM/yyyy"
                                     className="h-10 text-sm font-medium rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 shadow-sm"
                                 />
                             </div>
 
-                            {/* DocType */}
-                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="docType" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 justify-end">
+                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-1.5 sm:gap-2">
+                                <Label
+                                    htmlFor="docType"
+                                    className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 justify-start sm:justify-end sm:text-right"
+                                >
                                     <span className="text-red-500">*</span> ประเภทเอกสาร :
                                 </Label>
                                 <SearchableSelect
@@ -482,7 +376,7 @@ function ReceiveFormContent() {
                                     onChange={setDocTypeId}
                                     options={docTypeList.map((v) => ({
                                         value: String(v.id),
-                                        label: `${v.docTypeName}`,
+                                        label: `${v.docTypeName || v.name || v.id}`,
                                     }))}
                                     placeholder="-- เลือกประเภทเอกสาร (DocType) --"
                                     searchPlaceholder="ค้นหารหัส หรือประเภทเอกสาร..."
@@ -490,31 +384,33 @@ function ReceiveFormContent() {
                                 />
                             </div>
 
-                            {/* Employee */}
-                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="employee" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-1.5 sm:gap-2">
+                                <Label
+                                    htmlFor="employee"
+                                    className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-start sm:justify-end sm:text-right gap-1.5"
+                                >
                                     <span className="text-red-500">*</span> พนักงาน :
                                 </Label>
-                                <div>
-                                    <SearchableSelect
-                                        id="employee"
-                                        value={employeeId}
-                                        onChange={setEmployeeId}
-                                        options={employeeList.map((v) => ({
-                                            value: String(v.id),
-                                            label: `${v.empCode ? `[${v.empCode}] ` : ''}${v.fName} ${v.lName}`,
-                                            subLabel: v.tel ? `โทร: ${v.tel}` : '',
-                                        }))}
-                                        placeholder="-- เลือกพนักงาน (Employee) --"
-                                        searchPlaceholder="ค้นหารหัส หรือชื่อพนักงาน..."
-                                        clearable={false}
-                                    />
-                                </div>
+                                <SearchableSelect
+                                    id="employee"
+                                    value={employeeId}
+                                    onChange={setEmployeeId}
+                                    options={employeeList.map((v) => ({
+                                        value: String(v.id),
+                                        label: `${v.empCode ? `[${v.empCode}] ` : ''}${v.fName} ${v.lName}`,
+                                        subLabel: v.tel ? `โทร: ${v.tel}` : '',
+                                    }))}
+                                    placeholder="-- เลือกพนักงาน (Employee) --"
+                                    searchPlaceholder="ค้นหารหัส หรือชื่อพนักงาน..."
+                                    clearable={false}
+                                />
                             </div>
 
-                            {/* Warehouse */}
-                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="warehouse" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-1.5 sm:gap-2">
+                                <Label
+                                    htmlFor="warehouse"
+                                    className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-start sm:justify-end sm:text-right gap-1.5"
+                                >
                                     <span className="text-red-500">*</span> คลังรับเข้า :
                                 </Label>
                                 <SearchableSelect
@@ -532,11 +428,13 @@ function ReceiveFormContent() {
                             </div>
                         </div>
 
-                        {/* ─── ฝั่งขวา (Right Column) ─── */}
-                        <div className="space-y-4">
-                            {/* Vendor */}
-                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="vendor" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
+                        {/* คอลัมน์ขวา */}
+                        <div className="space-y-4 min-w-0">
+                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-1.5 sm:gap-2">
+                                <Label
+                                    htmlFor="vendor"
+                                    className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-start sm:justify-end sm:text-right gap-1.5"
+                                >
                                     ผู้จำหน่าย :
                                 </Label>
                                 <SearchableSelect
@@ -548,7 +446,9 @@ function ReceiveFormContent() {
                                         label: `${v.vendCode ? `[${v.vendCode}] ` : ''}${v.vendName}`,
                                         subLabel: v.contactName
                                             ? `ผู้ติดต่อ: ${v.contactName}${v.tel ? ` (${v.tel})` : ''}`
-                                            : (v.tel ? `โทร: ${v.tel}` : undefined),
+                                            : v.tel
+                                                ? `โทร: ${v.tel}`
+                                                : undefined,
                                     }))}
                                     placeholder="-- เลือกผู้จำหน่าย (Vendor) --"
                                     searchPlaceholder="ค้นหารหัส หรือชื่อผู้จำหน่าย..."
@@ -556,9 +456,11 @@ function ReceiveFormContent() {
                                 />
                             </div>
 
-                            {/* DocnoRef */}
-                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-2">
-                                <Label htmlFor="docNoRef" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-end gap-1.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-center gap-1.5 sm:gap-2">
+                                <Label
+                                    htmlFor="docNoRef"
+                                    className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-start sm:justify-end sm:text-right gap-1.5"
+                                >
                                     เอกสารอ้างอิง :
                                 </Label>
                                 <input
@@ -571,10 +473,12 @@ function ReceiveFormContent() {
                                 />
                             </div>
 
-                            {/* Remark */}
-                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-start gap-2 col-span-2">
-                                <Label htmlFor="remark" className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 justify-end pt-2">
-                                    Remark :
+                            <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] items-start gap-1.5 sm:gap-2">
+                                <Label
+                                    htmlFor="remark"
+                                    className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-start sm:justify-end sm:text-right sm:pt-2"
+                                >
+                                    หมายเหตุ :
                                 </Label>
                                 <textarea
                                     id="remark"
@@ -590,9 +494,7 @@ function ReceiveFormContent() {
                 </CardContent>
             </Card>
 
-            {/* ─────────────────────────────────────────────────────────────
-                2. Table Section: Table add Item (Reusable Component)
-               ───────────────────────────────────────────────────────────── */}
+            {/* 2. ตารางรายการสินค้าที่จะรับเข้า */}
             <div className="mb-6">
                 <MasterItemTable
                     items={items}
@@ -602,60 +504,44 @@ function ReceiveFormContent() {
                     showPrice
                     showLotSerial
                     showLocation
-                    title="Table add Item (รายการสินค้าที่จะรับเข้า)"
+                    title="รายการสินค้าที่จะรับเข้า (Receive Items)"
                     subtitle="เลือกสินค้าจาก Master Catalog เพื่อบันทึกการรับสินค้าเข้าคลัง"
                 />
             </div>
 
-            {/* ─────────────────────────────────────────────────────────────
-                3. Action Button Section
-               ───────────────────────────────────────────────────────────── */}
+            {/* 3. ปุ่มดำเนินการ (Actions) */}
             <div className="py-2 flex flex-col sm:flex-row sm:items-center justify-end gap-3">
-                <div className="flex items-end gap-3">
-                    {/* ปุ่มยกเลิก / ย้อนกลับ */}
+                <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
                     <Button
                         type="button"
                         variant="outline"
                         onClick={() => router.push('/transaction/receive')}
-                        className="px-4 py-2 text-sm rounded-xl border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        className="w-full sm:w-auto justify-center px-4 py-2 text-sm rounded-xl border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     >
                         ยกเลิก (Cancel)
                     </Button>
 
-                    {/* ปุ่มบันทึกฉบับร่าง */}
                     <Button
                         type="button"
                         variant="outline"
                         disabled={saving}
-                        hidden={statusCode !== 'DRAFT'}
+                        hidden={statusCode.toUpperCase() !== 'DRAFT'}
                         onClick={() => handleSubmit('Draft')}
-                        className="px-4 py-2 text-sm rounded-xl border-amber-300 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5"
+                        className="w-full sm:w-auto justify-center px-4 py-2 text-sm rounded-xl border-amber-300 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5"
                     >
                         <Save className="w-4 h-4" />
                         บันทึกฉบับร่าง (Save Draft)
                     </Button>
 
-                    {/* ปุ่มบันทึกรับสินค้า / ยืนยัน */}
                     <Button
                         type="button"
                         disabled={saving}
                         onClick={() => handleSubmit('Save')}
-                        className="px-5 py-2 text-sm font-semibold rounded-xl text-white bg-blue-600 hover:bg-blue-700 shadow-sm flex items-center gap-1.5"
+                        className="w-full sm:w-auto justify-center px-5 py-2 text-sm font-semibold rounded-xl text-white bg-blue-600 hover:bg-blue-700 shadow-sm flex items-center gap-1.5"
                     >
                         <FileCheck className="w-4 h-4" />
                         {saving ? 'กำลังบันทึก...' : isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกรับสินค้า (Save)'}
                     </Button>
-
-                    {/* <Button
-                        type="button"
-                        disabled={saving}
-                        hidden={statusCode === 'DRAFT'}
-                        onClick={() => handleSubmit('Complete')}
-                        className="px-5 py-2 text-sm font-semibold rounded-xl text-white bg-green-600 hover:bg-green-700 shadow-sm flex items-center gap-1.5"
-                    >
-                        <FileCheck className="w-4 h-4" />
-                        {saving ? 'กำลังบันทึก...' : 'ยืนยันเอกสาร'}
-                    </Button> */}
                 </div>
             </div>
         </AppLayout>

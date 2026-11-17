@@ -10,22 +10,32 @@ export interface InventoryListParams extends PaginationParams {
     serialNo?: string;
     status?: string;
 }
-export interface IssueInventoryList extends PaginationParams {
+
+export interface IssueInventoryList {
     id: string;
     itemId: string;
+    itemCode?: string;
     itemName: string;
-    lotNo: string;
-    serialNo: string;
+    lotNo?: string;
+    serialNo?: string;
     availableQty: number;
     itemPrice: number;
-    locationName: string;
-    uomName: string;
+    locationId?: string;
+    locationName?: string;
+    uomId?: string;
+    uomName?: string;
     mfgDate?: string;
     expireDate?: string;
-    warehouseName: string;
+    warehouseId?: string;
+    warehouseName?: string;
 }
 
-
+export interface IssueInventoryParams {
+    menuId?: string;
+    warehouseId: string;
+    docId?: string;
+    [key: string]: unknown;
+}
 
 export interface IssueInventoryResult {
     data?: IssueInventoryList[];
@@ -37,14 +47,12 @@ export interface IssueInventoryResult {
 }
 
 export const inventoryService = {
-    list: (p?: InventoryListParams) => {
-        return apiClient.post<InventoryView[]>(`/api/inventory/list`, p);
-    },
-    listAll: (p?: InventoryListParams) => {
-        return apiClient.post<InventoryView[]>(`/api/inventory/listAll`, p);
-    },
-    get: (id: string) => apiClient.get<InventoryView>(`/api/inventory/${id}`),
-    issueInventoryList: (data?: Record<string, unknown>) => {
-        return apiClient.post<IssueInventoryResult>(`/api/inventory/listForIssue`, data);
-    }
+    list: (p?: InventoryListParams) =>
+        apiClient.post<InventoryView[]>('/api/inventory/list', p),
+    listAll: (p?: InventoryListParams) =>
+        apiClient.post<InventoryView[]>('/api/inventory/listAll', p),
+    get: (id: string) =>
+        apiClient.get<InventoryView>(`/api/inventory/${id}`),
+    issueInventoryList: (data?: IssueInventoryParams) =>
+        apiClient.post<IssueInventoryResult>('/api/inventory/listForIssue', data),
 };

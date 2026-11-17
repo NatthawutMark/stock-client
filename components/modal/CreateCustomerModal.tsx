@@ -15,12 +15,12 @@ import {
 } from '@/components/ui/index';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { masterService } from '@/app/_services/master';
+import { extractErrorMessage } from '@/lib/utils';
 import type { MastCustomer } from '@/lib/types';
 import Swal from 'sweetalert2';
 
 interface CustomerFormData {
-    id?: string | number;
-    originalCustCode?: string;
+    id?: string;
     custCode: string;
     custName: string;
     contactName: string;
@@ -75,7 +75,6 @@ export function CreateCustomerModal({ open, onOpenChange, onSaved, dataEdit }: C
             if (dataEdit) {
                 setFormData({
                     id: dataEdit.id,
-                    originalCustCode: dataEdit.custCode || '',
                     custCode: dataEdit.custCode || '',
                     custName: dataEdit.custName || '',
                     contactName: dataEdit.contactName || '',
@@ -124,92 +123,61 @@ export function CreateCustomerModal({ open, onOpenChange, onSaved, dataEdit }: C
 
         setSaving(true);
         try {
-            if (isEditMode) {
-                // Update customer in C# stock-api (/api/MastCustomer/update)
-                const payload = {
-                    id: formData.id ? String(formData.id) : undefined,
-                    originalCustCode: formData.originalCustCode,
-                    custCode: formData.custCode.trim(),
-                    custName: formData.custName.trim(),
-                    contactName: formData.contactName.trim(),
-                    tel: formData.tel.trim(),
-                    address: formData.address.trim(),
-                    remark: formData.remark.trim(),
-                    isActive: formData.isActive,
-                };
+            const payload: Partial<MastCustomer> = {
+                id: isEditMode ? formData.id : undefined,
+                custCode: formData.custCode.trim(),
+                custName: formData.custName.trim(),
+                contactName: formData.contactName.trim(),
+                tel: formData.tel.trim(),
+                address: formData.address.trim(),
+                remark: formData.remark.trim(),
+                isActive: formData.isActive,
+            };
 
-                const res = await masterService.customers.update(payload);
+            const res = isEditMode
+                ? await masterService.customers.update(payload)
+                : await masterService.customers.create(payload);
 
-                if (res && res.success) {
+            if (res && res.success !== false) {
+                onSaved();
+                if (andAddMore && !isEditMode) {
+                    resetForm();
+                    setAlertMessage({
+                        type: 'success',
+                        message: res.message || 'เพิ่มข้อมูลลูกค้าเรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
+                    });
+                } else {
                     await Swal.fire({
                         icon: 'success',
                         title: 'สำเร็จ',
-                        text: res.message || 'แก้ไขข้อมูลลูกค้าเรียบร้อยแล้ว',
+                        text:
+                            res.message ||
+                            (isEditMode ? 'แก้ไขข้อมูลลูกค้าเรียบร้อยแล้ว' : 'เพิ่มข้อมูลลูกค้าเรียบร้อยแล้ว'),
                         timer: 1500,
                         showConfirmButton: false,
                     });
-                    onSaved();
+                    resetForm();
                     onOpenChange(false);
+                }
+            } else {
+                const errMsg = extractErrorMessage(
+                    res,
+                    isEditMode ? 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลลูกค้า' : 'เกิดข้อผิดพลาดในการสร้างข้อมูลลูกค้า'
+                );
+                if (andAddMore) {
+                    setAlertMessage({ type: 'error', message: errMsg });
                 } else {
                     Swal.fire({
                         icon: 'error',
-                        title: 'แก้ไขไม่สำเร็จ',
-                        text: res?.error || res?.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลลูกค้า',
+                        title: isEditMode ? 'แก้ไขไม่สำเร็จ' : 'สร้างไม่สำเร็จ',
+                        text: errMsg,
                         confirmButtonColor: '#dc2626',
                     });
-                }
-            } else {
-                // Create customer in C# stock-api (/api/MastCustomer/create)
-                const payload = {
-                    custCode: formData.custCode.trim(),
-                    custName: formData.custName.trim(),
-                    contactName: formData.contactName.trim(),
-                    tel: formData.tel.trim(),
-                    address: formData.address.trim(),
-                    remark: formData.remark.trim(),
-                    isActive: formData.isActive,
-                };
-
-                const res = await masterService.customers.create(payload);
-
-                if (res && res.success) {
-                    onSaved();
-
-                    if (andAddMore) {
-                        resetForm();
-                        setAlertMessage({
-                            type: 'success',
-                            message: res.message || 'เพิ่มข้อมูลลูกค้าเรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
-                        });
-                    } else {
-                        await Swal.fire({
-                            icon: 'success',
-                            title: 'สำเร็จ',
-                            text: res.message || 'เพิ่มข้อมูลลูกค้าเรียบร้อยแล้ว',
-                            timer: 1500,
-                            showConfirmButton: false,
-                        });
-                        resetForm();
-                        onOpenChange(false);
-                    }
-                } else {
-                    const errMsg = res?.error || res?.message || 'เกิดข้อผิดพลาดในการสร้างข้อมูลลูกค้า';
-                    if (andAddMore) {
-                        setAlertMessage({ type: 'error', message: errMsg });
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'สร้างไม่สำเร็จ',
-                            text: errMsg,
-                            confirmButtonColor: '#dc2626',
-                        });
-                    }
                 }
             }
         } catch (error: unknown) {
             console.error('Customer save failed:', error);
-            const err = error as { response?: { data?: { message?: string; error?: string } }; message?: string };
-            const errMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้';
+            const errMsg = extractErrorMessage(error, 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้');
             if (andAddMore) {
                 setAlertMessage({ type: 'error', message: errMsg });
             } else {
@@ -232,9 +200,9 @@ export function CreateCustomerModal({ open, onOpenChange, onSaved, dataEdit }: C
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal={true}>
-            <DialogContent className="max-w-4xl sm:max-w-4xl">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
+            <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[min(56rem,calc(100vw-2rem))] p-4 sm:p-6 overflow-y-auto overscroll-contain">
+                <DialogHeader className="pr-8">
+                    <DialogTitle className="flex flex-wrap items-center gap-2 text-lg sm:text-xl">
                         <span>{isEditMode ? 'แก้ไขข้อมูลลูกค้า' : 'สร้างข้อมูลลูกค้าใหม่'}</span>
                         {isEditMode && formData.custCode && (
                             <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 font-normal">
@@ -276,23 +244,24 @@ export function CreateCustomerModal({ open, onOpenChange, onSaved, dataEdit }: C
 
                 {/* Form Fields */}
                 <div className="space-y-4 py-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         {/* รหัสลูกค้า */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 min-w-0">
                             <label className="block text-sm font-medium">
                                 รหัสลูกค้า (Customer Code) <span className="text-red-500">*</span>
                             </label>
                             <input
+                                disabled={isEditMode}
                                 type="text"
                                 value={formData.custCode}
                                 onChange={(e) => setFormData({ ...formData, custCode: e.target.value })}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                                 placeholder="เช่น CUST001"
                             />
                         </div>
 
                         {/* ชื่อลูกค้า */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 min-w-0">
                             <label className="block text-sm font-medium">
                                 ชื่อลูกค้า (Customer Name) <span className="text-red-500">*</span>
                             </label>
@@ -300,15 +269,15 @@ export function CreateCustomerModal({ open, onOpenChange, onSaved, dataEdit }: C
                                 type="text"
                                 value={formData.custName}
                                 onChange={(e) => setFormData({ ...formData, custName: e.target.value })}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none"
                                 placeholder="ชื่อบริษัท หรือ ชื่อ-นามสกุล"
                             />
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         {/* ชื่อผู้ติดต่อ */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 min-w-0">
                             <label className="block text-sm font-medium">
                                 ผู้ติดต่อ (Contact Name)
                             </label>
@@ -316,13 +285,13 @@ export function CreateCustomerModal({ open, onOpenChange, onSaved, dataEdit }: C
                                 type="text"
                                 value={formData.contactName}
                                 onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none"
                                 placeholder="ชื่อผู้ติดต่อหรือผู้ประสานงาน"
                             />
                         </div>
 
                         {/* เบอร์โทรศัพท์ */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 min-w-0">
                             <label className="block text-sm font-medium">
                                 เบอร์โทรศัพท์ (Telephone)
                             </label>
@@ -330,7 +299,7 @@ export function CreateCustomerModal({ open, onOpenChange, onSaved, dataEdit }: C
                                 type="tel"
                                 value={formData.tel}
                                 onChange={(e) => setFormData({ ...formData, tel: e.target.value })}
-                                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none"
+                                className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring/50 outline-none"
                                 placeholder="เช่น 02-123-4567, 089-999-9999"
                             />
                         </div>
@@ -379,8 +348,8 @@ export function CreateCustomerModal({ open, onOpenChange, onSaved, dataEdit }: C
                 </div>
 
                 {/* Footer Buttons */}
-                <DialogFooter className="gap-2 sm:gap-2">
-                    <Button variant="outline" onClick={handleClose} disabled={saving}>
+                <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                    <Button variant="outline" onClick={handleClose} disabled={saving} className="w-full sm:w-auto">
                         ยกเลิก
                     </Button>
                     {!isEditMode && (
@@ -388,7 +357,7 @@ export function CreateCustomerModal({ open, onOpenChange, onSaved, dataEdit }: C
                             type="button"
                             onClick={() => handleSave(true)}
                             disabled={saving}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
                             {saving ? 'กำลังบันทึก...' : 'บันทึกและเพิ่มอีก'}
                         </Button>
@@ -397,6 +366,7 @@ export function CreateCustomerModal({ open, onOpenChange, onSaved, dataEdit }: C
                         variant="default"
                         onClick={() => handleSave(false)}
                         disabled={saving}
+                        className="w-full sm:w-auto"
                     >
                         {saving ? 'กำลังบันทึก...' : isEditMode ? 'บันทึกการแก้ไข' : 'บันทึก'}
                     </Button>

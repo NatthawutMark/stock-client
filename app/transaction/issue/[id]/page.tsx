@@ -6,8 +6,9 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import { transactionService } from '@/app/_services/transaction';
-import type { DocIssue, DocIssueDetail, MastCustomer, MastWarehouse, MastDocType } from '@/lib/types';
-import { IssueItemTable, MasterItemTable, TransactionItem } from '@/components/transaction';
+import { extractList } from '@/lib/utils';
+import type { DocIssue, DocIssueDetail, MastCustomer, MastWarehouse, MastDocType, MastEmployee } from '@/lib/types';
+import { IssueItemTable, TransactionItem } from '@/components/transaction';
 import { Button, Card, CardContent, Label, renderStatusBadge } from '@/components/ui';
 import Swal from 'sweetalert2';
 import {
@@ -28,21 +29,10 @@ type EmployeeOption = { id: string | number; name: string };
 
 const MENU_ID = '85D356B7877647C49B61B71FB047E0B6';
 
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
 const toDateOnly = (raw?: string) =>
     raw && raw.length >= 10 ? raw.slice(0, 10) : new Date().toISOString().split('T')[0];
 
-function pickList<T>(res: { success?: boolean; results?: unknown; data?: unknown } | undefined): T[] {
-    if (res?.success) {
-        if (Array.isArray(res.results)) return res.results as T[];
-        if (Array.isArray(res.data)) return res.data as T[];
-    }
-    return [];
-}
-
-const toEmployeeOptions = (list: { id?: string | number; fName?: string; lName?: string }[]): EmployeeOption[] =>
+const toEmployeeOptions = (list: MastEmployee[]): EmployeeOption[] =>
     list.map((e) => ({
         id: e.id ?? '',
         name: `${e.fName || ''} ${e.lName || ''}`.trim(),
@@ -60,13 +50,11 @@ const toTransactionItem = (d: DocIssueDetail, index: number): TransactionItem =>
         uomId: d.uomId,
         uomName: d.uomName || 'ชิ้น',
         itemQty: qty,
-        pickingQty: pickingQty,
+        pickingQty,
         itemPrice: price,
         totalPrice: qty * price,
         lotNo: d.lotNo || '',
         serialNo: d.serialNo || '',
-        isLotNo: Boolean(d.isLotNo),
-        isSerialNo: Boolean(d.isSerialNo),
         locationId: d.locationId,
         locationName: d.locationName || '',
         remark: d.remark || '',
@@ -85,12 +73,14 @@ function InfoRow({
     alignTop?: boolean;
 }) {
     return (
-        <div className={`grid grid-cols-1 sm:grid-cols-[130px_1fr] gap-2 ${alignTop ? 'items-start' : 'items-center'}`}>
-            <Label className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 select-none">
-                <Icon className="w-3.5 h-3.5 text-blue-500" />
+        <div className={`grid grid-cols-1 sm:grid-cols-[130px_1fr] gap-1 sm:gap-2 min-w-0 ${alignTop ? 'items-start' : 'items-center'}`}>
+            <Label className="text-xs sm:text-sm font-semibold text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 select-none">
+                <Icon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                 {label}:
             </Label>
-            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{children}</span>
+            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 min-w-0 break-words">
+                {children}
+            </span>
         </div>
     );
 }
@@ -102,11 +92,9 @@ function IssueDetailContent() {
 
     const { setPageTitle } = useLayout();
 
-    // Document Header
     const [doc, setDoc] = useState<DocIssue | null>(null);
     const [items, setItems] = useState<TransactionItem[]>([]);
 
-    // Master Data
     const [customerList, setCustomerList] = useState<MastCustomer[]>([]);
     const [warehouseList, setWarehouseList] = useState<MastWarehouse[]>([]);
     const [employeeList, setEmployeeList] = useState<EmployeeOption[]>([]);
@@ -115,37 +103,28 @@ function IssueDetailContent() {
     const [loading, setLoading] = useState<boolean>(true);
     const [saving, setSaving] = useState<boolean>(false);
 
-    // ─────────────────────────────────────────────────────────────
-    // 1. ตั้งชื่อหัวข้อหน้า
-    // ─────────────────────────────────────────────────────────────
     useEffect(() => {
         setPageTitle('รายละเอียดใบเบิกสินค้า (Goods Issue Detail)');
     }, [setPageTitle]);
 
-    // ─────────────────────────────────────────────────────────────
-    // 2. โหลด Master Data (Customer, Warehouse, Employee, DocType)
-    // ─────────────────────────────────────────────────────────────
+    // โหลดข้อมูล Master ทั้งหมดพร้อมกัน
     useEffect(() => {
         const loadMasters = async () => {
             try {
-                const [custRes, whRes, dTypeRes] = await Promise.all([
+                const [custRes, whRes, dTypeRes, empRes] = await Promise.all([
                     masterService.customers.list(),
                     masterService.warehouses.list(),
                     masterService.docTypes.list({ menuId: MENU_ID }),
+                    masterService.employees.list(),
                 ]);
-                setCustomerList(pickList(custRes));
-                setWarehouseList(pickList(whRes));
-                setDocTypeList(pickList(dTypeRes));
+                setCustomerList(extractList<MastCustomer>(custRes));
+                setWarehouseList(extractList<MastWarehouse>(whRes));
+                setDocTypeList(extractList<MastDocType>(dTypeRes));
+                setEmployeeList(toEmployeeOptions(extractList<MastEmployee>(empRes)));
             } catch {
                 setCustomerList([]);
                 setWarehouseList([]);
                 setDocTypeList([]);
-            }
-
-            try {
-                const empRes = await masterService.employees.list();
-                setEmployeeList(toEmployeeOptions(pickList(empRes)));
-            } catch {
                 setEmployeeList([]);
             }
         };
@@ -153,9 +132,7 @@ function IssueDetailContent() {
         loadMasters();
     }, []);
 
-    // ─────────────────────────────────────────────────────────────
-    // 3. โหลดข้อมูลเอกสาร
-    // ─────────────────────────────────────────────────────────────
+    // โหลดข้อมูลเอกสารใบเบิกสินค้า
     useEffect(() => {
         if (!docId) return;
 
@@ -167,7 +144,7 @@ function IssueDetailContent() {
                 try {
                     const res = await transactionService.issue.get(docId);
                     if (res?.success && (res.results || res.data)) {
-                        foundDoc = (res.results || res.data) as (DocIssue & { details?: DocIssueDetail[] });
+                        foundDoc = (res.results || res.data) as DocIssue & { details?: DocIssueDetail[] };
                     }
                 } catch (err) {
                     console.error('Fetch issue document failed:', err);
@@ -193,9 +170,6 @@ function IssueDetailContent() {
         loadDoc();
     }, [docId, router]);
 
-    // ─────────────────────────────────────────────────────────────
-    // ค่าที่ใช้แสดงผล (อิงตาม DocIssue ใน lib/types/index.ts)
-    // ─────────────────────────────────────────────────────────────
     const docNo = doc?.docNo || '';
     const docDate = doc ? toDateOnly(doc.docDate) : '';
     const refDocNo = doc?.refDocNo || '';
@@ -206,6 +180,7 @@ function IssueDetailContent() {
     const warehouseId = String(doc?.warehouseId || '');
     const docTypeId = String(doc?.docTypeId || '');
     const statusCode = String(doc?.statusCode || doc?.statusName || 'Draft');
+    const normalizedStatus = statusCode.toUpperCase();
 
     const customerDisplayName = useMemo(() => {
         const cust = customerList.find((c) => String(c.id) === customerId);
@@ -248,9 +223,7 @@ function IssueDetailContent() {
                 html: 'โปรดรอสักครู่...',
                 allowOutsideClick: false,
                 allowEscapeKey: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                },
+                didOpen: () => Swal.showLoading(),
             });
 
             await transactionService.issue.confirm(docId);
@@ -287,6 +260,7 @@ function IssueDetailContent() {
         });
 
         if (!result.isConfirmed) return;
+
         setSaving(true);
         try {
             Swal.fire({
@@ -294,13 +268,18 @@ function IssueDetailContent() {
                 html: 'โปรดรอสักครู่...',
                 allowOutsideClick: false,
                 allowEscapeKey: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                },
+                didOpen: () => Swal.showLoading(),
             });
 
             await transactionService.issue.picking(docId);
             setDoc((prev) => (prev ? { ...prev, statusCode: 'COMPLETED' } : null));
+
+            // โหลดรายละเอียดเอกสารใหม่เพื่ออัปเดตตัวเลขจำนวนที่เบิกแล้ว (pickingQty)
+            const refreshed = await transactionService.issue.get(docId);
+            const updatedDoc = refreshed?.results || refreshed?.data;
+            if (updatedDoc?.details) {
+                setItems(updatedDoc.details.map(toTransactionItem));
+            }
 
             await Swal.fire({
                 icon: 'success',
@@ -332,49 +311,35 @@ function IssueDetailContent() {
         );
     }
 
-    const isLocked = ['CANCEL', 'CONFIRM', 'COMPLETED'].includes(statusCode.toUpperCase());
+    const isLocked = ['CANCEL', 'CANCELLED', 'CONFIRM', 'COMPLETE', 'COMPLETED'].includes(normalizedStatus);
 
     return (
         <AppLayout>
-            {/* Top Navigation & Breadcrumb */}
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    {/* <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => router.push('/transaction/issue')}
-                        className="h-9 px-3 rounded-xl border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                    >
-                        <ArrowLeft className="w-4 h-4 mr-1.5" />
-                        กลับหน้ารายการ
-                    </Button> */}
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
-                            <span className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400">
-                                <FileText className="w-5 h-5" />
-                            </span>
-                            รายละเอียดใบเบิกสินค้า (Goods Issue Detail)
-                        </h1>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-mono">
-                            เลขที่เอกสาร: {docNo || `#${docId}`}
-                        </p>
-                    </div>
+            {/* ส่วนหัวหน้าจอ */}
+            <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
+                        <span className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shrink-0">
+                            <FileText className="w-5 h-5" />
+                        </span>
+                        รายละเอียดใบเบิกสินค้า (Goods Issue Detail)
+                    </h1>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 font-mono">
+                        เลขที่เอกสาร: {docNo || `#${docId}`}
+                    </p>
                 </div>
 
-                {/* Status Badge */}
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <span className="text-xs text-zinc-400">สถานะ:</span>
                     {renderStatusBadge(statusCode)}
                 </div>
             </div>
 
-            {/* ─────────────────────────────────────────────────────────────
-                1. Form Header Section (View Only)
-               ───────────────────────────────────────────────────────────── */}
+            {/* 1. ข้อมูลส่วนหัวเอกสาร (View Only) */}
             <Card className="mb-6 border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden">
-                <div className="px-6 py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 flex items-center justify-between">
+                <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                         <span className="font-semibold text-sm text-zinc-800 dark:text-zinc-200">
                             ข้อมูลส่วนหัวเอกสาร (Document Header)
                         </span>
@@ -382,10 +347,9 @@ function IssueDetailContent() {
                     <span className="text-xs font-mono text-zinc-400">ID: {docId}</span>
                 </div>
 
-                <CardContent className="p-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* ฝั่งซ้าย (Left Column) */}
-                        <div className="space-y-4">
+                <CardContent className="p-4 sm:p-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-8">
+                        <div className="space-y-3 sm:space-y-4 min-w-0">
                             <InfoRow icon={Calendar} label="วันที่เอกสาร">
                                 {docDate || '-'}
                             </InfoRow>
@@ -400,8 +364,7 @@ function IssueDetailContent() {
                             </InfoRow>
                         </div>
 
-                        {/* ฝั่งขวา (Right Column) */}
-                        <div className="space-y-4">
+                        <div className="space-y-3 sm:space-y-4 min-w-0">
                             <InfoRow icon={User} label="ลูกค้า / ผู้เบิก">
                                 {customerDisplayName}
                             </InfoRow>
@@ -419,9 +382,7 @@ function IssueDetailContent() {
                 </CardContent>
             </Card>
 
-            {/* ─────────────────────────────────────────────────────────────
-                2. Table Section: รายการสินค้าที่เบิกจ่าย (Read Only)
-               ───────────────────────────────────────────────────────────── */}
+            {/* 2. ตารางรายการสินค้าที่เบิกจ่าย (Read Only) */}
             <div className="mb-6">
                 <IssueItemTable
                     items={items}
@@ -437,56 +398,51 @@ function IssueDetailContent() {
                 />
             </div>
 
-            {/* ─────────────────────────────────────────────────────────────
-                3. Action Button Section
-               ───────────────────────────────────────────────────────────── */}
-            <div className="py-2 flex flex-col sm:flex-row sm:items-center justify-end gap-3">
+            {/* 3. ปุ่มดำเนินการ (Action Buttons) */}
+            <div className="py-2 flex flex-col-reverse sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-end gap-2 sm:gap-3">
                 <Button
                     type="button"
                     variant="outline"
                     onClick={() => router.push('/transaction/issue')}
-                    className="px-4 py-2 text-sm rounded-xl border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    className="w-full sm:w-auto justify-center px-4 py-2 text-sm rounded-xl border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 >
                     ย้อนกลับ
                 </Button>
 
-                <div className="flex items-center gap-3">
-                    {!isLocked && (
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => router.push(`/transaction/issue/form?id=${docId}`)}
-                            className="px-4 py-2 text-sm rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 flex items-center gap-1.5"
-                        >
-                            <Pencil className="w-4 h-4" />
-                            แก้ไขเอกสาร
-                        </Button>
-                    )}
+                {!isLocked && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push(`/transaction/issue/form?id=${docId}`)}
+                        className="w-full sm:w-auto justify-center px-4 py-2 text-sm rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 flex items-center gap-1.5"
+                    >
+                        <Pencil className="w-4 h-4" />
+                        แก้ไขเอกสาร
+                    </Button>
+                )}
 
-                    {!isLocked && (
-                        <Button
-                            type="button"
-                            disabled={saving}
-                            onClick={handleConfirm}
-                            className="px-5 py-2 text-sm font-semibold rounded-xl text-white bg-blue-600 hover:bg-blue-700 shadow-sm flex items-center gap-1.5"
-                        >
-                            <FileCheck className="w-4 h-4" />
-                            {saving ? 'กำลังบันทึก...' : 'ยืนยันการเบิกสินค้า'}
-                        </Button>
-                    )}
-
-                    {/* ปุ่มบันทึกรับสินค้า / จ่ายสินค้าออกคลัง */}
+                {!isLocked && normalizedStatus !== 'DRAFT' && (
                     <Button
                         type="button"
                         disabled={saving}
-                        hidden={['DRAFT', 'SAVE', 'CANCEL', 'COMPLETED'].includes(statusCode.toUpperCase())}
-                        onClick={handlePicking}
-                        className="px-5 py-2 text-sm font-semibold rounded-xl text-white bg-green-600 hover:bg-green-700 shadow-sm flex items-center gap-1.5"
+                        onClick={handleConfirm}
+                        className="w-full sm:w-auto justify-center px-5 py-2 text-sm font-semibold rounded-xl text-white bg-blue-600 hover:bg-blue-700 shadow-sm flex items-center gap-1.5"
                     >
                         <FileCheck className="w-4 h-4" />
-                        {saving ? 'กำลังยืนยัน...' : 'จ่ายสินค้าออกคลัง'}
+                        {saving ? 'กำลังบันทึก...' : 'ยืนยันการเบิกสินค้า'}
                     </Button>
-                </div>
+                )}
+
+                <Button
+                    type="button"
+                    disabled={saving}
+                    hidden={['DRAFT', 'SAVE', 'CANCEL', 'CANCELLED', 'COMPLETE', 'COMPLETED'].includes(normalizedStatus)}
+                    onClick={handlePicking}
+                    className="w-full sm:w-auto justify-center px-5 py-2 text-sm font-semibold rounded-xl text-white bg-green-600 hover:bg-green-700 shadow-sm flex items-center gap-1.5"
+                >
+                    <FileCheck className="w-4 h-4" />
+                    {saving ? 'กำลังยืนยัน...' : 'จ่ายสินค้าออกคลัง'}
+                </Button>
             </div>
         </AppLayout>
     );
@@ -507,4 +463,3 @@ export default function IssueDetailPage() {
         </Suspense>
     );
 }
-

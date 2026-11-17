@@ -46,18 +46,19 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 transition-colors" style={{ background: 'var(--bg)' }}>
+        <div className="min-h-dvh relative flex items-center justify-center px-4 pt-16 pb-8 sm:py-4 transition-colors" style={{ background: 'var(--bg)' }}>
             {/* Settings toggles */}
-            <div className="absolute top-4 right-4 flex gap-2">
+            <div className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 flex gap-2">
                 <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
                     {(['th', 'en'] as const).map(l => (
                         <button
                             key={l}
+                            type="button"
                             onClick={() => setLang(l)}
-                            className="px-3 py-1 text-xs font-medium transition-colors"
+                            className="px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
                             style={{
                                 background: lang === l ? 'var(--accent)' : 'var(--bg-card)',
-                                color: lang === l ? '#fff' : 'var(--text-secondary)',
+                                color: lang === l ? 'var(--foreground)' : 'var(--text-secondary)',
                             }}
                         >
                             {l.toUpperCase()}
@@ -65,23 +66,25 @@ export default function LoginPage() {
                     ))}
                 </div>
                 <button
+                    type="button"
                     onClick={toggleTheme}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors"
+                    className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border transition-colors cursor-pointer"
                     style={{ background: 'var(--bg-card)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
                 >
                     {theme === 'dark' ? '☀️' : '🌙'}
                 </button>
             </div>
 
             <div className="w-full max-w-md rounded-2xl shadow-xl overflow-hidden border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
-                <div className="p-8">
-                    <div className="text-center mb-8">
-                        <div className="text-5xl mb-4">📦</div>
-                        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>WMS</h1>
+                <div className="p-5 sm:p-8">
+                    <div className="text-center mb-6 sm:mb-8">
+                        <div className="text-5xl mb-3 sm:mb-4">📦</div>
+                        <h1 className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>WMS</h1>
                         <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{t.auth.systemName}</p>
                     </div>
 
-                    <form onSubmit={handleLogin} className="space-y-5">
+                    <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
                         <div>
                             <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-primary)' }}>
                                 {t.auth.username}
@@ -115,7 +118,7 @@ export default function LoginPage() {
                                 {error}
                             </div>
                         )}
-                        <Button type='submit' disabled={loading} variant='default' className='w-full' size='icon'>
+                        <Button type='submit' disabled={loading} variant='default' className='w-full h-11 text-sm font-medium cursor-pointer' size='lg'>
                             {loading ? t.common.loading : t.auth.loginButton}
                         </Button>
                     </form>

@@ -178,11 +178,33 @@ body {
         @apply border-border outline-ring/50;
     }
 
+    html {
+        @apply font-sans overflow-x-clip;
+    }
+
     body {
         @apply bg-background text-foreground;
     }
 
-    html {
-        @apply font-sans;
+    h1,
+    h2 {
+        text-wrap: balance;
+    }
+
+    /* ป้องกันการเลื่อนทะลุไปยังหน้าจอด้านหลังเมื่อเปิด Dialog / Navigation Drawer */
+    dialog:modal,
+    [data-slot="dialog-content"] {
+        overscroll-behavior: contain;
+    }
+
+    /* เพิ่มขนาดขั้นต่ำสำหรับการแตะ (Touch Targets >= 44px) บนหน้าจอสัมผัส */
+    @media (pointer: coarse) {
+        [data-slot="button"]:not([data-compact="true"]),
+        [data-slot="pagination-link"],
+        input:not([type="checkbox"]):not([type="radio"]):not([data-compact="true"]),
+        select:not([data-compact="true"]),
+        textarea:not([data-compact="true"]) {
+            min-height: 44px;
+        }
     }
 }

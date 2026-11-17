@@ -189,10 +189,11 @@ export function SearchableSelect({
                         align="start"
                         side="bottom"
                         sideOffset={4}
+                        collisionPadding={8}
                         className="isolate z-50"
                     >
                         <PopoverPrimitive.Popup
-                            className="w-[var(--anchor-width)] min-w-[220px] max-h-[360px] flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-2xl overflow-hidden duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+                            className="w-[var(--anchor-width)] min-w-[min(220px,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] max-h-[min(360px,50dvh)] overscroll-contain flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-2xl overflow-hidden duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
                         >
                             {/* Search Input Box */}
                             <div className="p-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 shrink-0">
@@ -201,6 +202,7 @@ export function SearchableSelect({
                                     <input
                                         ref={inputRef}
                                         type="text"
+                                        data-compact="true"
                                         value={searchQuery}
                                         onChange={(e) => {
                                             setSearchQuery(e.target.value);
@@ -225,7 +227,7 @@ export function SearchableSelect({
                             {/* Options List */}
                             <ul
                                 ref={listRef}
-                                className="max-h-60 overflow-y-auto p-1 text-sm focus:outline-none"
+                                className="max-h-[min(15rem,38dvh)] overflow-y-auto overscroll-contain p-1 text-sm focus:outline-none"
                             >
                                 {clearable && (
                                     <li

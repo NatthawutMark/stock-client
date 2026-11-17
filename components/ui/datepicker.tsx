@@ -66,7 +66,6 @@ export function DatePicker({
     id,
 }: DatePickerProps) {
     const [open, setOpen] = React.useState(false);
-    // const [isRequire, setIsrequire] = React.useState<boolean>(false)
     const selectedDate = React.useMemo(() => parseDateValue(value), [value]);
 
     const handleSelect = (date?: Date) => {
@@ -122,9 +121,10 @@ export function DatePicker({
                 )}
             </PopoverTrigger>
             <PopoverContent
-                className="w-auto p-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl"
+                className="w-auto max-w-[calc(100vw-1rem)] overflow-x-auto p-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl"
                 align="start"
                 sideOffset={6}
+                collisionPadding={8}
             >
                 <Calendar
                     mode="single"

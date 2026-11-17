@@ -15,11 +15,12 @@ import {
 } from '@/components/ui/index';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { masterService } from '@/app/_services/master';
+import { extractErrorMessage } from '@/lib/utils';
 import type { MastBrand } from '@/lib/types';
 import Swal from 'sweetalert2';
 
 interface BrandFormData {
-    id?: string | number;
+    id?: string;
     nameTh: string;
     nameEn: string;
     isActive: boolean;
@@ -98,79 +99,56 @@ export function CreateBrandModal({ open, onOpenChange, onSaved, dataEdit }: Crea
 
         setSaving(true);
         try {
-            if (isEditMode) {
-                const payload = {
-                    id: formData.id ? String(formData.id) : undefined,
-                    nameTh: formData.nameTh.trim(),
-                    nameEn: formData.nameEn.trim(),
-                    isActive: formData.isActive,
-                };
+            const payload: Partial<MastBrand> = {
+                id: isEditMode ? formData.id : undefined,
+                nameTh: formData.nameTh.trim(),
+                nameEn: formData.nameEn.trim(),
+                isActive: formData.isActive,
+            };
 
-                const res = await masterService.brands.update(payload);
+            const res = isEditMode
+                ? await masterService.brands.update(payload)
+                : await masterService.brands.create(payload);
 
-                if (res && res.success) {
+            if (res && res.success !== false) {
+                onSaved();
+                if (andAddMore && !isEditMode) {
+                    resetForm();
+                    setAlertMessage({
+                        type: 'success',
+                        message: res.message || 'เพิ่มแบรนด์ใหม่เรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
+                    });
+                } else {
                     await Swal.fire({
                         icon: 'success',
                         title: 'สำเร็จ',
-                        text: res.message || 'แก้ไขข้อมูลแบรนด์เรียบร้อยแล้ว',
+                        text:
+                            res.message ||
+                            (isEditMode ? 'แก้ไขข้อมูลแบรนด์เรียบร้อยแล้ว' : 'เพิ่มแบรนด์ใหม่เรียบร้อยแล้ว'),
                         timer: 1500,
                         showConfirmButton: false,
                     });
-                    onSaved();
                     onOpenChange(false);
+                }
+            } else {
+                const errMsg = extractErrorMessage(
+                    res,
+                    isEditMode ? 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลแบรนด์' : 'เกิดข้อผิดพลาดในการเพิ่มแบรนด์'
+                );
+                if (andAddMore) {
+                    setAlertMessage({ type: 'error', message: errMsg });
                 } else {
                     Swal.fire({
                         icon: 'error',
-                        title: 'แก้ไขไม่สำเร็จ',
-                        text: res?.error || res?.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลแบรนด์',
+                        title: isEditMode ? 'แก้ไขไม่สำเร็จ' : 'เพิ่มไม่สำเร็จ',
+                        text: errMsg,
                         confirmButtonColor: '#dc2626',
                     });
-                }
-            } else {
-                const payload = {
-                    nameTh: formData.nameTh.trim(),
-                    nameEn: formData.nameEn.trim(),
-                    isActive: formData.isActive,
-                };
-
-                const res = await masterService.brands.create(payload);
-
-                if (res && res.success) {
-                    onSaved();
-                    if (andAddMore) {
-                        resetForm();
-                        setAlertMessage({
-                            type: 'success',
-                            message: res.message || 'เพิ่มแบรนด์ใหม่เรียบร้อยแล้ว สามารถกรอกรายการถัดไปได้ทันที',
-                        });
-                    } else {
-                        await Swal.fire({
-                            icon: 'success',
-                            title: 'สำเร็จ',
-                            text: res.message || 'เพิ่มแบรนด์ใหม่เรียบร้อยแล้ว',
-                            timer: 1500,
-                            showConfirmButton: false,
-                        });
-                        onOpenChange(false);
-                    }
-                } else {
-                    const errMsg = res?.error || res?.message || 'เกิดข้อผิดพลาดในการเพิ่มแบรนด์';
-                    if (andAddMore) {
-                        setAlertMessage({ type: 'error', message: errMsg });
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'เพิ่มไม่สำเร็จ',
-                            text: errMsg,
-                            confirmButtonColor: '#dc2626',
-                        });
-                    }
                 }
             }
         } catch (error: unknown) {
             console.error('Save brand failed:', error);
-            const err = error as { message?: string };
-            const errMsg = err.message || 'ไม่สามารถบันทึกข้อมูลได้';
+            const errMsg = extractErrorMessage(error, 'ไม่สามารถบันทึกข้อมูลได้');
             if (andAddMore) {
                 setAlertMessage({ type: 'error', message: errMsg });
             } else {
@@ -188,9 +166,9 @@ export function CreateBrandModal({ open, onOpenChange, onSaved, dataEdit }: Crea
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal={true}>
-            <DialogContent className="max-w-lg sm:max-w-lg w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl p-6">
-                <DialogHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4">
-                    <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+            <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-lg w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl p-4 sm:p-6 overflow-y-auto overscroll-contain">
+                <DialogHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4 pr-8">
+                    <DialogTitle className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
                         {isEditMode ? 'แก้ไขข้อมูลแบรนด์ / ยี่ห้อ' : 'เพิ่มแบรนด์ใหม่ (New Brand)'}
                     </DialogTitle>
                     <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
@@ -282,7 +260,7 @@ export function CreateBrandModal({ open, onOpenChange, onSaved, dataEdit }: Crea
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                         disabled={saving}
-                        className="rounded-xl px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        className="w-full sm:w-auto rounded-xl px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     >
                         ยกเลิก
                     </Button>
@@ -291,7 +269,7 @@ export function CreateBrandModal({ open, onOpenChange, onSaved, dataEdit }: Crea
                             type="button"
                             onClick={() => handleSave(true)}
                             disabled={saving}
-                            className="rounded-xl px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="w-full sm:w-auto rounded-xl px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
                             {saving ? 'กำลังบันทึก...' : 'บันทึกและเพิ่มอีก'}
                         </Button>
@@ -300,7 +278,7 @@ export function CreateBrandModal({ open, onOpenChange, onSaved, dataEdit }: Crea
                         type="button"
                         onClick={() => handleSave(false)}
                         disabled={saving}
-                        className="rounded-xl px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                        className="w-full sm:w-auto rounded-xl px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
                     >
                         {saving ? 'กำลังบันทึก...' : isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูล'}
                     </Button>

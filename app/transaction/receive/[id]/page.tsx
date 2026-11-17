@@ -6,7 +6,8 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useLayout } from '@/app/providers';
 import { masterService } from '@/app/_services/master';
 import { transactionService } from '@/app/_services/transaction';
-import type { DocReceive, DocReceiveDetail, MastVendor, MastWarehouse } from '@/lib/types';
+import { extractList } from '@/lib/utils';
+import type { DocReceive, DocReceiveDetail, MastVendor, MastWarehouse, MastEmployee } from '@/lib/types';
 import { MasterItemTable, TransactionItem } from '@/components/transaction';
 import { Button, Card, CardContent, Label, renderStatusBadge } from '@/components/ui';
 import Swal from 'sweetalert2';
@@ -26,21 +27,10 @@ import {
 
 type EmployeeOption = { id: string | number; name: string };
 
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
 const toDateOnly = (raw?: string) =>
     raw && raw.length >= 10 ? raw.slice(0, 10) : new Date().toISOString().split('T')[0];
 
-function pickList<T>(res: { success?: boolean; results?: unknown; data?: unknown } | undefined): T[] {
-    if (res?.success) {
-        if (Array.isArray(res.results)) return res.results as T[];
-        if (Array.isArray(res.data)) return res.data as T[];
-    }
-    return [];
-}
-
-const toEmployeeOptions = (list: { id?: string | number; fName?: string; lName?: string }[]): EmployeeOption[] =>
+const toEmployeeOptions = (list: MastEmployee[]): EmployeeOption[] =>
     list.map((e) => ({
         id: e.id ?? '',
         name: `${e.fName || ''} ${e.lName || ''}`.trim(),
@@ -68,7 +58,6 @@ const toTransactionItem = (d: DocReceiveDetail, index: number): TransactionItem 
     };
 };
 
-// แถวแสดงข้อมูล Label : Value
 function InfoRow({
     icon: Icon,
     label,
@@ -81,12 +70,14 @@ function InfoRow({
     alignTop?: boolean;
 }) {
     return (
-        <div className={`grid grid-cols-1 sm:grid-cols-[130px_1fr] gap-2 ${alignTop ? 'items-start' : 'items-center'}`}>
-            <Label className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 select-none">
-                <Icon className="w-3.5 h-3.5 text-blue-500" />
+        <div className={`grid grid-cols-1 sm:grid-cols-[130px_1fr] gap-1 sm:gap-2 min-w-0 ${alignTop ? 'items-start' : 'items-center'}`}>
+            <Label className="text-xs sm:text-sm font-semibold text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 select-none">
+                <Icon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                 {label}:
             </Label>
-            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{children}</span>
+            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 min-w-0 break-words">
+                {children}
+            </span>
         </div>
     );
 }
@@ -98,11 +89,9 @@ function ReceiveDetailContent() {
 
     const { setPageTitle } = useLayout();
 
-    // Document Header
     const [doc, setDoc] = useState<DocReceive | null>(null);
     const [items, setItems] = useState<TransactionItem[]>([]);
 
-    // Master Data
     const [vendorList, setVendorList] = useState<MastVendor[]>([]);
     const [warehouseList, setWarehouseList] = useState<MastWarehouse[]>([]);
     const [employeeList, setEmployeeList] = useState<EmployeeOption[]>([]);
@@ -110,34 +99,24 @@ function ReceiveDetailContent() {
     const [loading, setLoading] = useState<boolean>(true);
     const [saving, setSaving] = useState<boolean>(false);
 
-    // ─────────────────────────────────────────────────────────────
-    // 1. ตั้งชื่อหัวข้อหน้า
-    // ─────────────────────────────────────────────────────────────
     useEffect(() => {
         setPageTitle('รายละเอียดใบรับสินค้า (Goods Receive Detail)');
     }, [setPageTitle]);
 
-    // ─────────────────────────────────────────────────────────────
-    // 2. โหลด Master Data (Vendor, Warehouse, Employee)
-    // ─────────────────────────────────────────────────────────────
     useEffect(() => {
         const loadMasters = async () => {
             try {
-                const [vendRes, whRes] = await Promise.all([
+                const [vendRes, whRes, empRes] = await Promise.all([
                     masterService.vendors.list(),
                     masterService.warehouses.list(),
+                    masterService.employees.list(),
                 ]);
-                setVendorList(pickList(vendRes));
-                setWarehouseList(pickList(whRes));
+                setVendorList(extractList<MastVendor>(vendRes));
+                setWarehouseList(extractList<MastWarehouse>(whRes));
+                setEmployeeList(toEmployeeOptions(extractList<MastEmployee>(empRes)));
             } catch {
                 setVendorList([]);
                 setWarehouseList([]);
-            }
-
-            try {
-                const empRes = await masterService.employees.list();
-                setEmployeeList(toEmployeeOptions(pickList(empRes)));
-            } catch {
                 setEmployeeList([]);
             }
         };
@@ -145,9 +124,6 @@ function ReceiveDetailContent() {
         loadMasters();
     }, []);
 
-    // ─────────────────────────────────────────────────────────────
-    // 3. โหลดข้อมูลเอกสาร
-    // ─────────────────────────────────────────────────────────────
     useEffect(() => {
         if (!docId) return;
 
@@ -158,7 +134,9 @@ function ReceiveDetailContent() {
                 let foundDoc: DocReceive | undefined;
                 try {
                     const res = await transactionService.receive.get(docId);
-                    if (res?.success && res.results) foundDoc = res.results;
+                    if (res?.success && (res.results || res.data)) {
+                        foundDoc = res.results || res.data;
+                    }
                 } catch (err) {
                     console.error('Fetch receive document failed:', err);
                 }
@@ -183,9 +161,6 @@ function ReceiveDetailContent() {
         loadDoc();
     }, [docId, router]);
 
-    // ─────────────────────────────────────────────────────────────
-    // ค่าที่ใช้แสดงผล
-    // ─────────────────────────────────────────────────────────────
     const docNo = doc?.docNo || '';
     const docDate = doc ? toDateOnly(doc.docDate) : '';
     const docNoRef = doc?.refDocNo || '';
@@ -194,24 +169,25 @@ function ReceiveDetailContent() {
     const employeeId = String(doc?.empId || '');
     const warehouseId = String(doc?.warehouseId || '');
     const statusCode = String(doc?.statusCode || doc?.statusName || 'Draft');
+    const normalizedStatus = statusCode.toUpperCase();
 
     const vendorDisplayName = useMemo(() => {
         const vend = vendorList.find((v) => String(v.id) === vendorId);
-        if (!vend) return vendorId || '-';
+        if (!vend) return doc?.vendName || vendorId || '-';
         return vend.vendCode ? `[${vend.vendCode}] ${vend.vendName}` : vend.vendName;
-    }, [vendorList, vendorId]);
+    }, [vendorList, vendorId, doc?.vendName]);
 
     const warehouseDisplayName = useMemo(() => {
         const wh = warehouseList.find((w) => String(w.id) === warehouseId);
-        return wh ? `${wh.warehouseName} (${wh.code})` : warehouseId || '-';
-    }, [warehouseList, warehouseId]);
+        return wh ? `${wh.warehouseName} (${wh.code})` : doc?.warehouseName || warehouseId || '-';
+    }, [warehouseList, warehouseId, doc?.warehouseName]);
 
     const employeeDisplayName = useMemo(() => {
         const emp = employeeList.find((e) => String(e.id) === employeeId || e.name === employeeId);
-        return emp?.name || employeeId || '-';
-    }, [employeeList, employeeId]);
+        return emp?.name || doc?.empName || employeeId || '-';
+    }, [employeeList, employeeId, doc?.empName]);
 
-    const handleSubmit = async (targetStatus: 'Draft' | 'Save' | 'Confirm' | 'Complete' | 'Putaway' = 'Save') => {
+    const handleSubmit = async (targetAction: 'Confirm' | 'Putaway') => {
         setSaving(true);
         try {
             Swal.fire({
@@ -219,13 +195,14 @@ function ReceiveDetailContent() {
                 html: 'โปรดรอสักครู่...',
                 allowOutsideClick: false,
                 allowEscapeKey: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                },
+                didOpen: () => Swal.showLoading(),
             });
 
-            if (targetStatus === 'Confirm') {
-                await transactionService.receive.confirm(docId);
+            if (targetAction === 'Confirm') {
+                const res = await transactionService.receive.confirm(docId);
+                if (res && res.success === false) {
+                    throw new Error(res.message || 'ไม่สามารถยืนยันเอกสารได้');
+                }
                 setDoc((prev) => (prev ? { ...prev, statusCode: 'CONFIRM' } : null));
 
                 await Swal.fire({
@@ -235,10 +212,19 @@ function ReceiveDetailContent() {
                     timer: 1800,
                     showConfirmButton: false,
                 });
-            }
-            else if (targetStatus === 'Putaway') {
-                await transactionService.receive.putaway(docId);
+            } else {
+                const res = await transactionService.receive.putaway(docId);
+                if (res && res.success === false) {
+                    throw new Error(res.message || 'ไม่สามารถนำสินค้าเข้าคลังได้');
+                }
                 setDoc((prev) => (prev ? { ...prev, statusCode: 'COMPLETE' } : null));
+
+                // โหลดรายละเอียดเอกสารใหม่เพื่ออัปเดตตัวเลขจำนวนที่รับเข้า (putawayQty)
+                const refreshed = await transactionService.receive.get(docId);
+                const updatedDoc = refreshed?.results || refreshed?.data;
+                if (updatedDoc?.details) {
+                    setItems(updatedDoc.details.map(toTransactionItem));
+                }
 
                 await Swal.fire({
                     icon: 'success',
@@ -248,15 +234,6 @@ function ReceiveDetailContent() {
                     showConfirmButton: false,
                 });
             }
-            else {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'เกิดข้อผิดพลาด',
-                    text: 'การทำงานของปุ่มทำงานไม่ถูกต้อง',
-                });
-            }
-
-
         } catch (error: unknown) {
             console.error('Save error:', error);
             const errMsg = error instanceof Error ? error.message : 'ไม่สามารถบันทึกข้อมูลเอกสารได้';
@@ -281,23 +258,25 @@ function ReceiveDetailContent() {
         );
     }
 
+    const isLocked = ['CONFIRM', 'COMPLETE', 'CANCEL', 'CANCELLED', 'COMPLETED'].includes(normalizedStatus);
+
     return (
         <AppLayout>
             {/* Page Header */}
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
-                        <span className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400">
+            <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
+                        <span className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shrink-0">
                             <FileText className="w-5 h-5" />
                         </span>
                         รายละเอียดใบรับสินค้า (Goods Receive Detail)
                     </h1>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                         เลขที่เอกสาร {docNo || '-'}
                     </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <span className="text-xs text-zinc-400">สถานะ:</span>
                     {renderStatusBadge(statusCode)}
                 </div>
@@ -305,27 +284,27 @@ function ReceiveDetailContent() {
 
             {/* Document Header */}
             <Card className="mb-6 border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden">
-                <div className="px-6 py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                     <span className="font-semibold text-sm text-zinc-800 dark:text-zinc-200">
                         ข้อมูลส่วนหัวเอกสาร (Document Header)
                     </span>
                 </div>
 
-                <CardContent className="p-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* ฝั่งซ้าย */}
-                        <div className="space-y-4">
+                <CardContent className="p-4 sm:p-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+                        <div className="space-y-3 sm:space-y-4 min-w-0">
                             <InfoRow icon={Hash} label="เลขที่เอกสาร">
-                                <span className="font-bold font-mono text-zinc-900 dark:text-zinc-100">{docNo || '-'}</span>
+                                <span className="font-bold font-mono text-zinc-900 dark:text-zinc-100">
+                                    {docNo || '-'}
+                                </span>
                             </InfoRow>
                             <InfoRow icon={Calendar} label="วันที่เอกสาร">{docDate || '-'}</InfoRow>
                             <InfoRow icon={User} label="พนักงาน">{employeeDisplayName}</InfoRow>
                             <InfoRow icon={Building2} label="คลังรับเข้า">{warehouseDisplayName}</InfoRow>
                         </div>
 
-                        {/* ฝั่งขวา */}
-                        <div className="space-y-4">
+                        <div className="space-y-3 sm:space-y-4 min-w-0">
                             <InfoRow icon={Truck} label="ผู้จำหน่าย">{vendorDisplayName}</InfoRow>
                             <InfoRow icon={FileText} label="เลขที่อ้างอิง">
                                 <span className="font-mono">{docNoRef || '-'}</span>
@@ -355,45 +334,43 @@ function ReceiveDetailContent() {
             </div>
 
             {/* Actions */}
-            <div className="py-2 flex items-center justify-end gap-3">
+            <div className="py-2 flex flex-col-reverse sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-end gap-2 sm:gap-3">
                 <Button
                     type="button"
                     variant="outline"
                     onClick={() => router.push('/transaction/receive')}
-                    className="px-4 py-2 text-sm rounded-xl border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    className="w-full sm:w-auto justify-center px-4 py-2 text-sm rounded-xl border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 >
                     ย้อนกลับ (Back)
                 </Button>
                 <Button
                     size="sm"
                     variant="outline"
-                    hidden={['CONFIRM', 'COMPLETE', 'CANCEL', 'COMPLETED'].includes(statusCode)}
+                    hidden={isLocked}
                     onClick={() => router.push(`/transaction/receive/form?id=${docId}`)}
-                    className="px-4 py-2 text-sm rounded-xl border-amber-300 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5"
+                    className="w-full sm:w-auto justify-center px-4 py-2 text-sm rounded-xl border-amber-300 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5"
                 >
                     <Pencil className="w-3.5 h-3.5" />
                     แก้ไขเอกสาร (Edit)
                 </Button>
 
-                {/* ปุ่มยืนยัน */}
                 <Button
                     type="button"
                     disabled={saving}
-                    hidden={['DRAFT', 'CONFIRM', 'COMPLETE', 'CANCEL', 'COMPLETED'].includes(statusCode)}
+                    hidden={['DRAFT', 'CONFIRM', 'COMPLETE', 'CANCEL', 'CANCELLED', 'COMPLETED'].includes(normalizedStatus)}
                     onClick={() => handleSubmit('Confirm')}
-                    className="px-5 py-2 text-sm font-semibold rounded-xl text-white bg-green-600 hover:bg-green-700 shadow-sm flex items-center gap-1.5"
+                    className="w-full sm:w-auto justify-center px-5 py-2 text-sm font-semibold rounded-xl text-white bg-green-600 hover:bg-green-700 shadow-sm flex items-center gap-1.5"
                 >
                     <FileCheck className="w-4 h-4" />
                     {saving ? 'กำลังยืนยัน...' : 'ยืนยันเอกสาร'}
                 </Button>
 
-                {/* ปุ่มบันทึกรับสินค้า*/}
                 <Button
                     type="button"
                     disabled={saving}
-                    hidden={['DRAFT', 'SAVE', 'COMPLETE', 'CANCEL', 'COMPLETED'].includes(statusCode)}
+                    hidden={['DRAFT', 'SAVE', 'COMPLETE', 'CANCEL', 'CANCELLED', 'COMPLETED'].includes(normalizedStatus)}
                     onClick={() => handleSubmit('Putaway')}
-                    className="px-5 py-2 text-sm font-semibold rounded-xl text-white bg-green-600 hover:bg-green-700 shadow-sm flex items-center gap-1.5"
+                    className="w-full sm:w-auto justify-center px-5 py-2 text-sm font-semibold rounded-xl text-white bg-green-600 hover:bg-green-700 shadow-sm flex items-center gap-1.5"
                 >
                     <FileCheck className="w-4 h-4" />
                     {saving ? 'กำลังยืนยัน...' : 'รับเข้าคลัง'}
