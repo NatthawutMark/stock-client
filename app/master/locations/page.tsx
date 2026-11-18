@@ -216,7 +216,7 @@ export default function LocationsPage() {
                     setIsPrintModalOpen(true);
                 }}
                 className="h-8 px-2.5 rounded-lg border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
-                title="พิมพ์ QR พิกัด (PDF Zebra)"
+                title="พิมพ์ / บันทึก PDF QR พิกัด"
             >
                 <QrCode className="w-3.5 h-3.5 mr-1" />
                 QR

@@ -1,4 +1,4 @@
-import type { InventoryView } from '@/lib/types';
+import { normalizeDateOnly, normalizeTrackValue } from './normalize';
 import type {
     DecodedQrResult,
     InventoryQrPayload,
@@ -6,29 +6,14 @@ import type {
     PrintableLabelItem,
 } from './types';
 
-/**
- * ปรับค่าฟิลด์ติดตามสินค้า (LotNo, SerialNo) ให้เป็นมาตรฐานเดียวกัน
- * กรณีไม่มีข้อมูล (null, undefined, "", "-") จะคืนค่าเป็น ""
- */
-export function normalizeTrackValue(value?: string | null): string {
-    if (value == null) return '';
-    const trimmed = String(value).trim();
-    if (!trimmed || trimmed === '-' || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined') {
-        return '';
-    }
-    return trimmed;
-}
-
-/**
- * ปรับรูปแบบวันที่ให้เหลือ YYYY-MM-DD และตัดค่าวันที่ว่างหรือค่าเริ่มต้น 0001-01-01 ทิ้ง
- */
-export function normalizeDateOnly(value?: string | null): string {
-    const clean = normalizeTrackValue(value);
-    if (!clean) return '';
-    const datePart = clean.length >= 10 ? clean.slice(0, 10) : clean;
-    if (datePart.startsWith('0001-') || datePart.startsWith('1900-01-01')) return '';
-    return datePart;
-}
+export { normalizeDateOnly, normalizeTrackValue } from './normalize';
+export {
+    matchInventoryRowsByQr,
+    matchRowsByDecodedQr,
+    matchLocationByQr,
+    formatQrDisplayLabel,
+    type MatchInventoryOptions,
+} from './matcher';
 
 /**
  * เข้ารหัสข้อมูลสินค้าเป็น JSON Payload แบบกระชับ
@@ -199,64 +184,4 @@ export function decodeQrString(raw: string): DecodedQrResult {
 
     // 4. รหัสข้อความธรรมดา (เช่น บาร์โค้ด 1D รหัสสินค้าหรือรหัสพิกัด)
     return { kind: 'RAW_TEXT', text: trimmed, raw };
-}
-
-/**
- * จับคู่รายการ Inventory จาก QRCode
- * รองรับทั้งกรณีมี invId และกรณีพิมพ์ตอน CONFIRM (ยังไม่มี invId) รวมถึงกรณีไม่มี Lot/Serial/Dates
- */
-export function matchInventoryRowsByQr(
-    qr: InventoryQrPayload,
-    inventoryList: InventoryView[]
-): InventoryView[] {
-    if (!inventoryList.length) return [];
-
-    // 1. ค้นหาตรงจาก invId (แม่นยำที่สุด)
-    const qrInvId = normalizeTrackValue(qr.invId);
-    if (qrInvId) {
-        const exactByInvId = inventoryList.filter((row) => String(row.id ?? '') === qrInvId);
-        if (exactByInvId.length > 0) return exactByInvId;
-    }
-
-    // 2. ค้นหาจาก itemId / itemCode + Lot + Serial (normalize ค่าว่างให้ "" === "")
-    const qrCode = normalizeTrackValue(qr.c).toLowerCase();
-    const qrItemId = normalizeTrackValue(qr.itemId);
-    const qrLot = normalizeTrackValue(qr.lot).toLowerCase();
-    const qrSn = normalizeTrackValue(qr.sn).toLowerCase();
-    const qrWh = normalizeTrackValue(qr.wh);
-    const qrLoc = normalizeTrackValue(qr.loc).toLowerCase();
-
-    const itemMatches = inventoryList.filter((row) => {
-        const rowItemId = normalizeTrackValue(row.itemId);
-        const rowCode = normalizeTrackValue(row.itemCode).toLowerCase();
-        const isSameItem =
-            (qrItemId && rowItemId === qrItemId) ||
-            (qrCode && rowCode === qrCode);
-        if (!isSameItem) return false;
-
-        const rowLot = normalizeTrackValue(row.lotNo).toLowerCase();
-        const rowSn = normalizeTrackValue(row.serialNo).toLowerCase();
-
-        // กรณีไม่มี Lot/SN ค่า normalize จะเป็น "" ทั้งคู่และจับคู่กันได้อย่างถูกต้อง
-        return rowLot === qrLot && rowSn === qrSn;
-    });
-
-    if (itemMatches.length <= 1) return itemMatches;
-
-    // 3. หากมีหลายตำแหน่งในคลัง ให้คัดกรองตามคลังและตำแหน่งตั้งต้นก่อน
-    const whFiltered = qrWh
-        ? itemMatches.filter((row) => normalizeTrackValue(row.warehouseId) === qrWh)
-        : itemMatches;
-    const pool = whFiltered.length > 0 ? whFiltered : itemMatches;
-
-    if (qrLoc) {
-        const locFiltered = pool.filter(
-            (row) =>
-                normalizeTrackValue(row.locationId).toLowerCase() === qrLoc ||
-                normalizeTrackValue(row.locationName).toLowerCase() === qrLoc
-        );
-        if (locFiltered.length > 0) return locFiltered;
-    }
-
-    return pool;
 }

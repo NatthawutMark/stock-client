@@ -47,13 +47,11 @@ import {
     Sparkles,
     RefreshCw,
     QrCode,
-    Camera,
 } from 'lucide-react';
-import { QrScannerModal, PrintQrcodeModel, LocationMoveModal } from '@/components/qrcode';
-import { matchInventoryRowsByQr, normalizeTrackValue } from '@/lib/qrcode/codec';
-import type { DecodedQrResult, PrintableLabelItem } from '@/lib/qrcode/types';
+import { QrScanButton, PrintQrcodeModel, LocationMoveModal } from '@/components/qrcode';
+import { matchLocationByQr, matchRowsByDecodedQr, normalizeTrackValue } from '@/lib/qrcode/codec';
+import type { DecodedQrResult, PrintableLabelItem, QrScanOutcome } from '@/lib/qrcode/types';
 import Swal from 'sweetalert2';
-import { log } from 'console';
 
 // ─────────────────────────────────────────────────────────────
 // Types & Constants
@@ -176,7 +174,6 @@ export default function InventoryPage() {
     const [totalRecords, setTotalRecords] = useState<number>(0);
 
     // QR Code Modals State
-    const [isQrScanOpen, setIsQrScanOpen] = useState<boolean>(false);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
     const [printItems, setPrintItems] = useState<PrintableLabelItem[]>([]);
     const [moveTargetItem, setMoveTargetItem] = useState<InventoryView | null>(null);
@@ -530,27 +527,26 @@ export default function InventoryPage() {
         setIsPrintModalOpen(true);
     };
 
-    const handleInventoryQrScanned = (decoded: DecodedQrResult) => {
+    const handleInventoryQrScanned = (decoded: DecodedQrResult): QrScanOutcome => {
         if (decoded.kind === 'LOC') {
-            const codeOrId = (decoded.payload.id || decoded.payload.code || '').trim().toLowerCase();
-            const foundLoc = locationList.find(
-                (l) =>
-                    String(l.id || '').toLowerCase() === codeOrId ||
-                    String(l.code || '').toLowerCase() === codeOrId
-            );
+            const foundLoc = matchLocationByQr(decoded, locationList);
             if (!foundLoc) {
-                Swal.fire({ icon: 'warning', title: 'ไม่พบพิกัดนี้ในระบบ', text: decoded.payload.code });
-                return;
+                return {
+                    status: 'error',
+                    title: 'ไม่พบพิกัดนี้ในระบบ',
+                    message: `ไม่พบตำแหน่ง "${decoded.payload.code || decoded.payload.id || '-'}"`,
+                    requireAcknowledge: true,
+                };
             }
             const locIdStr = String(foundLoc.id);
             setLocationIdInput(locIdStr);
             setAppliedFilters((prev) => ({ ...prev, locationId: locIdStr }));
             setCurrentPage(1);
-            return;
+            return true;
         }
 
         if (decoded.kind === 'INV') {
-            const matches = matchInventoryRowsByQr(decoded.payload, allInventoryList);
+            const matches = matchRowsByDecodedQr(decoded, allInventoryList);
             const kw = normalizeTrackValue(decoded.payload.c);
             const lot = normalizeTrackValue(decoded.payload.lot);
             const sn = normalizeTrackValue(decoded.payload.sn);
@@ -576,13 +572,13 @@ export default function InventoryPage() {
                     text: `รหัสสินค้า ${kw || '-'} อาจยังไม่ได้กดนำเข้าคลัง (Putaway) หรือสต็อกเป็น 0`,
                 });
             }
-            console.log('QR Scanned appliedFilters:', appliedFilters);
-            return;
+            return true;
         }
 
         setKeywordInput(decoded.text);
         setAppliedFilters((prev) => ({ ...prev, keyword: decoded.text }));
         setCurrentPage(1);
+        return true;
     };
 
     const renderStockBadge = (qty: number, minAlert = 5) => {
@@ -623,14 +619,16 @@ export default function InventoryPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-                    <Button
+                    <QrScanButton
+                        mode="all"
+                        onScan={handleInventoryQrScanned}
                         variant="outline"
-                        onClick={() => setIsQrScanOpen(true)}
+                        size="default"
+                        label="สแกน QR ค้นหา"
+                        title="สแกน QRCode ค้นหาสต็อก / พิกัด"
+                        subtitle="สแกน QR บนกล่องสินค้า (แม้ไม่มี Lot/SN ก็สแกนได้) หรือสแกน QR ป้ายชั้นวาง"
                         className="flex-1 sm:flex-none justify-center h-9 px-3 text-xs rounded-xl border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 flex items-center gap-1.5"
-                    >
-                        <Camera className="w-3.5 h-3.5" />
-                        สแกน QR ค้นหา
-                    </Button>
+                    />
                     <Button
                         variant="outline"
                         onClick={() => {
@@ -1339,7 +1337,7 @@ export default function InventoryPage() {
                                                             variant="outline"
                                                             onClick={() => handleOpenPrintSingle(item)}
                                                             className="h-8 px-2.5 rounded-lg border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
-                                                            title="พิมพ์ QRCode (PDF Zebra)"
+                                                            title="พิมพ์ / บันทึก PDF QRCode"
                                                         >
                                                             <QrCode className="w-3.5 h-3.5 mr-1" />
                                                             QR
@@ -1381,20 +1379,12 @@ export default function InventoryPage() {
                 </div>
             </Card>
 
-            <QrScannerModal
-                open={isQrScanOpen}
-                onOpenChange={setIsQrScanOpen}
-                onScan={handleInventoryQrScanned}
-                title="สแกน QRCode ค้นหาสต็อก / พิกัด"
-                subtitle="สแกน QR บนกล่องสินค้า (แม้ไม่มี Lot/SN ก็สแกนได้) หรือสแกน QR ป้ายชั้นวาง"
-            />
-
             <PrintQrcodeModel
                 open={isPrintModalOpen}
                 onOpenChange={setIsPrintModalOpen}
                 items={printItems}
-                title="พิมพ์สติกเกอร์ QRCode สินค้า (Zebra PDF)"
-                subtitle="ขนาดเริ่มต้น 70 × 50 mm พร้อม Vector QR สำหรับเครื่องพิมพ์ Zebra"
+                title="พิมพ์สติกเกอร์ QRCode สินค้า"
+                subtitle="รองรับทั้งเครื่องพิมพ์สติกเกอร์ทุกยี่ห้อ และกระดาษ A4 (พิมพ์ตรงหรือบันทึกเป็น PDF)"
             />
 
             <LocationMoveModal

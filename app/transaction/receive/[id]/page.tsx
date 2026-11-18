@@ -417,7 +417,7 @@ function ReceiveDetailContent() {
                         className="w-full sm:w-auto justify-center px-5 py-2 text-sm font-semibold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm flex items-center gap-1.5"
                     >
                         <QrCode className="w-4 h-4" />
-                        พิมพ์ QRCode (PDF Zebra)
+                        พิมพ์ QRCode / PDF
                     </Button>
                 )}
             </div>
@@ -427,7 +427,7 @@ function ReceiveDetailContent() {
                 onOpenChange={setIsPrintModalOpen}
                 items={printableLabels}
                 title={`พิมพ์ QRCode ใบรับสินค้า ${docNo || ''}`}
-                subtitle="สร้าง PDF สติกเกอร์ขนาดเริ่มต้น 70 × 50 mm สำหรับสั่งพิมพ์ออกเครื่อง Zebra"
+                subtitle="ดูตัวอย่าง Print Preview เพื่อสั่งพิมพ์ออกเครื่องพิมพ์ทุกประเภท หรือบันทึกเป็นไฟล์ PDF"
             />
         </AppLayout>
     );

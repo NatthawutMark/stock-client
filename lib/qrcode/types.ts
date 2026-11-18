@@ -1,5 +1,39 @@
 export type QrPayloadType = 'INV' | 'LOC';
 
+export type QrScanMode = 'all' | 'inventory' | 'location';
+
+export type QrFeedbackStatus = 'success' | 'warning' | 'error' | 'info';
+
+export interface QrScanFeedback {
+    status: QrFeedbackStatus;
+    title?: string;
+    message: string;
+    /** true = หยุดสแกนชั่วคราวและแสดงกล่องแจ้งเตือน Error จนกว่าผู้ใช้จะกด "สแกนใหม่" */
+    requireAcknowledge?: boolean;
+}
+
+/** ผลลัพธ์ที่ onScan handler ส่งกลับให้ตัวสแกนกลางควบคุม feedback / error overlay */
+export type QrScanOutcome = void | boolean | QrScanFeedback;
+
+export interface QrMatchableInventoryRow {
+    id?: string | number;
+    invId?: string | number;
+    itemId?: string | number;
+    itemCode?: string;
+    lotNo?: string;
+    serialNo?: string;
+    warehouseId?: string | number;
+    locationId?: string | number;
+    locationName?: string;
+}
+
+export interface QrMatchableLocation {
+    id?: string | number;
+    code?: string;
+    name?: string;
+    warehouseId?: string | number;
+}
+
 export interface InventoryQrPayload {
     v: number;
     t: 'INV';
@@ -31,23 +65,28 @@ export type DecodedQrResult =
     | { kind: 'LOC'; payload: LocationQrPayload; raw: string }
     | { kind: 'RAW_TEXT'; text: string; raw: string };
 
-export type ZebraLabelSizeKey = '70x50' | '100x75' | '50x30' | '40x25';
+export type LabelPaperMode = 'roll' | 'a4';
 
-export interface ZebraLabelSizeConfig {
-    key: ZebraLabelSizeKey;
-    label: string;
-    description: string;
+export type LabelSizeKey = '70x50' | '100x75' | '60x40' | '50x30' | '40x25' | 'custom';
+
+export interface LabelDimensions {
     widthMm: number;
     heightMm: number;
 }
 
-export const DEFAULT_ZEBRA_LABEL_SIZE: ZebraLabelSizeKey = '70x50';
+export interface LabelSizeConfig extends LabelDimensions {
+    key: LabelSizeKey;
+    label: string;
+    description: string;
+}
 
-export const ZEBRA_LABEL_SIZES: ZebraLabelSizeConfig[] = [
+export const DEFAULT_LABEL_SIZE: LabelSizeKey = '70x50';
+
+export const LABEL_SIZES: LabelSizeConfig[] = [
     {
         key: '70x50',
         label: '70 × 50 mm (ค่าเริ่มต้น)',
-        description: 'ขนาดมาตรฐานติดกล่อง/ลังสินค้า Zebra',
+        description: 'ขนาดมาตรฐานติดกล่อง/ลังสินค้า',
         widthMm: 70,
         heightMm: 50,
     },
@@ -57,6 +96,13 @@ export const ZEBRA_LABEL_SIZES: ZebraLabelSizeConfig[] = [
         description: 'ป้ายขนาดใหญ่สำหรับติดพาเลท',
         widthMm: 100,
         heightMm: 75,
+    },
+    {
+        key: '60x40',
+        label: '60 × 40 mm',
+        description: 'ขนาดมาตรฐานเครื่องพิมพ์สติกเกอร์ทั่วไป',
+        widthMm: 60,
+        heightMm: 40,
     },
     {
         key: '50x30',
@@ -71,6 +117,13 @@ export const ZEBRA_LABEL_SIZES: ZebraLabelSizeConfig[] = [
         description: 'ป้ายขนาดเล็กสำหรับชิ้นส่วน/Serial',
         widthMm: 40,
         heightMm: 25,
+    },
+    {
+        key: 'custom',
+        label: 'กำหนดขนาดเอง (Custom)',
+        description: 'ระบุกว้าง × สูง (mm) ตามสติกเกอร์ที่ใช้',
+        widthMm: 70,
+        heightMm: 50,
     },
 ];
 

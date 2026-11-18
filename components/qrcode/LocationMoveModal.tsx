@@ -16,9 +16,10 @@ import {
 import { inventoryService } from '@/app/_services/inventory';
 import { extractErrorMessage } from '@/lib/utils';
 import type { InventoryView, MastLocation } from '@/lib/types';
-import type { DecodedQrResult } from '@/lib/qrcode/types';
-import { QrScannerModal } from './QrScannerModal';
-import { MapPin, QrCode, ArrowRight, RefreshCw } from 'lucide-react';
+import { matchLocationByQr } from '@/lib/qrcode/codec';
+import type { DecodedQrResult, QrScanOutcome } from '@/lib/qrcode/types';
+import { QrScannerPanel } from './QrScannerPanel';
+import { MapPin, QrCode, ArrowRight, RefreshCw, ArrowLeft } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 interface LocationMoveModalProps {
@@ -32,18 +33,21 @@ interface LocationMoveModalProps {
 function LocationMoveBody({
     item,
     locationList,
+    isScanningLocation,
+    setIsScanningLocation,
     onClose,
     onMoved,
 }: {
     item: InventoryView;
     locationList: MastLocation[];
+    isScanningLocation: boolean;
+    setIsScanningLocation: (scanning: boolean) => void;
     onClose: () => void;
     onMoved: () => void;
 }) {
     const [newLocationId, setNewLocationId] = useState<string>('');
     const [moveQty, setMoveQty] = useState<string>(String(Math.max(1, Number(item.itemQty) || 1)));
     const [saving, setSaving] = useState<boolean>(false);
-    const [scannerOpen, setScannerOpen] = useState<boolean>(false);
 
     const availableLocations = useMemo(() => {
         const whId = item.warehouseId ? String(item.warehouseId) : '';
@@ -63,50 +67,43 @@ function LocationMoveBody({
         [availableLocations]
     );
 
-    const handleLocationQrScanned = (decoded: DecodedQrResult) => {
-        const targetCodeOrId =
-            decoded.kind === 'LOC'
-                ? decoded.payload.id || decoded.payload.code
-                : decoded.kind === 'RAW_TEXT'
-                  ? decoded.text
-                  : '';
-
-        if (!targetCodeOrId) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'QRCode ไม่ใช่ป้ายพิกัด',
-                text: 'กรุณาสแกน QRCode ของป้ายชั้นวาง (Location) หรือเลือกจากรายการ',
-            });
-            return;
-        }
-
-        const norm = targetCodeOrId.trim().toLowerCase();
-        const found = locationList.find(
-            (loc) =>
-                String(loc.id || '').toLowerCase() === norm ||
-                String(loc.code || '').toLowerCase() === norm ||
-                String(loc.name || '').toLowerCase() === norm
+    const handleLocationQrScanned = (decoded: DecodedQrResult): QrScanOutcome => {
+        const found = matchLocationByQr(
+            decoded,
+            locationList,
+            item.warehouseId ? String(item.warehouseId) : undefined
         );
 
         if (!found) {
-            Swal.fire({
-                icon: 'warning',
+            const label =
+                decoded.kind === 'LOC'
+                    ? decoded.payload.code || decoded.payload.id || '-'
+                    : decoded.kind === 'RAW_TEXT'
+                      ? decoded.text
+                      : '-';
+            return {
+                status: 'error',
                 title: 'ไม่พบพิกัดจัดเก็บในระบบ',
-                text: `ไม่พบตำแหน่ง "${targetCodeOrId}" ในคลังสินค้า`,
-            });
-            return;
+                message: `ไม่พบตำแหน่ง "${label}" ในคลังสินค้า กรุณาสแกนป้ายชั้นวางใหม่`,
+                requireAcknowledge: true,
+            };
         }
 
         if (String(found.id) === String(item.locationId || '')) {
-            Swal.fire({
-                icon: 'info',
-                title: 'ตำแหน่งเดิม',
-                text: 'สินค้ากำลังอยู่ที่ตำแหน่งนี้แล้ว กรุณาเลือกพิกัดปลายทางใหม่',
-            });
-            return;
+            return {
+                status: 'error',
+                title: 'ตำแหน่งเดิมของสินค้า',
+                message: 'สินค้ากำลังอยู่ที่ตำแหน่งนี้แล้ว กรุณาสแกนพิกัดปลายทางใหม่',
+                requireAcknowledge: true,
+            };
         }
 
         setNewLocationId(String(found.id));
+        setIsScanningLocation(false);
+        return {
+            status: 'success',
+            message: `เลือกพิกัดปลายทาง: ${found.code || found.name}`,
+        };
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -158,98 +155,115 @@ function LocationMoveBody({
         }
     };
 
-    return (
-        <>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 p-3 space-y-1.5 text-xs">
-                    <div className="font-mono font-bold text-blue-600 dark:text-blue-400">
-                        {item.itemCode || '-'}
-                    </div>
-                    <div className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">
-                        {item.itemName || '-'}
-                    </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-zinc-500">
-                        <span>Lot: {item.lotNo || '-'}</span>
-                        <span>S/N: {item.serialNo || '-'}</span>
-                        <span>
-                            คงเหลือ: <strong>{(item.itemQty ?? 0).toLocaleString()}</strong> {item.uomName || 'ชิ้น'}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 pt-1 text-purple-700 dark:text-purple-300 font-medium">
-                        <MapPin className="w-3.5 h-3.5 shrink-0" />
-                        <span>พิกัดปัจจุบัน: {item.locationName || '-'}</span>
-                        <ArrowRight className="w-3.5 h-3.5 text-zinc-400" />
-                        <span className="text-blue-600 dark:text-blue-400">
-                            {locationOptions.find((o) => o.value === newLocationId)?.label || 'รอเลือกปลายทาง'}
-                        </span>
-                    </div>
-                </div>
-
-                <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                        <Label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                            พิกัดปลายทาง (Target Location)
-                        </Label>
-                        <button
-                            type="button"
-                            onClick={() => setScannerOpen(true)}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline"
-                        >
-                            <QrCode className="w-3.5 h-3.5" />
-                            สแกน QR ชั้นวาง
-                        </button>
-                    </div>
-                    <SearchableSelect
-                        options={locationOptions}
-                        value={newLocationId}
-                        onChange={setNewLocationId}
-                        placeholder="เลือกตำแหน่งจัดเก็บใหม่..."
-                        searchPlaceholder="พิมพ์รหัสหรือชื่อตำแหน่ง..."
-                        emptyText="ไม่พบตำแหน่งอื่นในคลังนี้"
-                    />
-                </div>
-
-                <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        จำนวนที่ต้องการย้าย ({item.uomName || 'ชิ้น'})
-                    </Label>
-                    <input
-                        type="number"
-                        min={1}
-                        max={Math.max(1, Number(item.itemQty) || 1)}
-                        value={moveQty}
-                        onChange={(e) => setMoveQty(e.target.value)}
-                        className="w-full h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm font-mono"
-                    />
-                </div>
+    if (isScanningLocation) {
+        return (
+            <div className="space-y-3">
+                <QrScannerPanel
+                    enabled={isScanningLocation}
+                    mode="location"
+                    keepOpen
+                    autoFocusInput
+                    inputPlaceholder="ยิง USB Scanner หรือกรอกรหัสพิกัดชั้นวาง..."
+                    onScan={handleLocationQrScanned}
+                />
 
                 <DialogFooter>
                     <Button
                         type="button"
                         variant="outline"
-                        onClick={onClose}
-                        className="w-full sm:w-auto justify-center rounded-xl"
+                        onClick={() => setIsScanningLocation(false)}
+                        className="w-full sm:w-auto justify-center rounded-xl flex items-center gap-1.5"
                     >
-                        ยกเลิก
-                    </Button>
-                    <Button
-                        type="submit"
-                        disabled={saving || !newLocationId}
-                        className="w-full sm:w-auto justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                        {saving ? 'กำลังบันทึก...' : 'ยืนยันย้ายตำแหน่ง'}
+                        <ArrowLeft className="w-4 h-4" />
+                        กลับไปหน้าย้ายพิกัด
                     </Button>
                 </DialogFooter>
-            </form>
+            </div>
+        );
+    }
 
-            <QrScannerModal
-                open={scannerOpen}
-                onOpenChange={setScannerOpen}
-                onScan={handleLocationQrScanned}
-                title="สแกน QRCode ป้ายชั้นวางปลายทาง"
-                subtitle="ส่องกล้องไปที่ป้าย QRCode พิกัดชั้นวางที่ต้องการย้ายสินค้าไปเก็บ"
-            />
-        </>
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 p-3 space-y-1.5 text-xs">
+                <div className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                    {item.itemCode || '-'}
+                </div>
+                <div className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">
+                    {item.itemName || '-'}
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-zinc-500">
+                    <span>Lot: {item.lotNo || '-'}</span>
+                    <span>S/N: {item.serialNo || '-'}</span>
+                    <span>
+                        คงเหลือ: <strong>{(item.itemQty ?? 0).toLocaleString()}</strong> {item.uomName || 'ชิ้น'}
+                    </span>
+                </div>
+                <div className="flex items-center gap-1.5 pt-1 text-purple-700 dark:text-purple-300 font-medium">
+                    <MapPin className="w-3.5 h-3.5 shrink-0" />
+                    <span>พิกัดปัจจุบัน: {item.locationName || '-'}</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-zinc-400" />
+                    <span className="text-blue-600 dark:text-blue-400">
+                        {locationOptions.find((o) => o.value === newLocationId)?.label || 'รอเลือกปลายทาง'}
+                    </span>
+                </div>
+            </div>
+
+            <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        พิกัดปลายทาง (Target Location)
+                    </Label>
+                    <button
+                        type="button"
+                        onClick={() => setIsScanningLocation(true)}
+                        className="inline-flex items-center gap-1 min-h-7 px-2 rounded-lg text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                    >
+                        <QrCode className="w-3.5 h-3.5" />
+                        สแกน QR ชั้นวาง
+                    </button>
+                </div>
+                <SearchableSelect
+                    options={locationOptions}
+                    value={newLocationId}
+                    onChange={setNewLocationId}
+                    placeholder="เลือกตำแหน่งจัดเก็บใหม่..."
+                    searchPlaceholder="พิมพ์รหัสหรือชื่อตำแหน่ง..."
+                    emptyText="ไม่พบตำแหน่งอื่นในคลังนี้"
+                />
+            </div>
+
+            <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                    จำนวนที่ต้องการย้าย ({item.uomName || 'ชิ้น'})
+                </Label>
+                <input
+                    type="number"
+                    min={1}
+                    max={Math.max(1, Number(item.itemQty) || 1)}
+                    value={moveQty}
+                    onChange={(e) => setMoveQty(e.target.value)}
+                    className="w-full h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm font-mono"
+                />
+            </div>
+
+            <DialogFooter>
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={onClose}
+                    className="w-full sm:w-auto justify-center rounded-xl"
+                >
+                    ยกเลิก
+                </Button>
+                <Button
+                    type="submit"
+                    disabled={saving || !newLocationId}
+                    className="w-full sm:w-auto justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                    {saving ? 'กำลังบันทึก...' : 'ยืนยันย้ายตำแหน่ง'}
+                </Button>
+            </DialogFooter>
+        </form>
     );
 }
 
@@ -260,16 +274,27 @@ export function LocationMoveModal({
     locationList,
     onMoved,
 }: LocationMoveModalProps) {
+    const [isScanningLocation, setIsScanningLocation] = useState(false);
+
+    const handleOpenChange = (nextOpen: boolean) => {
+        if (!nextOpen) {
+            setIsScanningLocation(false);
+        }
+        onOpenChange(nextOpen);
+    };
+
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-md w-[calc(100vw-1rem)] p-4 sm:p-6">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
                         <RefreshCw className="w-5 h-5 text-blue-600 shrink-0" />
-                        ย้ายตำแหน่งจัดเก็บสินค้า
+                        {isScanningLocation ? 'สแกน QRCode ป้ายชั้นวางปลายทาง' : 'ย้ายตำแหน่งจัดเก็บสินค้า'}
                     </DialogTitle>
                     <DialogDescription className="text-xs sm:text-sm text-zinc-500">
-                        สแกน QR พิกัดชั้นวางปลายทาง หรือเลือกตำแหน่งใหม่จากรายการ
+                        {isScanningLocation
+                            ? 'ส่องกล้องไปที่ป้าย QRCode พิกัดชั้นวางที่ต้องการย้ายสินค้าไปเก็บ หรือยิง USB Scanner ด้านล่าง'
+                            : 'สแกน QR พิกัดชั้นวางปลายทาง หรือเลือกตำแหน่งใหม่จากรายการ'}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -278,7 +303,9 @@ export function LocationMoveModal({
                         key={String(item.id || item.itemId)}
                         item={item}
                         locationList={locationList}
-                        onClose={() => onOpenChange(false)}
+                        isScanningLocation={isScanningLocation}
+                        setIsScanningLocation={setIsScanningLocation}
+                        onClose={() => handleOpenChange(false)}
                         onMoved={onMoved}
                     />
                 )}
