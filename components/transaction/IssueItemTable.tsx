@@ -21,7 +21,11 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui';
-import { Plus, Trash2, Search, Package, X } from 'lucide-react';
+import { Plus, Trash2, Search, Package, X, Camera } from 'lucide-react';
+import { QrScannerModal } from '@/components/qrcode';
+import { matchInventoryRowsByQr, normalizeTrackValue } from '@/lib/qrcode/codec';
+import type { DecodedQrResult } from '@/lib/qrcode/types';
+import type { InventoryView } from '@/lib/types';
 
 const ISSUE_MENU_ID = '85D356B7877647C49B61B71FB047E0B6';
 
@@ -57,6 +61,7 @@ export function IssueItemTable({
     // 1. State ของหน้าจอและหน้าต่างเลือกสินค้า (Modal)
     // ─────────────────────────────────────────────────────────────
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isQrScanOpen, setIsQrScanOpen] = useState(false);
     const [modalSearch, setModalSearch] = useState('');
     const [selectedInvIds, setSelectedInvIds] = useState<string[]>([]);
     const [inventoryList, setInventoryList] = useState<IssueInventoryList[]>([]);
@@ -141,6 +146,103 @@ export function IssueItemTable({
         setSelectedInvIds([]);
         fetchInventoryItems();
         setIsAddModalOpen(true);
+    };
+
+    const handleOpenQrScan = () => {
+        if (!warehouseId) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'กรุณาเลือกคลังสินค้าจ่ายออกก่อน',
+                text: 'กรุณาเลือกคลังสินค้าที่ส่วนหัวเอกสาร เพื่อสแกนเบิกเฉพาะสินค้าในคลังนั้น',
+                confirmButtonColor: '#2563eb',
+            });
+            return;
+        }
+        if (inventoryList.length === 0) {
+            fetchInventoryItems();
+        }
+        setIsQrScanOpen(true);
+    };
+
+    const handleIssueQrScanned = (decoded: DecodedQrResult) => {
+        if (decoded.kind === 'LOC') {
+            Swal.fire({
+                icon: 'info',
+                title: 'นี่คือ QRCode ป้ายชั้นวาง',
+                text: `พิกัด ${decoded.payload.code} — กรุณาสแกน QRCode บนกล่องสินค้า`,
+                timer: 1800,
+                showConfirmButton: false,
+            });
+            return;
+        }
+
+        // แปลง IssueInventoryList ให้เข้ากับ InventoryView matcher
+        const candidatesAsView: InventoryView[] = inventoryList.map((s) => ({
+            id: s.id,
+            itemId: s.itemId,
+            itemCode: s.itemCode,
+            itemName: s.itemName,
+            lotNo: s.lotNo || '',
+            serialNo: s.serialNo || '',
+            itemQty: Number(s.availableQty) || 0,
+            itemPrice: Number(s.itemPrice) || 0,
+            locationId: s.locationId || '',
+            locationName: s.locationName || '',
+            mfgDate: s.mfgDate || '',
+            expireDate: s.expireDate || '',
+            warehouseId: s.warehouseId || warehouseId || '',
+            uomName: s.uomName,
+        }));
+
+        let matchedStock: IssueInventoryList | undefined;
+
+        if (decoded.kind === 'INV') {
+            const matches = matchInventoryRowsByQr(decoded.payload, candidatesAsView);
+            const firstValid = matches.find((m) => {
+                const orig = inventoryList.find((s) => String(s.id) === String(m.id));
+                return orig ? getRemainingStockQty(orig) > 0 : false;
+            });
+            if (firstValid) {
+                matchedStock = inventoryList.find((s) => String(s.id) === String(firstValid.id));
+            } else if (matches.length > 0) {
+                matchedStock = inventoryList.find((s) => String(s.id) === String(matches[0].id));
+            }
+        } else {
+            const kw = normalizeTrackValue(decoded.text).toLowerCase();
+            matchedStock = inventoryList.find(
+                (s) =>
+                    (normalizeTrackValue(s.itemCode).toLowerCase() === kw ||
+                        normalizeTrackValue(s.serialNo).toLowerCase() === kw) &&
+                    getRemainingStockQty(s) > 0
+            );
+        }
+
+        if (!matchedStock) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'ไม่พบสินค้านี้ในคลังจ่ายออก',
+                text:
+                    decoded.kind === 'INV'
+                        ? `ไม่พบสต็อกพร้อมจ่ายสำหรับรหัส ${decoded.payload.c}`
+                        : `ไม่พบสต็อกพร้อมจ่ายสำหรับ "${decoded.text}"`,
+                timer: 2200,
+                showConfirmButton: false,
+            });
+            return;
+        }
+
+        if (getRemainingStockQty(matchedStock) <= 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'ยอดคงเหลือไม่พอ',
+                text: `${matchedStock.itemCode || matchedStock.itemName} ถูกเลือกจนครบจำนวนคงเหลือแล้ว`,
+                timer: 2000,
+                showConfirmButton: false,
+            });
+            return;
+        }
+
+        addStockItemsToTable([matchedStock]);
     };
 
     // กรองรายการสินค้าใน Modal ตามคำค้นหา
@@ -322,6 +424,16 @@ export function IssueItemTable({
                                 ลบทั้งหมด
                             </Button>
                         )}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleOpenQrScan}
+                            className="flex-1 sm:flex-none justify-center h-8 px-3 text-xs font-medium rounded-lg border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 flex items-center gap-1.5"
+                        >
+                            <Camera className="w-3.5 h-3.5" />
+                            สแกน QR เบิกสินค้า
+                        </Button>
                         <Button
                             size="sm"
                             onClick={handleOpenAddModal}
@@ -1233,6 +1345,15 @@ export function IssueItemTable({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <QrScannerModal
+                open={isQrScanOpen}
+                onOpenChange={setIsQrScanOpen}
+                onScan={handleIssueQrScanned}
+                keepOpen
+                title="สแกน QRCode เพิ่มรายการเบิกสินค้า"
+                subtitle="สแกนต่อเนื่องได้ทันที ระบบจะเพิ่มรายการหรือบวกจำนวนเบิก +1 อัตโนมัติ (รองรับสินค้าที่ไม่มี Lot/SN)"
+            />
         </Card>
     );
 }

@@ -8,7 +8,9 @@ import { masterService } from '@/app/_services/master';
 import { transactionService } from '@/app/_services/transaction';
 import { extractList } from '@/lib/utils';
 import type { DocReceive, DocReceiveDetail, MastVendor, MastWarehouse, MastEmployee } from '@/lib/types';
+import type { PrintableLabelItem } from '@/lib/qrcode/types';
 import { MasterItemTable, TransactionItem } from '@/components/transaction';
+import { PrintQrcodeModel } from '@/components/qrcode';
 import { Button, Card, CardContent, Label, renderStatusBadge } from '@/components/ui';
 import Swal from 'sweetalert2';
 import {
@@ -23,6 +25,7 @@ import {
     NotepadText,
     type LucideIcon,
     FileCheck,
+    QrCode,
 } from 'lucide-react';
 
 type EmployeeOption = { id: string | number; name: string };
@@ -52,6 +55,9 @@ const toTransactionItem = (d: DocReceiveDetail, index: number): TransactionItem 
         totalPrice: qty * price,
         lotNo: d.lotNo || '',
         serialNo: d.serialNo || '',
+        mfgDate: d.mfgDate || '',
+        expireDate: d.expireDate || '',
+        invId: d.invId ? String(d.invId) : undefined,
         locationId: d.locationId,
         locationName: d.locationName || '',
         remark: d.remark || '',
@@ -98,6 +104,7 @@ function ReceiveDetailContent() {
 
     const [loading, setLoading] = useState<boolean>(true);
     const [saving, setSaving] = useState<boolean>(false);
+    const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
 
     useEffect(() => {
         setPageTitle('รายละเอียดใบรับสินค้า (Goods Receive Detail)');
@@ -247,6 +254,32 @@ function ReceiveDetailContent() {
         }
     };
 
+    const printableLabels: PrintableLabelItem[] = useMemo(
+        () =>
+            items.map((item, idx) => ({
+                id: String(item.id || `rec-lbl-${idx}`),
+                kind: 'INV',
+                itemId: item.itemId,
+                itemCode: item.itemCode,
+                itemName: item.itemName,
+                qty: Number(item.itemQty) || 1,
+                uomName: item.uomName || 'ชิ้น',
+                copies: 1,
+                invId: item.invId,
+                recDetId: item.id,
+                refDoc: docNo,
+                lotNo: item.lotNo,
+                serialNo: item.serialNo,
+                mfgDate: item.mfgDate,
+                expireDate: item.expireDate,
+                warehouseId,
+                warehouseName: warehouseDisplayName,
+                locationId: item.locationId,
+                locationName: item.locationName,
+            })),
+        [items, docNo, warehouseId, warehouseDisplayName]
+    );
+
     if (loading) {
         return (
             <AppLayout>
@@ -259,6 +292,7 @@ function ReceiveDetailContent() {
     }
 
     const isLocked = ['CONFIRM', 'COMPLETE', 'CANCEL', 'CANCELLED', 'COMPLETED'].includes(normalizedStatus);
+    const canPrintQr = ['CONFIRM', 'COMPLETE', 'COMPLETED'].includes(normalizedStatus) && items.length > 0;
 
     return (
         <AppLayout>
@@ -375,7 +409,26 @@ function ReceiveDetailContent() {
                     <FileCheck className="w-4 h-4" />
                     {saving ? 'กำลังยืนยัน...' : 'รับเข้าคลัง'}
                 </Button>
+
+                {canPrintQr && (
+                    <Button
+                        type="button"
+                        onClick={() => setIsPrintModalOpen(true)}
+                        className="w-full sm:w-auto justify-center px-5 py-2 text-sm font-semibold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm flex items-center gap-1.5"
+                    >
+                        <QrCode className="w-4 h-4" />
+                        พิมพ์ QRCode (PDF Zebra)
+                    </Button>
+                )}
             </div>
+
+            <PrintQrcodeModel
+                open={isPrintModalOpen}
+                onOpenChange={setIsPrintModalOpen}
+                items={printableLabels}
+                title={`พิมพ์ QRCode ใบรับสินค้า ${docNo || ''}`}
+                subtitle="สร้าง PDF สติกเกอร์ขนาดเริ่มต้น 70 × 50 mm สำหรับสั่งพิมพ์ออกเครื่อง Zebra"
+            />
         </AppLayout>
     );
 }

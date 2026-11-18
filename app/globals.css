@@ -197,6 +197,11 @@ body {
         overscroll-behavior: contain;
     }
 
+    dialog::backdrop {
+        overflow: hidden;
+        overscroll-behavior: contain;
+    }
+
     /* เพิ่มขนาดขั้นต่ำสำหรับการแตะ (Touch Targets >= 44px) บนหน้าจอสัมผัส */
     @media (pointer: coarse) {
         [data-slot="button"]:not([data-compact="true"]),

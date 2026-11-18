@@ -72,9 +72,11 @@ const th = {
   },
   dashboard: {
     title: 'แดชบอร์ด',
+    companySubtitle: 'ภาพรวมคลังสินค้า เอกสารรับ-จ่าย และตัวชี้วัดสำคัญของบริษัท',
     totalItems: 'สินค้าทั้งหมด',
     totalStock: 'ยอดคงคลังรวม',
     lowStock: 'สินค้าใกล้หมด',
+    outOfStock: 'สินค้าหมดสต็อก',
     pendingDocs: 'เอกสารรอดำเนินการ',
     recentActivity: 'กิจกรรมล่าสุด',
     stockByWarehouse: 'สินค้าแยกตามคลัง',
@@ -82,6 +84,14 @@ const th = {
     todayIssue: 'จ่ายออกวันนี้',
     expiringSoon: 'ใกล้หมดอายุ',
     totalValue: 'มูลค่ารวม',
+    receiveDocs: 'เอกสารรับสินค้าเข้า (GR)',
+    issueDocs: 'เอกสารจ่ายสินค้าออก (GI)',
+    monthlyFlowTitle: 'เปรียบเทียบเอกสารรับเข้า - จ่ายออก รายเดือน',
+    docStatusTitle: 'สัดส่วนสถานะเอกสารทั้งหมด',
+    topStockTitle: '5 อันดับสินค้าคงคลังสูงสุด',
+    watchlistTitle: 'รายการสินค้าเฝ้าระวัง (ใกล้หมด / ใกล้หมดอายุ)',
+    futureSlotsTitle: 'พื้นที่รองรับข้อมูลในอนาคต (Future Business & Module Slots)',
+    refresh: 'รีเฟรชข้อมูล',
   },
   master: {
     item: {
@@ -303,9 +313,11 @@ const en: typeof th = {
   },
   dashboard: {
     title: 'Dashboard',
+    companySubtitle: 'Company-wide overview of inventory, GR/GI documents, and key operational metrics',
     totalItems: 'Total Items',
     totalStock: 'Total Stock',
     lowStock: 'Low Stock',
+    outOfStock: 'Out of Stock',
     pendingDocs: 'Pending Documents',
     recentActivity: 'Recent Activity',
     stockByWarehouse: 'Stock by Warehouse',
@@ -313,6 +325,14 @@ const en: typeof th = {
     todayIssue: "Today's Issues",
     expiringSoon: 'Expiring Soon',
     totalValue: 'Total Value',
+    receiveDocs: 'Goods Receipt (GR)',
+    issueDocs: 'Goods Issue (GI)',
+    monthlyFlowTitle: 'Monthly Goods Receipt vs Goods Issue',
+    docStatusTitle: 'Document Status Breakdown',
+    topStockTitle: 'Top 5 Inventory Items',
+    watchlistTitle: 'Stock Alert Watchlist (Low Stock / Expiring)',
+    futureSlotsTitle: 'Future Business & Module Slots',
+    refresh: 'Refresh',
   },
   master: {
     item: {

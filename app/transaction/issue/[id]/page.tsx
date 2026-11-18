@@ -9,6 +9,9 @@ import { transactionService } from '@/app/_services/transaction';
 import { extractList } from '@/lib/utils';
 import type { DocIssue, DocIssueDetail, MastCustomer, MastWarehouse, MastDocType, MastEmployee } from '@/lib/types';
 import { IssueItemTable, TransactionItem } from '@/components/transaction';
+import { QrScannerModal } from '@/components/qrcode';
+import { normalizeTrackValue } from '@/lib/qrcode/codec';
+import type { DecodedQrResult } from '@/lib/qrcode/types';
 import { Button, Card, CardContent, Label, renderStatusBadge } from '@/components/ui';
 import Swal from 'sweetalert2';
 import {
@@ -23,6 +26,8 @@ import {
     type LucideIcon,
     FileCheck,
     Bookmark,
+    Camera,
+    CheckCircle2,
 } from 'lucide-react';
 
 type EmployeeOption = { id: string | number; name: string };
@@ -44,6 +49,7 @@ const toTransactionItem = (d: DocIssueDetail, index: number): TransactionItem =>
     const pickingQty = Number(d.pickingQty) || 0;
     return {
         id: d.id || `view-item-${index}`,
+        invId: d.invId ? String(d.invId) : undefined,
         itemId: d.itemId ?? '',
         itemCode: d.itemCode || `ITM${d.itemId}`,
         itemName: d.itemName || '',
@@ -55,6 +61,8 @@ const toTransactionItem = (d: DocIssueDetail, index: number): TransactionItem =>
         totalPrice: qty * price,
         lotNo: d.lotNo || '',
         serialNo: d.serialNo || '',
+        mfgDate: d.mfgDate || '',
+        expireDate: d.expireDate || '',
         locationId: d.locationId,
         locationName: d.locationName || '',
         remark: d.remark || '',
@@ -102,6 +110,78 @@ function IssueDetailContent() {
 
     const [loading, setLoading] = useState<boolean>(true);
     const [saving, setSaving] = useState<boolean>(false);
+    const [isScanOpen, setIsScanOpen] = useState<boolean>(false);
+    const [verifiedCounts, setVerifiedCounts] = useState<Record<string, number>>({});
+
+    const handlePickVerifyScan = (decoded: DecodedQrResult) => {
+        if (decoded.kind === 'LOC') {
+            Swal.fire({
+                icon: 'info',
+                title: 'นี่คือ QRCode ป้ายชั้นวาง',
+                text: `พิกัด ${decoded.payload.code} — กรุณาสแกน QRCode บนกล่องสินค้า`,
+                timer: 1800,
+                showConfirmButton: false,
+            });
+            return;
+        }
+
+        let matched: TransactionItem | undefined;
+
+        if (decoded.kind === 'INV') {
+            const qrInvId = normalizeTrackValue(decoded.payload.invId);
+            const qrItemId = normalizeTrackValue(decoded.payload.itemId);
+            const qrCode = normalizeTrackValue(decoded.payload.c).toLowerCase();
+            const qrLot = normalizeTrackValue(decoded.payload.lot).toLowerCase();
+            const qrSn = normalizeTrackValue(decoded.payload.sn).toLowerCase();
+
+            if (qrInvId) {
+                matched = items.find((row) => String(row.invId || '') === qrInvId);
+            }
+            if (!matched) {
+                matched = items.find((row) => {
+                    const sameItem =
+                        (qrItemId && String(row.itemId) === qrItemId) ||
+                        (qrCode && normalizeTrackValue(row.itemCode).toLowerCase() === qrCode);
+                    if (!sameItem) return false;
+                    return (
+                        normalizeTrackValue(row.lotNo).toLowerCase() === qrLot &&
+                        normalizeTrackValue(row.serialNo).toLowerCase() === qrSn
+                    );
+                });
+            }
+        } else {
+            const kw = normalizeTrackValue(decoded.text).toLowerCase();
+            matched = items.find(
+                (row) =>
+                    normalizeTrackValue(row.itemCode).toLowerCase() === kw ||
+                    normalizeTrackValue(row.serialNo).toLowerCase() === kw
+            );
+        }
+
+        if (!matched) {
+            Swal.fire({
+                icon: 'error',
+                title: 'สินค้าไม่ตรงกับใบเบิกนี้!',
+                text:
+                    decoded.kind === 'INV'
+                        ? `รหัส ${decoded.payload.c} (Lot: ${decoded.payload.lot || '-'}) ไม่อยู่ในรายการเบิกจ่าย`
+                        : `ไม่พบรหัส "${decoded.text}" ในใบเบิกนี้`,
+            });
+            return;
+        }
+
+        const key = String(matched.id);
+        const nextCount = (verifiedCounts[key] || 0) + 1;
+        setVerifiedCounts((prev) => ({ ...prev, [key]: nextCount }));
+
+        Swal.fire({
+            icon: 'success',
+            title: `ตรวจสินค้าตรงกัน: ${matched.itemCode}`,
+            text: `${matched.itemName} • สแกนตรวจแล้ว ${nextCount}/${matched.itemQty} ${matched.uomName || 'ชิ้น'}`,
+            timer: 1600,
+            showConfirmButton: false,
+        });
+    };
 
     useEffect(() => {
         setPageTitle('รายละเอียดใบเบิกสินค้า (Goods Issue Detail)');
@@ -383,7 +463,33 @@ function IssueDetailContent() {
             </Card>
 
             {/* 2. ตารางรายการสินค้าที่เบิกจ่าย (Read Only) */}
-            <div className="mb-6">
+            <div className="mb-6 space-y-3">
+                {Object.keys(verifiedCounts).length > 0 && (
+                    <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/30 p-3 flex flex-wrap items-center gap-3 text-xs">
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                            <CheckCircle2 className="w-4 h-4" />
+                            ผลสแกนตรวจเช็กการหยิบสินค้า:
+                        </span>
+                        {items.map((it) => {
+                            const cnt = verifiedCounts[String(it.id)] || 0;
+                            return (
+                                <span
+                                    key={it.id}
+                                    className={`px-2 py-0.5 rounded-md font-mono border ${
+                                        cnt >= it.itemQty
+                                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-700'
+                                            : cnt > 0
+                                              ? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-200'
+                                              : 'bg-white text-zinc-500 border-zinc-200 dark:bg-zinc-900 dark:border-zinc-700'
+                                    }`}
+                                >
+                                    {it.itemCode}: {cnt}/{it.itemQty}
+                                </span>
+                            );
+                        })}
+                    </div>
+                )}
+
                 <IssueItemTable
                     items={items}
                     onChange={setItems}
@@ -433,6 +539,18 @@ function IssueDetailContent() {
                     </Button>
                 )}
 
+                {!['DRAFT', 'CANCEL', 'CANCELLED', 'COMPLETE', 'COMPLETED'].includes(normalizedStatus) && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsScanOpen(true)}
+                        className="w-full sm:w-auto justify-center px-4 py-2 text-sm font-medium rounded-xl border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 flex items-center gap-1.5"
+                    >
+                        <Camera className="w-4 h-4" />
+                        สแกน QR ตรวจเช็กจ่ายออก
+                    </Button>
+                )}
+
                 <Button
                     type="button"
                     disabled={saving}
@@ -444,6 +562,15 @@ function IssueDetailContent() {
                     {saving ? 'กำลังยืนยัน...' : 'จ่ายสินค้าออกคลัง'}
                 </Button>
             </div>
+
+            <QrScannerModal
+                open={isScanOpen}
+                onOpenChange={setIsScanOpen}
+                onScan={handlePickVerifyScan}
+                keepOpen
+                title={`สแกน QRCode ตรวจเช็กการจ่ายสินค้า ${docNo || ''}`}
+                subtitle="สแกนกล่องสินค้าเพื่อตรวจเช็กความถูกต้องเทียบกับใบเบิก (ป้องกันหยิบผิดรายการ/ผิด Lot)"
+            />
         </AppLayout>
     );
 }

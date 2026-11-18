@@ -46,6 +46,13 @@ export interface IssueInventoryResult {
     [key: string]: unknown;
 }
 
+export interface MoveLocationPayload {
+    invId: string;
+    oldLocationId: string;
+    newLocationId: string;
+    itemQty: number;
+}
+
 export const inventoryService = {
     list: (p?: InventoryListParams) =>
         apiClient.post<InventoryView[]>('/api/inventory/list', p),
@@ -55,4 +62,6 @@ export const inventoryService = {
         apiClient.get<InventoryView>(`/api/inventory/${id}`),
     issueInventoryList: (data?: IssueInventoryParams) =>
         apiClient.post<IssueInventoryResult>('/api/inventory/listForIssue', data),
+    moveLocation: (data: MoveLocationPayload) =>
+        apiClient.post<unknown>('/api/inventory/move', data),
 };

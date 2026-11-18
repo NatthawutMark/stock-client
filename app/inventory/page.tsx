@@ -46,8 +46,14 @@ import {
     Barcode,
     Sparkles,
     RefreshCw,
+    QrCode,
+    Camera,
 } from 'lucide-react';
+import { QrScannerModal, PrintQrcodeModel, LocationMoveModal } from '@/components/qrcode';
+import { matchInventoryRowsByQr, normalizeTrackValue } from '@/lib/qrcode/codec';
+import type { DecodedQrResult, PrintableLabelItem } from '@/lib/qrcode/types';
 import Swal from 'sweetalert2';
+import { log } from 'console';
 
 // ─────────────────────────────────────────────────────────────
 // Types & Constants
@@ -169,6 +175,13 @@ export default function InventoryPage() {
     const [pageSize, setPageSize] = useState<number>(10);
     const [totalRecords, setTotalRecords] = useState<number>(0);
 
+    // QR Code Modals State
+    const [isQrScanOpen, setIsQrScanOpen] = useState<boolean>(false);
+    const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
+    const [printItems, setPrintItems] = useState<PrintableLabelItem[]>([]);
+    const [moveTargetItem, setMoveTargetItem] = useState<InventoryView | null>(null);
+    const [isMoveModalOpen, setIsMoveModalOpen] = useState<boolean>(false);
+
     // 2. โหลด Master Data สำหรับ Dropdowns
     useEffect(() => {
         const loadMasters = async () => {
@@ -212,10 +225,9 @@ export default function InventoryPage() {
             value: String(loc.id),
             label: `${loc.code ? `[${loc.code}] ` : ''}${loc.name || `ตำแหน่ง #${loc.id}`}`,
             subLabel: loc.warehouseId
-                ? `คลัง: ${
-                      warehouseList.find((w) => String(w.id) === String(loc.warehouseId))?.warehouseName ||
-                      loc.warehouseId
-                  }`
+                ? `คลัง: ${warehouseList.find((w) => String(w.id) === String(loc.warehouseId))?.warehouseName ||
+                loc.warehouseId
+                }`
                 : undefined,
         }));
     }, [locationList, warehouseIdInput, warehouseList]);
@@ -263,6 +275,7 @@ export default function InventoryPage() {
                 limit: pageSize,
             };
 
+            console.log('Fetching inventory with payload:', payload);
             const res = await inventoryService.list(payload);
             if (!res?.success) {
                 setInventoryList([]);
@@ -342,8 +355,8 @@ export default function InventoryPage() {
             const itemQty = Number(getField<number>(raw, 'itemQty', 'item_qty', 'qty', 'quantity') ?? 0);
             const itemPrice = Number(
                 getField<number>(raw, 'itemPrice', 'item_price', 'price', 'buyPrice') ??
-                    matchedItem?.buyPrice ??
-                    0
+                matchedItem?.buyPrice ??
+                0
             );
 
             return {
@@ -352,26 +365,26 @@ export default function InventoryPage() {
                 itemId: String(itemId || ''),
                 itemCode: String(
                     getField<string>(raw, 'itemCode', 'item_code') ||
-                        matchedItem?.itemCode ||
-                        `ITM-${itemId || '-'}`
+                    matchedItem?.itemCode ||
+                    `ITM-${itemId || '-'}`
                 ),
                 itemName: String(
                     getField<string>(raw, 'itemName', 'item_name') ||
-                        matchedItem?.itemName ||
-                        `สินค้า #${itemId || '-'}`
+                    matchedItem?.itemName ||
+                    `สินค้า #${itemId || '-'}`
                 ),
                 warehouseId: String(whId || ''),
                 warehouseName: String(
                     getField<string>(raw, 'warehouseName', 'warehouse_name') ||
-                        matchedWh?.warehouseName ||
-                        `คลัง #${whId || '-'}`
+                    matchedWh?.warehouseName ||
+                    `คลัง #${whId || '-'}`
                 ),
                 locationId: String(locId || ''),
                 locationName: String(
                     getField<string>(raw, 'locationName', 'location_name') ||
-                        matchedLoc?.name ||
-                        matchedLoc?.code ||
-                        `ตำแหน่ง #${locId || '-'}`
+                    matchedLoc?.name ||
+                    matchedLoc?.code ||
+                    `ตำแหน่ง #${locId || '-'}`
                 ),
                 uomName: String(
                     getField<string>(raw, 'uomName', 'uom_name') || matchedUom?.name || 'ชิ้น'
@@ -454,8 +467,8 @@ export default function InventoryPage() {
             const itemQty = Number(getField<number>(raw, 'itemQty', 'item_qty', 'qty', 'quantity') ?? 0);
             const itemPrice = Number(
                 getField<number>(raw, 'itemPrice', 'item_price', 'price', 'buyPrice') ??
-                    matchedItem?.buyPrice ??
-                    0
+                matchedItem?.buyPrice ??
+                0
             );
             const minAlert = matchedItem?.minAlert ?? 5;
 
@@ -479,20 +492,97 @@ export default function InventoryPage() {
 
     const hasActiveFilters = Boolean(
         appliedFilters.warehouseId ||
-            appliedFilters.locationId ||
-            appliedFilters.itemId ||
-            appliedFilters.keyword ||
-            appliedFilters.lotNo ||
-            appliedFilters.serialNo ||
-            appliedFilters.stockStatus !== 'ALL'
+        appliedFilters.locationId ||
+        appliedFilters.itemId ||
+        appliedFilters.keyword ||
+        appliedFilters.lotNo ||
+        appliedFilters.serialNo ||
+        appliedFilters.stockStatus !== 'ALL'
     );
 
-    const handleAlert = () => {
-        Swal.fire({
-            icon: 'info',
-            title: 'แจ้งเตือน',
-            html: 'ระบบนี้ยังไม่พร้อมใช้งาน',
-        });
+    const handleOpenMoveModal = (item: InventoryView) => {
+        setMoveTargetItem(item);
+        setIsMoveModalOpen(true);
+    };
+
+    const handleOpenPrintSingle = (item: ExtendedInventoryItem) => {
+        setPrintItems([
+            {
+                id: String(item.id || `inv-${item.itemId}`),
+                kind: 'INV',
+                itemId: item.itemId ? String(item.itemId) : undefined,
+                itemCode: item.itemCode || '-',
+                itemName: item.itemName || '-',
+                qty: Math.max(1, Number(item.itemQty) || 1),
+                uomName: item.uomName || 'ชิ้น',
+                copies: 1,
+                invId: item.id ? String(item.id) : undefined,
+                lotNo: item.lotNo,
+                serialNo: item.serialNo,
+                mfgDate: item.mfgDate,
+                expireDate: item.expireDate,
+                warehouseId: item.warehouseId ? String(item.warehouseId) : undefined,
+                warehouseName: item.warehouseName,
+                locationId: item.locationId ? String(item.locationId) : undefined,
+                locationName: item.locationName,
+            },
+        ]);
+        setIsPrintModalOpen(true);
+    };
+
+    const handleInventoryQrScanned = (decoded: DecodedQrResult) => {
+        if (decoded.kind === 'LOC') {
+            const codeOrId = (decoded.payload.id || decoded.payload.code || '').trim().toLowerCase();
+            const foundLoc = locationList.find(
+                (l) =>
+                    String(l.id || '').toLowerCase() === codeOrId ||
+                    String(l.code || '').toLowerCase() === codeOrId
+            );
+            if (!foundLoc) {
+                Swal.fire({ icon: 'warning', title: 'ไม่พบพิกัดนี้ในระบบ', text: decoded.payload.code });
+                return;
+            }
+            const locIdStr = String(foundLoc.id);
+            setLocationIdInput(locIdStr);
+            setAppliedFilters((prev) => ({ ...prev, locationId: locIdStr }));
+            setCurrentPage(1);
+            return;
+        }
+
+        if (decoded.kind === 'INV') {
+            const matches = matchInventoryRowsByQr(decoded.payload, allInventoryList);
+            const kw = normalizeTrackValue(decoded.payload.c);
+            const lot = normalizeTrackValue(decoded.payload.lot);
+            const sn = normalizeTrackValue(decoded.payload.sn);
+            const wh = normalizeTrackValue(decoded.payload.wh);
+
+            setKeywordInput(kw);
+            setLotNoInput(lot);
+            setSerialNoInput(sn);
+            setWarehouseIdInput(wh);
+            setAppliedFilters({
+                ...initialFilters,
+                keyword: kw,
+                lotNo: lot,
+                serialNo: sn,
+                warehouseId: wh,
+            });
+            setCurrentPage(1);
+
+            if (matches.length === 0) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'ยังไม่พบสต็อกคงคลังที่ตรงกัน',
+                    text: `รหัสสินค้า ${kw || '-'} อาจยังไม่ได้กดนำเข้าคลัง (Putaway) หรือสต็อกเป็น 0`,
+                });
+            }
+            console.log('QR Scanned appliedFilters:', appliedFilters);
+            return;
+        }
+
+        setKeywordInput(decoded.text);
+        setAppliedFilters((prev) => ({ ...prev, keyword: decoded.text }));
+        setCurrentPage(1);
     };
 
     const renderStockBadge = (qty: number, minAlert = 5) => {
@@ -533,6 +623,14 @@ export default function InventoryPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                    <Button
+                        variant="outline"
+                        onClick={() => setIsQrScanOpen(true)}
+                        className="flex-1 sm:flex-none justify-center h-9 px-3 text-xs rounded-xl border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 flex items-center gap-1.5"
+                    >
+                        <Camera className="w-3.5 h-3.5" />
+                        สแกน QR ค้นหา
+                    </Button>
                     <Button
                         variant="outline"
                         onClick={() => {
@@ -675,11 +773,10 @@ export default function InventoryPage() {
                                     key={tab.key}
                                     type="button"
                                     onClick={() => handleQuickTabSelect(tab.key)}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 flex items-center gap-1.5 ${
-                                        isActive
-                                            ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/20'
-                                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                                    }`}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 flex items-center gap-1.5 ${isActive
+                                        ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/20'
+                                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                                        }`}
                                 >
                                     {tab.icon}
                                     {tab.label}
@@ -1060,15 +1157,24 @@ export default function InventoryPage() {
                                                 </div>
                                             )}
 
-                                            <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                                            <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-2 gap-2">
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
-                                                    onClick={handleAlert}
-                                                    className="w-full h-9 px-3 text-xs rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                                                    onClick={() => handleOpenPrintSingle(item)}
+                                                    className="w-full h-9 px-2.5 text-xs rounded-lg border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
                                                 >
-                                                    <RefreshCw className="w-3.5 h-3.5 mr-1.5 text-zinc-500" />
-                                                    ย้ายสถานที่จัดเก็บ
+                                                    <QrCode className="w-3.5 h-3.5 mr-1" />
+                                                    พิมพ์ QR (PDF)
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleOpenMoveModal(item)}
+                                                    className="w-full h-9 px-2.5 text-xs rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                                                >
+                                                    <RefreshCw className="w-3.5 h-3.5 mr-1 text-zinc-500" />
+                                                    ย้ายพิกัด
                                                 </Button>
                                             </div>
                                         </div>
@@ -1087,9 +1193,8 @@ export default function InventoryPage() {
                                         <TableHead
                                             key={col.key}
                                             style={{ width: `${col.width}px` }}
-                                            className={`font-bold text-xs uppercase tracking-wider text-zinc-800 dark:text-zinc-200 py-3.5 px-4 ${
-                                                col.align || 'text-left'
-                                            }`}
+                                            className={`font-bold text-xs uppercase tracking-wider text-zinc-800 dark:text-zinc-200 py-3.5 px-4 ${col.align || 'text-left'
+                                                }`}
                                         >
                                             {col.colName}
                                         </TableHead>
@@ -1228,16 +1333,28 @@ export default function InventoryPage() {
                                                 </TableCell>
 
                                                 <TableCell className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={handleAlert}
-                                                        className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
-                                                        title="ย้ายสถานที่จัดเก็บ"
-                                                    >
-                                                        <RefreshCw className="w-3.5 h-3.5 mr-1 text-zinc-500" />
-                                                        ย้ายสถานที่จัดเก็บ
-                                                    </Button>
+                                                    <div className="inline-flex items-center gap-1.5">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => handleOpenPrintSingle(item)}
+                                                            className="h-8 px-2.5 rounded-lg border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
+                                                            title="พิมพ์ QRCode (PDF Zebra)"
+                                                        >
+                                                            <QrCode className="w-3.5 h-3.5 mr-1" />
+                                                            QR
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => handleOpenMoveModal(item)}
+                                                            className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                                                            title="ย้ายสถานที่จัดเก็บ"
+                                                        >
+                                                            <RefreshCw className="w-3.5 h-3.5 mr-1 text-zinc-500" />
+                                                            ย้ายพิกัด
+                                                        </Button>
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         );
@@ -1263,6 +1380,33 @@ export default function InventoryPage() {
                     />
                 </div>
             </Card>
+
+            <QrScannerModal
+                open={isQrScanOpen}
+                onOpenChange={setIsQrScanOpen}
+                onScan={handleInventoryQrScanned}
+                title="สแกน QRCode ค้นหาสต็อก / พิกัด"
+                subtitle="สแกน QR บนกล่องสินค้า (แม้ไม่มี Lot/SN ก็สแกนได้) หรือสแกน QR ป้ายชั้นวาง"
+            />
+
+            <PrintQrcodeModel
+                open={isPrintModalOpen}
+                onOpenChange={setIsPrintModalOpen}
+                items={printItems}
+                title="พิมพ์สติกเกอร์ QRCode สินค้า (Zebra PDF)"
+                subtitle="ขนาดเริ่มต้น 70 × 50 mm พร้อม Vector QR สำหรับเครื่องพิมพ์ Zebra"
+            />
+
+            <LocationMoveModal
+                open={isMoveModalOpen}
+                onOpenChange={setIsMoveModalOpen}
+                item={moveTargetItem}
+                locationList={locationList}
+                onMoved={() => {
+                    fetchInventory();
+                    fetchInventoryAll();
+                }}
+            />
         </AppLayout>
     );
 }

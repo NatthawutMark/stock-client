@@ -20,8 +20,10 @@ import {
     SearchInput,
 } from '@/components/ui';
 import { CreateLocationModal } from '@/components/modal/CreateLocationModal';
+import { PrintQrcodeModel } from '@/components/qrcode';
+import type { PrintableLabelItem } from '@/lib/qrcode/types';
 import { extractList, confirmDelete } from '@/lib/utils';
-import { Building2, Pencil, Trash2 } from 'lucide-react';
+import { Building2, Pencil, Trash2, QrCode } from 'lucide-react';
 
 export default function LocationsPage() {
     const { t } = useI18n();
@@ -49,6 +51,29 @@ export default function LocationsPage() {
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingLocation, setEditingLocation] = useState<MastLocation | null>(null);
+    const [printLabels, setPrintLabels] = useState<PrintableLabelItem[]>([]);
+    const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+    const toLocationPrintItems = useCallback(
+        (locs: MastLocation[]): PrintableLabelItem[] =>
+            locs.map((loc, idx) => {
+                const wh = warehouseList.find((w) => String(w.id) === String(loc.warehouseId || ''));
+                return {
+                    id: String(loc.id || `loc-lbl-${idx}`),
+                    kind: 'LOC',
+                    itemCode: loc.code || String(loc.id || '-'),
+                    itemName: loc.name || loc.code || '-',
+                    qty: 1,
+                    uomName: 'พิกัด',
+                    copies: 1,
+                    locationId: loc.id ? String(loc.id) : undefined,
+                    locationName: loc.name || loc.code,
+                    warehouseId: loc.warehouseId ? String(loc.warehouseId) : undefined,
+                    warehouseName: wh ? `${wh.warehouseName} (${wh.code})` : undefined,
+                };
+            }),
+        [warehouseList]
+    );
 
     // Fetch warehouses for filter dropdown
     useEffect(() => {
@@ -186,6 +211,19 @@ export default function LocationsPage() {
             <Button
                 size="sm"
                 variant="outline"
+                onClick={() => {
+                    setPrintLabels(toLocationPrintItems([loc]));
+                    setIsPrintModalOpen(true);
+                }}
+                className="h-8 px-2.5 rounded-lg border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
+                title="พิมพ์ QR พิกัด (PDF Zebra)"
+            >
+                <QrCode className="w-3.5 h-3.5 mr-1" />
+                QR
+            </Button>
+            <Button
+                size="sm"
+                variant="outline"
                 onClick={() => handleOpenEdit(loc)}
                 className="h-8 px-2.5 rounded-lg border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                 title="แก้ไขข้อมูล"
@@ -266,6 +304,20 @@ export default function LocationsPage() {
                         placeholder="ค้นหารหัส หรือชื่อตำแหน่ง..."
                         className="w-full sm:w-64"
                     />
+
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={filteredLocations.length === 0}
+                        onClick={() => {
+                            setPrintLabels(toLocationPrintItems(filteredLocations));
+                            setIsPrintModalOpen(true);
+                        }}
+                        className="w-full sm:w-auto justify-center px-4 py-2 text-sm font-medium rounded-xl border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 flex items-center gap-1.5"
+                    >
+                        <QrCode className="w-4 h-4" />
+                        พิมพ์ QR พิกัด (PDF)
+                    </Button>
 
                     <Button
                         onClick={handleOpenCreate}
@@ -412,6 +464,14 @@ export default function LocationsPage() {
                 dataEdit={editingLocation}
                 defaultWarehouseId={selectedWarehouse}
                 warehouseList={warehouseList}
+            />
+
+            <PrintQrcodeModel
+                open={isPrintModalOpen}
+                onOpenChange={setIsPrintModalOpen}
+                items={printLabels}
+                title="พิมพ์ QRCode พิกัดชั้นวาง (Shelf Location)"
+                subtitle="สติกเกอร์สำหรับติดหน้าชั้นวางสินค้า ใช้สแกนระบุตำแหน่งปลายทางเวลาย้ายสินค้า"
             />
         </AppLayout>
     );

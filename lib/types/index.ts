@@ -212,6 +212,7 @@ export interface DocReceive extends BaseEntity {
 export interface DocReceiveDetail extends BaseEntity {
     id?: string;
     docId?: string;
+    invId?: string;
     itemId?: string;
     itemCode?: string;
     itemName?: string;
@@ -225,6 +226,8 @@ export interface DocReceiveDetail extends BaseEntity {
     serialNo?: string;
     isLotNo?: boolean;
     isSerialNo?: boolean;
+    mfgDate?: string;
+    expireDate?: string;
     locationId?: string;
     locationName?: string;
     remark?: string;
@@ -270,6 +273,8 @@ export interface DocIssueDetail extends BaseEntity {
     serialNo?: string;
     isLotNo?: boolean;
     isSerialNo?: boolean;
+    mfgDate?: string;
+    expireDate?: string;
     locationId?: string;
     locationName?: string;
     remark?: string;

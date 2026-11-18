@@ -11,6 +11,8 @@ export interface TransactionItem {
     availableQty?: number; // จำนวนคงเหลือในสต็อก (ใช้ในหน้า Goods Issue)
     lotNo?: string;
     serialNo?: string;
+    mfgDate?: string;
+    expireDate?: string;
     locationId?: string;
     locationName?: string;
     unitPrice?: number;
